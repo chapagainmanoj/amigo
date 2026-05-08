@@ -2,12 +2,14 @@
 
 import logging
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from src.bot.keyboards import reminder_keyboard
 from src.channels.base import MessageChannel
 from src.memory.store import MemoryStore
+from src.utils import Clock, default_clock
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +26,11 @@ class ReminderScheduler:
     Uses stable job IDs (user_id:reminder_id) for idempotency.
     """
 
-    def __init__(self, channel: MessageChannel, store: MemoryStore):
+    def __init__(self, channel: MessageChannel, store: MemoryStore, clock: Clock = default_clock):
         self.scheduler = AsyncIOScheduler()
         self.channel = channel
         self.store = store
+        self.clock = clock
 
     def start(self) -> None:
         """Start the scheduler."""
@@ -40,7 +43,7 @@ class ReminderScheduler:
         Queries all pending reminders, re-schedules future ones,
         and fires recently-missed ones (within 15-min window).
         """
-        now = datetime.utcnow()
+        now = self.clock.utc_now()
         cutoff = now - MISSED_FIRE_WINDOW
 
         reminders = await self.store.get_pending_reminders_for_reload(cutoff)
@@ -55,6 +58,9 @@ class ReminderScheduler:
                 continue
 
             scheduled = datetime.fromisoformat(reminder["scheduled_time"])
+            # Normalize to naive UTC to match clock.utc_now()
+            if scheduled.tzinfo is not None:
+                scheduled = scheduled.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
 
             if scheduled <= now:
                 # Missed but within window — fire immediately

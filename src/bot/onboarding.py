@@ -65,6 +65,19 @@ async def handle_onboarding(
     # ── Step 1: Receive name → confirm timezone ──
     if step == 1:
         name = message.strip()
+
+        # Users often reply with a greeting instead of their name
+        greetings = {
+            "hi", "hello", "hey", "yo", "sup", "hola", "namaste",
+            "hi!", "hello!", "hey!", "yo!",
+        }
+        if name.lower() in greetings:
+            await channel.send_message(
+                chat_id,
+                f"{name}! 😄 What's your name though? What should I call you?",
+            )
+            return True
+
         await store.update_user(user_id, {"name": name, "onboarding_step": 2})
         await channel.send_message(
             chat_id,

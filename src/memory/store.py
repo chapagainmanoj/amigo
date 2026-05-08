@@ -27,7 +27,7 @@ class MemoryStore:
             .maybe_single()
             .execute()
         )
-        return result.data
+        return result.data if result else None
 
     async def create_user(self, chat_id: int) -> dict:
         """Create a new user profile during onboarding."""
@@ -63,7 +63,7 @@ class MemoryStore:
             .maybe_single()
             .execute()
         )
-        return result.data
+        return result.data if result else None
 
     async def create_session(self, user_id: str, session_type: str = "casual") -> dict:
         """Start a new session."""
@@ -159,7 +159,7 @@ class MemoryStore:
             .maybe_single()
             .execute()
         )
-        if result.data:
+        if result and result.data:
             return result.data["context_summary"]
         return None
 
@@ -268,7 +268,7 @@ class MemoryStore:
             .maybe_single()
             .execute()
         )
-        return result.data
+        return result.data if result else None
 
     async def get_reminder_for_send(self, reminder_id: str) -> dict | None:
         """Fetch reminder/task status immediately before sending a reminder."""
@@ -279,7 +279,7 @@ class MemoryStore:
             .maybe_single()
             .execute()
         )
-        return result.data
+        return result.data if result else None
 
     async def get_pending_reminders_for_reload(self, cutoff: datetime) -> list[dict]:
         """Get pending reminders due after cutoff with task title and chat id."""

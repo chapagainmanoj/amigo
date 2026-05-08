@@ -49,6 +49,10 @@ class SessionManager:
 
         if active:
             last_activity = datetime.fromisoformat(active["last_activity_at"])
+            # Supabase returns tz-aware timestamps; normalize to naive UTC
+            # to match Clock.utc_now() which is also naive UTC.
+            if last_activity.tzinfo is not None:
+                last_activity = last_activity.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
             now = self.clock.utc_now()
             gap = now - last_activity
 
