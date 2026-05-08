@@ -15,17 +15,19 @@ All architectural decisions resolved via design review. No open questions remain
 | 3 | Mobile app | Deferred — validate with Telegram first, decide Flutter vs RN later |
 | 4 | Model routing | Gemini Flash for everything in Phase 1. Sonnet for emotional, local for extraction in Phase 2 |
 | 5 | Agent framework | Raw Python + Pydantic AI for Phase 1. Evaluate LangGraph/ADK for Phase 2 |
-| 6 | Morning greeting | Reactive in Phase 1a (respond to user's first message). Adaptive proactive in Phase 1b |
+| 6 | Morning greeting | Reactive in Phase 1a: first local-day message is routed to morning planning. Adaptive proactive in Phase 1b |
 | 7 | Evening reflection | No proactive push. Morning conversation surfaces yesterday's tasks naturally |
 | 8 | Database | Supabase-only (Postgres + pgvector + RLS) for Phase 1. Graphiti + Neo4j Aura in Phase 2a |
 | 9 | Deployment | Local Mac + ngrok for dev. Railway when ready for always-on |
 | 10 | Language | English-first, tolerates Nepali/Hindi code-switching input |
-| 11 | Task model | Dateless "today's list" with optional `due_date` column. No automated rollover |
-| 12 | Session boundaries | Type-aware + time-aware. 2hr configurable inactivity gap. Midnight hard-close |
+| 11 | Task model | Dateless "today's list" with optional `due_date` column. App sets `created_date` from the user's timezone. No automated rollover |
+| 12 | Session boundaries | Type-aware + user-timezone-aware. 2hr configurable inactivity gap. Local midnight hard-close |
 | 13 | Persona | Supportive older sibling. Voice over adjectives. 3 example messages in system prompt |
 | 14 | Corrections | Brief "Updated ✓" confirmations. Silent behavioral adaptation. Explicit commands as tool calls |
 | 15 | LLM abstraction | `ModelProvider` interface — no hard dependency on any single provider |
-| 16 | MVP scope | Telegram bot + tasks + reminders + `/feedback`. Nothing else |
+| 16 | MVP scope | Telegram bot + allowlisted access + tasks + reminders + text/button status updates + `/feedback`. Nothing else |
+| 17 | Telegram formatting | Plain text by default. No Markdown parse mode until escaping is implemented |
+| 18 | Reminder persistence | APScheduler in memory, with pending reminder reload from Supabase on startup and a missed-fire grace window |
 
 ---
 
@@ -36,11 +38,11 @@ All architectural decisions resolved via design review. No open questions remain
 | In (Phase 1a) | Out (Phase 1b+) |
 |----------------|-----------------|
 | Telegram bot that responds to messages | WhatsApp, mobile app |
-| Onboarding conversation (name, timezone, wake time) | Full coaching style calibration |
+| Onboarding conversation (name, timezone) | Wake/sleep routine capture, full coaching style calibration |
 | "What are you doing today?" → extracts task list | Smart time suggestions |
 | Stores tasks in Supabase | Knowledge graph, Graphiti |
-| Sends reminders at user-specified times | Learned optimal times |
-| Marks tasks done/skipped via reply | PACT evaluation |
+| Sends reminders at user-specified times, reloads pending reminders after restart | Learned optimal times |
+| Marks tasks done/skipped/deferred via buttons or text | PACT evaluation |
 | Morning conversation surfaces yesterday's tasks | Automated rollover logic |
 | `/feedback` command (instant capture → Supabase) | Evaluation framework |
 | Gemini Flash for everything | Multi-model routing |
@@ -65,9 +67,9 @@ User sends first message of the day
 |-------|-----------|
 | **Backend** | FastAPI (Python 3.12+) |
 | **LLM** | Gemini 2.5 Flash via `google-genai` SDK |
-| **LLM Orchestration** | Pydantic AI (structured outputs) |
+| **LLM Orchestration** | `google-genai` structured outputs + Pydantic models |
 | **Database** | Supabase (PostgreSQL + RLS) |
-| **Scheduler** | APScheduler + Redis |
+| **Scheduler** | APScheduler in-memory + Supabase reload on startup. Redis deferred |
 | **Interface** | Telegram Bot API (python-telegram-bot) |
 | **Dev Tunnel** | ngrok (Telegram webhooks to localhost) |
 
@@ -88,7 +90,7 @@ CREATE TABLE user_profiles (
     preferences JSONB DEFAULT '{}',
     coaching_profile JSONB DEFAULT '{"warmth":0.7,"directiveness":0.4,"challenge":0.4,"verbosity":0.5,"emotional_depth":0.5}',
     onboarding_complete BOOLEAN DEFAULT FALSE,
-    onboarding_step INT DEFAULT 0,         -- 0=not started, 1=name, 2=timezone, 3=routine, 4=prefs, 5=done
+    onboarding_step INT DEFAULT 0,         -- 0=not started, 1=name, 2=timezone, 3=done
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -107,7 +109,7 @@ CREATE TABLE tasks (
     status task_status DEFAULT 'pending',
     deferred_count INT DEFAULT 0,          -- 3+ → Amigo suggests dropping
     source_session_id UUID,
-    created_date DATE DEFAULT CURRENT_DATE,
+    created_date DATE DEFAULT CURRENT_DATE, -- App sets this in the user's timezone
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -230,9 +232,12 @@ amigo/
 │   ├── config.py                  # Settings via pydantic-settings
 │   ├── bot/
 │   │   ├── __init__.py
-│   │   ├── handlers.py            # Telegram message/command handlers
-│   │   ├── onboarding.py          # Multi-turn onboarding state machine (step tracking in user_profiles)
-│   │   └── keyboards.py           # Inline keyboards (Done/Skip/Later)
+│   │   ├── handlers.py            # Thin Telegram adapter: allowlist + onboarding + turn/callback delegation
+│   │   ├── keyboards.py           # Inline keyboards (Done/Skip/Later)
+│   │   ├── onboarding.py          # Three-step onboarding state machine (name + timezone)
+│   │   ├── reminder_actions.py    # Reminder scheduling + Done/Skip/Later callback actions
+│   │   ├── task_matching.py       # Task-list and task-title matching heuristics
+│   │   └── turns.py               # Authenticated message routing pipeline
 │   ├── agent/
 │   │   ├── __init__.py
 │   │   ├── amigo.py               # Core agent logic (conversation + task extraction)
@@ -250,14 +255,16 @@ amigo/
 │   │   └── anthropic.py           # Claude Sonnet implementation (Phase 2)
 │   ├── memory/
 │   │   ├── __init__.py
-│   │   ├── store.py               # Supabase CRUD for tasks, sessions, messages
+│   │   ├── store.py               # Supabase CRUD/query module for tasks, sessions, reminders, messages
 │   │   ├── sessions.py            # Session boundary logic (type-aware + time-aware)
 │   │   └── context.py             # Assembles LLM context: today's tasks + current session
 │   │                              #   messages + yesterday's summary + coaching profile +
 │   │                              #   user name/timezone. Most perf-sensitive path.
 │   ├── scheduler/
 │   │   ├── __init__.py
-│   │   └── reminders.py           # APScheduler reminder management
+│   │   └── reminders.py           # APScheduler reminder management + pending reload
+│   ├── utils/
+│   │   └── __init__.py            # Clock/timezone helpers and local-day UTC ranges
 │   └── db/
 │       ├── __init__.py
 │       └── supabase.py            # Supabase client singleton
@@ -391,9 +398,12 @@ Single LLM-as-Judge call per session. ~50 tokens. Negligible cost.
 ## Verification Plan
 
 ### Automated Tests
+- Onboarding state machine (name, timezone confirm/manual/alias/invalid, completion)
+- Allowlist blocks unknown chats before DB/model calls
+- Timezone helpers and app-set task `created_date`
+- Session boundary logic (time gaps, first local-day session, local midnight close)
+- Reminder scheduling, reload, delivery guards, and status-update cancellation
 - Task extraction from natural language (golden inputs → expected tasks)
-- Session boundary logic (time gaps, single-message appends, midnight close)
-- Reminder scheduling and delivery
 - Anti-nag governor rules (Phase 1b)
 
 ### Dogfooding Protocol

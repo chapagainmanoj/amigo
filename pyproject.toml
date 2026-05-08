@@ -1,0 +1,35 @@
+[project]
+name = "amigo"
+version = "0.1.0"
+description = "Your AI virtual friend — daily task planner and proactive companion"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.136.1",
+    "uvicorn[standard]>=0.46.0",
+    "python-telegram-bot>=22.7",
+    "pydantic>=2.13.4",
+    "pydantic-ai>=1.90.0,<2.0.0",
+    "pydantic-settings>=2.14.0",
+    "google-genai>=1.75.0",
+    "supabase>=2.30.0",
+    "apscheduler>=3.11.2",
+    "httpx>=0.28.1,<0.29",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.26.0",
+    "ruff>=0.11.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
