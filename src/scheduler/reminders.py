@@ -135,12 +135,10 @@ class ReminderScheduler:
         before sending. Skips silently if task was already completed.
         """
         try:
-            # Guard: check if reminder is still pending and task still needs it
-            reminder = await self.store.get_reminder_for_send(reminder_id)
+            # Guard: atomically claim the reminder before sending so deploy overlap
+            # or accidental scale-out cannot send the same reminder twice.
+            reminder = await self.store.claim_reminder_for_send(reminder_id)
             if not reminder:
-                return
-            if reminder["status"] != "pending":
-                logger.debug("Skipping reminder %s — status is %s", reminder_id, reminder["status"])
                 return
             task_status = reminder.get("tasks", {}).get("status")
             if task_status in ("done", "skipped"):
@@ -148,11 +146,15 @@ class ReminderScheduler:
                 await self.store.update_reminder(reminder_id, {"status": "acknowledged"})
                 return
 
-            message_id = await self.channel.send_message(
-                chat_id,
-                f"Hey — you mentioned wanting to \"{task_title}\" today. Good time? 📋",
-                buttons=reminder_keyboard(reminder_id),
-            )
+            try:
+                message_id = await self.channel.send_message(
+                    chat_id,
+                    f"Hey — you mentioned wanting to \"{task_title}\" today. Good time? 📋",
+                    buttons=reminder_keyboard(reminder_id),
+                )
+            except Exception:
+                await self.store.update_reminder(reminder_id, {"status": "pending"})
+                raise
 
             # Store telegram_message_id for later button editing
             if message_id:

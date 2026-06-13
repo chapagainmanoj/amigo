@@ -247,6 +247,18 @@ class FakeStore:
             }
         return None
 
+    async def claim_reminder_for_send(self, reminder_id: str) -> dict | None:
+        for reminder in self.reminders:
+            if reminder["reminder_id"] != reminder_id or reminder["status"] != "pending":
+                continue
+            reminder["status"] = "sending"
+            task = next((t for t in self.tasks if t["task_id"] == reminder["task_id"]), None)
+            return {
+                "status": reminder["status"],
+                "tasks": {"status": task["status"] if task else None},
+            }
+        return None
+
     async def get_pending_reminders_for_reload(self, cutoff: datetime) -> list[dict]:
         rows = []
         for reminder in self.reminders:

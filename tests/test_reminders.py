@@ -1,5 +1,53 @@
 """Reminder snooze logic tests."""
 
+import asyncio
+from datetime import timedelta
+
+from src.scheduler.reminders import ReminderScheduler
+from src.utils import utc_now
+from tests.fakes import FakeChannel, FakeStore
+
+
+class FailingChannel(FakeChannel):
+    async def send_message(
+        self, chat_id: str | int, text: str, *, buttons=None
+    ) -> int | None:
+        raise RuntimeError("telegram send failed")
+
+
+async def _create_due_reminder(store: FakeStore) -> dict:
+    user = await store.create_user(123)
+    task = await store.create_task(user["user_id"], "finish slides")
+    return await store.create_reminder(
+        task_id=task["task_id"],
+        user_id=user["user_id"],
+        scheduled_time=(utc_now() + timedelta(minutes=5)).isoformat(),
+    )
+
+
+async def test_duplicate_send_attempts_claim_reminder_once():
+    store = FakeStore()
+    channel = FakeChannel()
+    reminder = await _create_due_reminder(store)
+    scheduler = ReminderScheduler(channel=channel, store=store)
+
+    await asyncio.gather(
+        scheduler._send_reminder(123, reminder["reminder_id"], "finish slides"),
+        scheduler._send_reminder(123, reminder["reminder_id"], "finish slides"),
+    )
+
+    assert len(channel.sent) == 1
+    assert reminder["status"] == "sent"
+
+
+async def test_send_failure_releases_reminder_for_retry():
+    store = FakeStore()
+    reminder = await _create_due_reminder(store)
+    scheduler = ReminderScheduler(channel=FailingChannel(), store=store)
+
+    await scheduler._send_reminder(123, reminder["reminder_id"], "finish slides")
+
+    assert reminder["status"] == "pending"
 
 
 class TestSnoozeLogic:

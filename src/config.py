@@ -6,13 +6,16 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """All config from .env — fails fast if required vars are missing."""
 
-    # Telegram
-    telegram_bot_token: str
-    telegram_webhook_secret: str
+    # Channel selection — "telegram" (default) or "cli"
+    app_channel: str = "telegram"
 
-    # Supabase
-    supabase_url: str
-    supabase_service_key: str
+    # Telegram (required when app_channel=telegram, ignored in cli mode)
+    telegram_bot_token: str = ""
+    telegram_webhook_secret: str = ""
+
+    # Supabase (required when app_channel=telegram, ignored in cli mode)
+    supabase_url: str = ""
+    supabase_service_key: str = ""
 
     # Google AI
     google_api_key: str

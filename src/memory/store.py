@@ -281,6 +281,31 @@ class MemoryStore:
         )
         return result.data if result else None
 
+    async def claim_reminder_for_send(self, reminder_id: str) -> dict | None:
+        """Atomically claim a pending reminder before sending it.
+
+        Returns reminder/task state only for the process that successfully
+        changes the row from pending to sending.
+        """
+        claimed = (
+            self.db.table("reminders")
+            .update({"status": "sending"})
+            .eq("reminder_id", reminder_id)
+            .eq("status", "pending")
+            .execute()
+        )
+        if not claimed.data:
+            return None
+
+        result = (
+            self.db.table("reminders")
+            .select("status, tasks(status)")
+            .eq("reminder_id", reminder_id)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result else None
+
     async def get_pending_reminders_for_reload(self, cutoff: datetime) -> list[dict]:
         """Get pending reminders due after cutoff with task title and chat id."""
         result = (
