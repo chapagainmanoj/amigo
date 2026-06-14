@@ -11,6 +11,7 @@ from src.channels.base import MessageChannel
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
 from src.scheduler.reminders import ReminderScheduler
+from src.tools import ToolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class BotHandlers:
         self.scheduler = reminder_scheduler
         self.task_matcher = TaskMatcher()
         self.reminder_actions = ReminderActions(agent, channel, store, reminder_scheduler)
+        self.tool_executor = ToolExecutor(store, reminder_scheduler)
         self.turn_processor = TurnProcessor(
             agent=agent,
             channel=channel,
@@ -40,6 +42,7 @@ class BotHandlers:
             session_mgr=session_mgr,
             reminder_actions=self.reminder_actions,
             task_matcher=self.task_matcher,
+            tool_executor=self.tool_executor,
         )
 
     async def handle_message(self, chat_id: int, text: str) -> None:

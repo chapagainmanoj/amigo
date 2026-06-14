@@ -1,4 +1,6 @@
-"""Pydantic models for structured LLM output."""
+"""Pydantic models for structured LLM output and agent planning."""
+
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -67,4 +69,32 @@ class ReminderTimeResolution(BaseModel):
     confidence: str = Field(
         default="high",
         description='"high" for exact times ("3pm"), "medium" for relative ("after lunch")',
+    )
+
+
+class ToolCall(BaseModel):
+    """A side-effectful action requested by the agent but executed by tools."""
+
+    name: str = Field(description="Registered tool name to execute")
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentDecision(BaseModel):
+    """Structured plan for handling one user message."""
+
+    message_type: Literal[
+        "chat",
+        "task_list",
+        "status_update",
+        "feedback",
+        "close_session",
+        "unknown",
+    ] = Field(description="High-level classification for the user message")
+    reply: str | None = Field(
+        default=None,
+        description="Final user-facing reply if no conversational generation is needed",
+    )
+    tool_calls: list[ToolCall] = Field(
+        default_factory=list,
+        description="Side-effectful tool calls for the app layer to execute",
     )

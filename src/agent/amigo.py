@@ -3,13 +3,20 @@
 import json
 import logging
 
-from src.agent.models import ExtractionResult, ReminderTimeResolution, TaskStatusUpdate
+from src.agent.models import (
+    AgentDecision,
+    ExtractionResult,
+    ReminderTimeResolution,
+    TaskStatusUpdate,
+    ToolCall,
+)
 from src.agent.prompts import (
     REMINDER_TIME_PROMPT,
     TASK_EXTRACTION_PROMPT,
     TASK_STATUS_PROMPT,
     build_system_prompt,
 )
+from src.agent.task_matching import TaskMatcher
 from src.memory.context import ContextBuilder
 from src.memory.store import MemoryStore
 from src.providers.base import ModelProvider
@@ -31,6 +38,7 @@ class AmigoAgent:
         self.model = model
         self.store = store
         self.context_builder = ContextBuilder(store)
+        self.task_matcher = TaskMatcher()
 
     async def chat(self, user: dict, session_id: str, user_message: str) -> str:
         """Main conversation handler. Returns Amigo's response.
@@ -112,6 +120,81 @@ Keep it to 2-4 sentences. Don't list every task mechanically — weave them into
 
         await self.store.add_message(session_id, user_id, "assistant", response)
         return response
+
+    async def plan_message(
+        self,
+        user: dict,
+        user_message: str,
+        pending_tasks: list[dict],
+        timezone: str,
+    ) -> AgentDecision:
+        """Classify one user message and return requested tool calls.
+
+        The agent plans side effects, but does not perform them. Tool execution
+        happens in the application layer.
+        """
+        status_update = await self.detect_status_update(user_message, pending_tasks)
+        if status_update:
+            matched = self.task_matcher.fuzzy_match_task(
+                status_update.task_title_match, pending_tasks
+            )
+            if matched:
+                return AgentDecision(
+                    message_type="status_update",
+                    reply=status_update.response_message,
+                    tool_calls=[
+                        ToolCall(
+                            name="update_task_status",
+                            arguments={
+                                "task_id": matched["task_id"],
+                                "status": status_update.new_status,
+                            },
+                        )
+                    ],
+                )
+
+        if not self.task_matcher.looks_like_task_list(user_message):
+            return AgentDecision(message_type="chat")
+
+        extraction = await self.extract_tasks(user_message)
+        tool_calls: list[ToolCall] = []
+        for index, task in enumerate(extraction.tasks):
+            task_ref = f"task_{index}"
+            tool_calls.append(
+                ToolCall(
+                    name="create_task",
+                    arguments={
+                        "task_ref": task_ref,
+                        "title": task.title,
+                        "category": task.category,
+                    },
+                )
+            )
+            if task.reminder_time:
+                resolution = await self.resolve_reminder_time(task.reminder_time, timezone)
+                tool_calls.append(
+                    ToolCall(
+                        name="schedule_reminder",
+                        arguments={
+                            "task_ref": task_ref,
+                            "original_time": task.reminder_time,
+                            "resolved_time": resolution.resolved_time,
+                        },
+                    )
+                )
+
+        response = extraction.confirmation_message
+        if extraction.unextracted:
+            response += (
+                f'\n\n🤔 I wasn\'t sure about: "{extraction.unextracted}" — '
+                "what did you mean?"
+            )
+
+        return AgentDecision(
+            message_type="task_list",
+            reply=response,
+            tool_calls=tool_calls,
+        )
 
     async def extract_tasks(self, user_message: str) -> ExtractionResult:
         """Extract structured tasks from user's natural language input.

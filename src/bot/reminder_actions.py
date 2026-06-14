@@ -7,7 +7,9 @@ from src.agent.amigo import AmigoAgent
 from src.channels.base import MessageChannel
 from src.memory.store import MemoryStore
 from src.scheduler.reminders import ReminderScheduler
-from src.utils import local_time_to_utc, utc_now
+from src.tools.reminders import CancelRemindersTool, ScheduleReminderTool
+from src.tools.tasks import UpdateTaskStatusTool
+from src.utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -28,42 +30,33 @@ class ReminderActions:
         self.channel = channel
         self.store = store
         self.scheduler = scheduler
+        self.cancel_reminders_tool = CancelRemindersTool(store, scheduler)
+        self.schedule_reminder_tool = ScheduleReminderTool(store, scheduler)
+        self.update_task_status_tool = UpdateTaskStatusTool(store, self.cancel_reminders_tool)
 
     async def schedule_for_task(
         self, user: dict, task: dict, time_expr: str, chat_id: int
     ) -> None:
-        """Resolve a time expression and schedule a reminder in UTC."""
+        """Resolve a time expression and schedule a reminder in UTC.
+
+        Kept for compatibility; new message turns schedule reminders via tools.
+        """
         try:
             tz = user.get("timezone") or "UTC"
             resolution = await self.agent.resolve_reminder_time(time_expr, tz)
-
-            hour, minute = map(int, resolution.resolved_time.split(":"))
-            send_time = local_time_to_utc(hour, minute, tz)
-
-            if send_time <= utc_now():
-                logger.info("Skipping reminder for %s — time already passed", task["title"])
-                return
-
-            reminder = await self.store.create_reminder(
-                task_id=task["task_id"],
+            await self.schedule_reminder_tool.run(
                 user_id=user["user_id"],
-                scheduled_time=send_time.isoformat(),
-            )
-            self.scheduler.schedule_reminder(
-                user_id=user["user_id"],
-                reminder_id=reminder["reminder_id"],
-                send_time=send_time,
+                task=task,
+                resolved_time=resolution.resolved_time,
+                timezone=tz,
                 chat_id=chat_id,
-                task_title=task["title"],
             )
         except Exception:
             logger.exception("Failed to schedule reminder for task: %s", task["title"])
 
     async def cancel_for_task(self, task_id: str, user_id: str) -> None:
         """Acknowledge all pending reminders for a task and cancel scheduler jobs."""
-        reminder_ids = await self.store.acknowledge_reminders_for_task(task_id, user_id)
-        for reminder_id in reminder_ids:
-            self.scheduler.cancel_reminder(user_id, reminder_id)
+        await self.cancel_reminders_tool.run(task_id=task_id, user_id=user_id)
 
     async def handle_callback(self, chat_id: int, message_id: int, data: str) -> None:
         """Handle Done/Skip/Later reminder button callbacks."""
@@ -89,15 +82,21 @@ class ReminderActions:
         await self.channel.edit_message_buttons(chat_id, message_id, buttons=None)
 
         if action == "done":
-            await self.store.update_task_status(reminder["task_id"], "done")
-            await self.cancel_for_task(reminder["task_id"], reminder["user_id"])
+            await self.update_task_status_tool.run(
+                task_id=reminder["task_id"],
+                status="done",
+                user_id=reminder["user_id"],
+            )
             await self.channel.send_message(
                 chat_id, f"✅ Nice — \"{reminder['tasks']['title']}\" done!"
             )
 
         elif action == "skip":
-            await self.store.update_task_status(reminder["task_id"], "skipped")
-            await self.cancel_for_task(reminder["task_id"], reminder["user_id"])
+            await self.update_task_status_tool.run(
+                task_id=reminder["task_id"],
+                status="skipped",
+                user_id=reminder["user_id"],
+            )
             await self.channel.send_message(chat_id, "Skipped ⏭️")
 
         elif action == "later":
@@ -108,7 +107,11 @@ class ReminderActions:
         snooze_count = reminder.get("snooze_count", 0)
 
         if snooze_count >= len(SNOOZE_DELAYS_MINUTES):
-            await self.store.update_task_status(reminder["task_id"], "deferred")
+            await self.update_task_status_tool.run(
+                task_id=reminder["task_id"],
+                status="deferred",
+                user_id=reminder["user_id"],
+            )
             await self.store.update_reminder(reminder_id, {"status": "acknowledged"})
             await self.channel.send_message(
                 chat_id, "Got it — I'll bring it up tomorrow morning."
@@ -122,7 +125,7 @@ class ReminderActions:
             "scheduled_time": new_time.isoformat(),
             "status": "pending",
         })
-        self.scheduler.schedule_reminder(
+        await self.schedule_reminder_tool.run_at(
             user_id=str(reminder["user_id"]),
             reminder_id=reminder_id,
             send_time=new_time,
