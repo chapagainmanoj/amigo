@@ -6,12 +6,20 @@ class TaskMatcher:
 
     def looks_like_task_list(self, text: str) -> bool:
         """Return whether a message is likely listing today's tasks."""
+        import re
+
+        lower = text.lower()
         indicators = [
-            "today" in text.lower(),
-            "need to" in text.lower(),
-            "want to" in text.lower(),
-            "going to" in text.lower(),
-            "plan" in text.lower(),
+            "today" in lower,
+            "need to" in lower,
+            "want to" in lower,
+            "going to" in lower,
+            "plan" in lower,
+            "i will" in lower or "i'll" in lower,
+            "have to" in lower or "gotta" in lower,
+            "then" in lower or "after that" in lower,
+            bool(re.search(r"\bat\s+\d{1,2}(:\d{2})?\s*(am|pm|AM|PM)?", text)),
+            bool(re.search(r"\bin\s+\d+\s*(min|hour|hr)", lower)),
             "," in text,
             "\n" in text,
             text.count(".") >= 2,

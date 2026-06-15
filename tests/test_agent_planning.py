@@ -49,6 +49,11 @@ async def test_plan_task_list_with_reminder_returns_tool_calls():
 async def test_plan_plain_chat_returns_no_tool_calls():
     store = FakeStore()
     model = FakeModel()
+    model.responses["ExtractionResult"] = {
+        "tasks": [],
+        "unextracted": None,
+        "confirmation_message": "",
+    }
     agent = AmigoAgent(model, store)
 
     decision = await agent.plan_message(
@@ -60,7 +65,6 @@ async def test_plan_plain_chat_returns_no_tool_calls():
 
     assert decision.message_type == "chat"
     assert decision.tool_calls == []
-    assert model.calls == []
 
 
 async def test_plan_status_update_returns_update_tool_call():

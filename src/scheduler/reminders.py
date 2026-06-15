@@ -1,5 +1,6 @@
 """APScheduler reminder management — in-memory for Phase 1a."""
 
+import contextlib
 import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -102,6 +103,12 @@ class ReminderScheduler:
         Uses stable job ID for idempotency — safe to call multiple times.
         """
         job_id = f"{user_id}:{reminder_id}"
+
+        # Explicitly remove any existing job before adding. APScheduler's
+        # replace_existing=True only works after start() when the jobstore
+        # is initialised; before start(), pending jobs bypass the lookup.
+        with contextlib.suppress(Exception):
+            self.scheduler.remove_job(job_id)
 
         self.scheduler.add_job(
             self._send_reminder,

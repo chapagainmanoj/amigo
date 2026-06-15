@@ -157,13 +157,29 @@ Health check: `curl http://localhost:8000/health`
 ### Test & Lint
 
 ```bash
-python -m pytest tests/ -v    # 43 unit tests, no network needed
-ruff check src tests           # lint
+python -m pytest tests/ -v         # 62 unit tests, no network needed
+ruff check src tests scripts       # lint
 ```
 
 All tests use in-memory fakes — no Supabase, Telegram, or Gemini
 calls. See [`tests/fakes.py`](tests/fakes.py) for the shared test
 doubles.
+
+### Smoke Checks
+
+The [`scripts/smoke_check.py`](scripts/smoke_check.py) script runs
+production-liveness checks without touching Supabase:
+
+```bash
+# In-memory scheduler — proves APScheduler fires through the channel
+python scripts/smoke_check.py --scheduler
+
+# Real Telegram ping — sends one message to verify delivery
+TELEGRAM_BOT_TOKEN=... SMOKE_TEST_CHAT_ID=... python scripts/smoke_check.py --channel
+
+# Both checks
+python scripts/smoke_check.py --all
+```
 
 ### Environment Variables
 
@@ -180,6 +196,7 @@ doubles.
 | `APP_ENV` | `development` | — |
 | `LOG_LEVEL` | `INFO` | — |
 | `DEFAULT_MODEL` | `gemini-2.5-flash` | — |
+| `SMOKE_TEST_CHAT_ID` | — | Smoke checks (`--channel`) |
 
 ### Deploy to Production (Fly.io)
 
@@ -253,9 +270,11 @@ abstractions, extensibility hooks, and testing strategy.
 - Three-step Telegram onboarding: name, timezone, first planning prompt
 - Local CLI mode for development (no external services needed)
 - Natural-language task extraction with Gemini Flash
+- Structured agent planning with tool-based side effects (ADR 0001)
 - Reminder scheduling with Done/Skip/Later buttons
 - Text status updates ("done with slides", "skip gym")
 - Pending reminder reload after app restart
 - User-timezone-aware task dates, session rollover, and reminder times
 - `/feedback` capture into Supabase
 - Allowlisted access for private dogfooding
+- Production smoke checks (scheduler + Telegram channel liveness)

@@ -24,7 +24,10 @@ uvicorn src.main:app --reload --port 8000
 python -m pytest tests/ -v
 
 # Lint
-ruff check src tests
+ruff check src tests scripts
+
+# Smoke checks (no Supabase needed)
+python scripts/smoke_check.py --scheduler
 ```
 
 ## Code Style
@@ -44,6 +47,7 @@ ruff check src tests
 - `migrations/*.sql` — schema changes affect production data
 - `src/config.py` — changing defaults can break all environments
 - `src/db/supabase.py` — singleton wiring
+- `scripts/smoke_check.py` — production liveness checks
 
 ### Never auto-delete
 
@@ -56,6 +60,8 @@ ruff check src tests
   through the store layer.
 - **No Telegram imports outside `src/channels/telegram.py`** — the
   library is an implementation detail.
+- **No direct side effects in `src/agent/`** — the agent classifies
+  and plans; side effects go through `src/tools/` (see ADR 0001).
 - **Store sync**: any change to `MemoryStore` methods must be mirrored
   in `InMemoryStore` and `FakeStore` (three implementations).
 - **Protocol changes**: any change to `MessageChannel` or
@@ -78,6 +84,7 @@ ruff check src tests
 | `APP_ENV` | `development` | Environment name |
 | `LOG_LEVEL` | `INFO` | Python logging level |
 | `DEFAULT_MODEL` | `gemini-2.5-flash` | LLM model identifier |
+| `SMOKE_TEST_CHAT_ID` | `""` | Chat ID for `--channel` smoke check |
 
 ## Secrets
 

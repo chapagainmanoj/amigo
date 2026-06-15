@@ -20,6 +20,7 @@ from src.agent.task_matching import TaskMatcher
 from src.memory.context import ContextBuilder
 from src.memory.store import MemoryStore
 from src.providers.base import ModelProvider
+from src.utils import now_in_tz
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,9 @@ class AmigoAgent:
         messages = await self.context_builder.build(user, session_id)
 
         # Generate response (1 retry on failure)
-        system = build_system_prompt(name)
+        tz = user.get("timezone") or "UTC"
+        local_time = now_in_tz(tz).strftime("%Y-%m-%d %H:%M %A")
+        system = build_system_prompt(name, current_time=local_time)
         response = await self._generate_with_retry(messages, system)
 
         # Store assistant response
@@ -104,7 +107,8 @@ class AmigoAgent:
             task_names = ", ".join(f"'{t['title']}'" for t in today_tasks)
             today_block = f"\nAlready on today's list: {task_names}."
 
-        morning_system = f"""{build_system_prompt(name)}
+        local_now = now_in_tz(tz).strftime("%Y-%m-%d %H:%M %A")
+        morning_system = f"""{build_system_prompt(name, current_time=local_now)}
 
 <morning_planning>
 This is {name}'s first message of the day. Write a morning greeting that:
@@ -153,10 +157,10 @@ Keep it to 2-4 sentences. Don't list every task mechanically — weave them into
                     ],
                 )
 
-        if not self.task_matcher.looks_like_task_list(user_message):
+        extraction = await self.extract_tasks(user_message)
+        if not extraction.tasks:
             return AgentDecision(message_type="chat")
 
-        extraction = await self.extract_tasks(user_message)
         tool_calls: list[ToolCall] = []
         for index, task in enumerate(extraction.tasks):
             task_ref = f"task_{index}"
@@ -171,17 +175,25 @@ Keep it to 2-4 sentences. Don't list every task mechanically — weave them into
                 )
             )
             if task.reminder_time:
-                resolution = await self.resolve_reminder_time(task.reminder_time, timezone)
-                tool_calls.append(
-                    ToolCall(
-                        name="schedule_reminder",
-                        arguments={
-                            "task_ref": task_ref,
-                            "original_time": task.reminder_time,
-                            "resolved_time": resolution.resolved_time,
-                        },
+                try:
+                    resolution = await self.resolve_reminder_time(
+                        task.reminder_time, timezone
                     )
-                )
+                    tool_calls.append(
+                        ToolCall(
+                            name="schedule_reminder",
+                            arguments={
+                                "task_ref": task_ref,
+                                "original_time": task.reminder_time,
+                                "resolved_time": resolution.resolved_time,
+                            },
+                        )
+                    )
+                except Exception:
+                    logger.warning(
+                        "Failed to resolve reminder time '%s' for '%s', skipping reminder",
+                        task.reminder_time, task.title,
+                    )
 
         response = extraction.confirmation_message
         if extraction.unextracted:
@@ -218,7 +230,9 @@ Keep it to 2-4 sentences. Don't list every task mechanically — weave them into
         self, time_expression: str, timezone: str = "Asia/Kathmandu"
     ) -> ReminderTimeResolution:
         """Convert natural language time to HH:MM format."""
-        prompt = REMINDER_TIME_PROMPT.format(timezone=timezone)
+        tz_obj = now_in_tz(timezone)
+        current_time = tz_obj.strftime("%Y-%m-%d %H:%M")
+        prompt = REMINDER_TIME_PROMPT.format(timezone=timezone, current_time=current_time)
         messages = [{"role": "user", "content": f"Time to resolve: {time_expression}"}]
 
         result = await self.model.generate(
