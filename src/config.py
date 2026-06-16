@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     allowed_telegram_chat_ids: str = ""  # e.g. "123456789,987654321"
 
     # LLM defaults
-    default_model: str = "gemini-2.5-flash"
+    default_model: str = "gemini-3.5-flash"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

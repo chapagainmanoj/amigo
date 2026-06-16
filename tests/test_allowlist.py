@@ -8,22 +8,19 @@ from unittest.mock import patch
 
 import pytest
 
-from src.agent.amigo import AmigoAgent
 from src.bot.handlers import BotHandlers
 from src.memory.sessions import SessionManager
-from tests.fakes import FakeChannel, FakeModel, FakeScheduler, FakeStore
+from tests.fakes import FakeChannel, FakeScheduler, FakeStore
 
 
 @pytest.fixture
 def setup():
     store = FakeStore()
     channel = FakeChannel()
-    model = FakeModel()
-    agent = AmigoAgent(model, store)
     session_mgr = SessionManager(store)
     scheduler = FakeScheduler()
-    handlers = BotHandlers(agent, channel, store, session_mgr, scheduler)
-    return handlers, channel, store, model
+    handlers = BotHandlers(channel, store, session_mgr, scheduler)
+    return handlers, channel, store
 
 
 class TestAllowlist:
@@ -31,7 +28,7 @@ class TestAllowlist:
 
     @pytest.mark.asyncio
     async def test_unknown_chat_gets_rejection(self, setup):
-        handlers, channel, store, model = setup
+        handlers, channel, store = setup
 
         with patch("src.bot.handlers.BotHandlers._is_allowed", return_value=False):
             await handlers.handle_message(99999, "hello")
@@ -40,12 +37,10 @@ class TestAllowlist:
         assert "isn't open" in channel.last_text
         # Store should never be touched
         assert 99999 not in store.users
-        # Model should never be called
-        assert len(model.calls) == 0
 
     @pytest.mark.asyncio
     async def test_allowed_chat_proceeds(self, setup):
-        handlers, channel, store, model = setup
+        handlers, channel, store = setup
 
         with patch("src.bot.handlers.BotHandlers._is_allowed", return_value=True):
             await handlers.handle_message(12345, "hello")

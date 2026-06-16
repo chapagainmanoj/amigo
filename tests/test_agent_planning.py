@@ -1,93 +1,131 @@
-"""Agent planning tests."""
+"""Agent tool-calling tests (ADR 0002).
 
-from src.agent.amigo import AmigoAgent
-from src.agent.models import AgentDecision
-from tests.fakes import FakeModel, FakeStore
+Uses pydantic-ai's TestModel which calls all available tools by default,
+making it easy to verify tool behavior without a real LLM.
+"""
+
+from datetime import timedelta
+
+from pydantic_ai.models.test import TestModel
+
+from src.agent.agent import AgentDeps, amigo_agent, handle_message
+from src.utils import now_in_tz
+from tests.fakes import FakeChannel, FakeScheduler, FakeStore
 
 
-async def test_plan_task_list_with_reminder_returns_tool_calls():
-    store = FakeStore()
-    model = FakeModel()
-    model.responses["ExtractionResult"] = {
-        "tasks": [
-            {
-                "title": "Call mom",
-                "category": "social",
-                "reminder_time": "3pm",
-                "priority": "normal",
-                "raw_input": "call mom at 3pm",
-            }
-        ],
-        "unextracted": None,
-        "confirmation_message": "Got it — call mom at 3pm.",
-    }
-    model.responses["ReminderTimeResolution"] = {
-        "original": "3pm",
-        "resolved_time": "15:00",
-        "confidence": "high",
-    }
-    agent = AmigoAgent(model, store)
+def _future_hhmm(timezone: str) -> str:
+    local_target = now_in_tz(timezone) + timedelta(minutes=10)
+    return local_target.strftime("%H:%M")
 
-    decision = await agent.plan_message(
-        {"user_id": "user-1"},
-        "today I need to call mom at 3pm",
-        pending_tasks=[],
+
+def _make_deps(store, scheduler, channel, user, session_id="session-1"):
+    return AgentDeps(
+        store=store,
+        scheduler=scheduler,
+        channel=channel,
+        user=user,
+        session_id=session_id,
+        chat_id=123,
         timezone="Asia/Kathmandu",
     )
 
-    assert isinstance(decision, AgentDecision)
-    assert decision.message_type == "task_list"
-    assert [call.name for call in decision.tool_calls] == [
-        "create_task",
-        "schedule_reminder",
-    ]
-    assert decision.tool_calls[0].arguments["task_ref"] == "task_0"
-    assert decision.tool_calls[1].arguments["task_ref"] == "task_0"
-    assert decision.tool_calls[1].arguments["resolved_time"] == "15:00"
 
-
-async def test_plan_plain_chat_returns_no_tool_calls():
+async def test_handle_message_stores_user_and_assistant_messages():
+    """handle_message should store the user message and agent response."""
     store = FakeStore()
-    model = FakeModel()
-    model.responses["ExtractionResult"] = {
-        "tasks": [],
-        "unextracted": None,
-        "confirmation_message": "",
-    }
-    agent = AmigoAgent(model, store)
+    channel = FakeChannel()
+    scheduler = FakeScheduler()
+    user = await store.create_user(123)
+    await store.update_user(user["user_id"], {
+        "name": "Dev", "timezone": "Asia/Kathmandu",
+        "onboarding_complete": True, "onboarding_step": 3,
+    })
+    user = await store.get_user_by_chat_id(123)
+    session = await store.create_session(user["user_id"])
 
-    decision = await agent.plan_message(
-        {"user_id": "user-1"},
-        "hello amigo",
-        pending_tasks=[],
+    deps = _make_deps(store, scheduler, channel, user, session["session_id"])
+
+    with amigo_agent.override(model=TestModel()):
+        response = await handle_message(deps, "hello")
+
+    assert isinstance(response, str)
+    assert len(response) > 0
+
+    # Should have at least 2 messages: user + assistant
+    session_msgs = await store.get_session_messages(session["session_id"])
+    roles = [m["role"] for m in session_msgs]
+    assert "user" in roles
+    assert "assistant" in roles
+
+
+async def test_handle_message_returns_error_on_failure():
+    """handle_message should return a friendly error when the agent fails."""
+    store = FakeStore()
+    channel = FakeChannel()
+    scheduler = FakeScheduler()
+    user = await store.create_user(123)
+    await store.update_user(user["user_id"], {
+        "name": "Dev", "timezone": "Asia/Kathmandu",
+        "onboarding_complete": True, "onboarding_step": 3,
+    })
+    user = await store.get_user_by_chat_id(123)
+    session = await store.create_session(user["user_id"])
+
+    deps = _make_deps(store, scheduler, channel, user, session["session_id"])
+
+    # Use a model that will raise
+    class FailingModel(TestModel):
+        async def request(self, *args, **kwargs):
+            raise RuntimeError("LLM down")
+
+    with amigo_agent.override(model=FailingModel()):
+        response = await handle_message(deps, "hello")
+
+    assert "trouble" in response.lower() or "sorry" in response.lower()
+
+
+async def test_create_task_tool_creates_task_in_store():
+    """Calling create_task tool directly should persist a task."""
+    store = FakeStore()
+    user = await store.create_user(123)
+    await store.update_user(user["user_id"], {
+        "name": "Dev", "timezone": "Asia/Kathmandu",
+        "onboarding_complete": True, "onboarding_step": 3,
+    })
+    user = await store.get_user_by_chat_id(123)
+
+    from src.tools.tasks import CreateTaskTool
+    tool = CreateTaskTool(store)
+    result = await tool.run(
+        user_id=user["user_id"],
+        title="Call mom",
+        category="social",
+        session_id="session-1",
         timezone="Asia/Kathmandu",
     )
 
-    assert decision.message_type == "chat"
-    assert decision.tool_calls == []
+    assert result["task"]["title"] == "Call mom"
+    assert len(store.tasks) == 1
 
 
-async def test_plan_status_update_returns_update_tool_call():
+async def test_update_task_status_tool_marks_done_and_cancels_reminders():
+    """update_task_status should update the task and cancel pending reminders."""
     store = FakeStore()
-    model = FakeModel()
-    model.responses["TaskStatusUpdate"] = {
-        "task_title_match": "slides",
-        "new_status": "done",
-        "response_message": "Nice — slides done!",
-    }
-    agent = AmigoAgent(model, store)
+    scheduler = FakeScheduler()
+    user = await store.create_user(123)
+    task = await store.create_task(user["user_id"], "finish slides")
+    await store.create_reminder(task["task_id"], user["user_id"], "2099-01-01T00:00:00")
 
-    decision = await agent.plan_message(
-        {"user_id": "user-1"},
-        "finished the slides",
-        pending_tasks=[
-            {"task_id": "task-1", "title": "finish slides", "status": "pending"}
-        ],
-        timezone="Asia/Kathmandu",
+    from src.tools.reminders import CancelRemindersTool
+    from src.tools.tasks import UpdateTaskStatusTool
+    cancel_tool = CancelRemindersTool(store, scheduler)
+    tool = UpdateTaskStatusTool(store, cancel_tool)
+
+    result = await tool.run(
+        task_id=task["task_id"],
+        status="done",
+        user_id=user["user_id"],
     )
 
-    assert decision.message_type == "status_update"
-    assert decision.reply == "Nice — slides done!"
-    assert len(decision.tool_calls) == 1
-    assert decision.tool_calls[0].name == "update_task_status"
-    assert decision.tool_calls[0].arguments == {"task_id": "task-1", "status": "done"}
+    assert result["task"]["status"] == "done"
+    assert len(scheduler.cancelled) == 1

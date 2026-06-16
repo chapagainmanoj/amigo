@@ -6,13 +6,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from telegram import Update
 
-from src.agent.amigo import AmigoAgent
 from src.bot.handlers import BotHandlers
 from src.channels.telegram import TelegramChannel
 from src.config import settings
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
-from src.providers.gemini import GeminiProvider
 from src.scheduler.reminders import ReminderScheduler
 
 logging.basicConfig(
@@ -24,12 +22,9 @@ logger = logging.getLogger(__name__)
 # ── Wiring ──
 channel = TelegramChannel()
 store = MemoryStore()
-model = GeminiProvider(settings.default_model)
-agent = AmigoAgent(model=model, store=store)
 session_mgr = SessionManager(store)
 reminder_scheduler = ReminderScheduler(channel=channel, store=store)
 handlers = BotHandlers(
-    agent=agent,
     channel=channel,
     store=store,
     session_mgr=session_mgr,

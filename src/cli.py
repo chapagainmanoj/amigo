@@ -11,13 +11,11 @@ import logging
 import signal
 import sys
 
-from src.agent.amigo import AmigoAgent
 from src.bot.handlers import BotHandlers
 from src.channels.cli import CLIChannel
 from src.config import settings
 from src.memory.memory_store import InMemoryStore
 from src.memory.sessions import SessionManager
-from src.providers.gemini import GeminiProvider
 from src.scheduler.reminders import ReminderScheduler
 
 # ANSI
@@ -101,13 +99,10 @@ async def run_cli(onboard: bool = False):
     # Wire components with in-memory store
     channel = CLIChannel()
     store = InMemoryStore()
-    model = GeminiProvider(settings.default_model)
-    agent = AmigoAgent(model=model, store=store)
     session_mgr = SessionManager(store)
     reminder_scheduler = ReminderScheduler(channel=channel, store=store)
 
     handlers = BotHandlers(
-        agent=agent,
         channel=channel,
         store=store,
         session_mgr=session_mgr,

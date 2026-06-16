@@ -2,10 +2,8 @@
 
 from datetime import timedelta
 
-from src.agent.models import ToolCall
-from src.tools import ToolExecutionContext, ToolExecutor
 from src.tools.reminders import CancelRemindersTool, ScheduleReminderTool
-from src.tools.tasks import UpdateTaskStatusTool
+from src.tools.tasks import CreateTaskTool, UpdateTaskStatusTool
 from src.utils import now_in_tz
 from tests.fakes import FakeScheduler, FakeStore
 
@@ -59,38 +57,19 @@ async def test_update_task_status_tool_cancels_pending_reminders():
     assert scheduler.cancelled == [reminder["reminder_id"]]
 
 
-async def test_tool_executor_passes_created_task_to_schedule_reminder():
+async def test_create_task_tool_persists_task():
     store = FakeStore()
-    scheduler = FakeScheduler()
     user = await store.create_user(123)
-    executor = ToolExecutor(store, scheduler)
+    tool = CreateTaskTool(store)
 
-    await executor.execute(
-        [
-            ToolCall(
-                name="create_task",
-                arguments={
-                    "task_ref": "task_0",
-                    "title": "drink water",
-                    "category": "health",
-                },
-            ),
-            ToolCall(
-                name="schedule_reminder",
-                arguments={
-                    "task_ref": "task_0",
-                    "resolved_time": _future_hhmm("Asia/Kathmandu"),
-                },
-            ),
-        ],
-        ToolExecutionContext(
-            user=user,
-            session_id="session-1",
-            chat_id=123,
-            timezone="Asia/Kathmandu",
-        ),
+    result = await tool.run(
+        user_id=user["user_id"],
+        title="drink water",
+        category="health",
+        session_id="session-1",
+        timezone="Asia/Kathmandu",
     )
 
     assert len(store.tasks) == 1
-    assert len(store.reminders) == 1
-    assert len(scheduler.scheduled) == 1
+    assert result["task"]["title"] == "drink water"
+    assert result["task"]["category"] == "health"

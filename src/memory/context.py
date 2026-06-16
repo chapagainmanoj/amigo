@@ -28,7 +28,7 @@ class ContextBuilder:
     async def build(self, user: dict, session_id: str) -> list[dict[str, str]]:
         """Assemble conversation history for LLM.
 
-        Returns list of message dicts ready for ModelProvider.generate().
+        Returns list of message dicts for context assembly.
         """
         parts = []
 

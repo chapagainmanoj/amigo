@@ -2,7 +2,6 @@
 
 import logging
 
-from src.agent.amigo import AmigoAgent
 from src.bot.onboarding import handle_onboarding
 from src.bot.reminder_actions import ReminderActions
 from src.bot.turns import TurnProcessor
@@ -10,7 +9,6 @@ from src.channels.base import MessageChannel
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
 from src.scheduler.reminders import ReminderScheduler
-from src.tools import ToolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -20,26 +18,21 @@ class BotHandlers:
 
     def __init__(
         self,
-        agent: AmigoAgent,
         channel: MessageChannel,
         store: MemoryStore,
         session_mgr: SessionManager,
         reminder_scheduler: ReminderScheduler,
     ):
-        self.agent = agent
         self.channel = channel
         self.store = store
         self.session_mgr = session_mgr
         self.scheduler = reminder_scheduler
-        self.reminder_actions = ReminderActions(agent, channel, store, reminder_scheduler)
-        self.tool_executor = ToolExecutor(store, reminder_scheduler)
+        self.reminder_actions = ReminderActions(channel, store, reminder_scheduler)
         self.turn_processor = TurnProcessor(
-            agent=agent,
             channel=channel,
             store=store,
             session_mgr=session_mgr,
-            reminder_actions=self.reminder_actions,
-            tool_executor=self.tool_executor,
+            scheduler=reminder_scheduler,
         )
 
     async def handle_message(self, chat_id: int, text: str) -> None:
@@ -99,4 +92,3 @@ class BotHandlers:
             return True  # No allowlist configured = open (dev convenience)
         allowed_ids = {int(x.strip()) for x in allowed.split(",") if x.strip()}
         return chat_id in allowed_ids
-

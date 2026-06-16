@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
 
 
 class FakeChannel:
@@ -419,33 +418,6 @@ class FakeResult:
         else:
             self.data = data
 
-
-class FakeModel:
-    """Fake model provider. Returns canned responses."""
-
-    def __init__(self, responses: dict[str, Any] | None = None):
-        self.responses = responses or {}
-        self.calls: list[dict] = []
-        self._default_chat = "Hey! What's on the plan for today?"
-        self._default_structured = None
-
-    async def generate(self, messages, system, *, response_schema=None, temperature=0.7):
-        self.calls.append({
-            "messages": messages, "system": system,
-            "response_schema": response_schema, "temperature": temperature,
-        })
-        if response_schema and response_schema.__name__ in self.responses:
-            return self.responses[response_schema.__name__]
-        if response_schema:
-            # Return "none" status for TaskStatusUpdate by default
-            from src.agent.models import TaskStatusUpdate
-            if response_schema == TaskStatusUpdate:
-                return {"task_title_match": "", "new_status": "none", "response_message": ""}
-            return self._default_structured or {}
-        return self._default_chat
-
-    async def count_tokens(self, text: str) -> int:
-        return len(text) // 4
 
 
 class FakeScheduler:

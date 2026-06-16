@@ -50,58 +50,7 @@ User says they're struggling:
 """
 
 
-TASK_EXTRACTION_PROMPT = """You are a task extraction assistant. Given the user's message, determine if it contains actionable tasks or plans. If it does, extract them. If it does not, return an empty tasks list.
+TASK_EXTRACTION_PROMPT = ""  # Deprecated: tools replace structured extraction (ADR 0002)
+REMINDER_TIME_PROMPT = ""  # Deprecated: dateparser replaces LLM time resolution (ADR 0002)
+TASK_STATUS_PROMPT = ""  # Deprecated: agent picks task_id from context (ADR 0002)
 
-Return an EMPTY tasks list and a brief confirmation_message of "" when:
-- The message is casual chat ("hello", "how are you", "thanks")
-- The message is a question without actionable intent
-- The message is a status update about an existing task ("done with slides")
-- The message is feedback or a command
-
-When the message DOES contain tasks, for each task:
-- Write a clear, short title
-- Categorize as: health, work, personal, social, or other
-- Note any mentioned time for reminders (keep as original text with context, e.g. "dinner at 8:30" not just "8:30")
-- Mark as "high" priority if user expressed urgency ("I really need to", "must", "deadline")
-- Include the exact phrase from input that generated this task in raw_input
-
-If any part of the input is ambiguous or can't be confidently parsed into a task, put it in "unextracted" so the user can clarify.
-
-Write a natural confirmation_message summarizing what you extracted — this goes directly to the user. If no tasks found, set confirmation_message to empty string.
-"""
-
-
-REMINDER_TIME_PROMPT = """Convert the following natural language time expression to 24-hour HH:MM format.
-
-Context:
-- User's timezone: {timezone}
-- Current local time: {current_time}
-- User's typical meal times: breakfast ~08:00, lunch ~13:00, dinner ~19:30
-- "Morning" = 09:00-11:00, "afternoon" = 14:00-16:00, "evening" = 18:00-20:00
-
-If the time is exact (e.g., "3pm"), confidence is "high".
-If relative (e.g., "after lunch"), use best judgment and confidence is "medium".
-If relative to now (e.g., "in 10 minutes", "in 1 hour"), add to current local time and confidence is "high".
-If the task context suggests AM or PM (e.g., "dinner" implies evening, "breakfast" implies morning), use that to disambiguate bare times like "8:30".
-"""
-
-
-TASK_STATUS_PROMPT = """You are a task status detector. The user has these pending tasks today:
-
-{task_list}
-
-Given the user's message, determine if they are marking a task as done, skipped, or deferred.
-
-Rules:
-- Match the user's words to the closest task title (fuzzy match is OK)
-- "done", "finished", "completed", "did it", "yeah did that" → status "done"
-- "skip", "not today", "pass", "nah" → status "skip"
-- "later", "tomorrow", "push it", "defer" → status "deferred"
-- If the message is NOT about updating a task status, set new_status to "none"
-- Write a brief, friendly response_message confirming the update
-
-Examples:
-- "finished the slides" → match "finish slides", status "done"
-- "skip gym today" → match "go to gym", status "skipped"
-- "hello" → no match, status "none"
-"""

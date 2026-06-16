@@ -3,7 +3,7 @@
 import logging
 from datetime import timedelta
 
-from src.agent.amigo import AmigoAgent
+from src.agent.agent import parse_time_expression
 from src.channels.base import MessageChannel
 from src.memory.store import MemoryStore
 from src.scheduler.reminders import ReminderScheduler
@@ -21,12 +21,10 @@ class ReminderActions:
 
     def __init__(
         self,
-        agent: AmigoAgent,
         channel: MessageChannel,
         store: MemoryStore,
         scheduler: ReminderScheduler,
     ):
-        self.agent = agent
         self.channel = channel
         self.store = store
         self.scheduler = scheduler
@@ -39,15 +37,18 @@ class ReminderActions:
     ) -> None:
         """Resolve a time expression and schedule a reminder in UTC.
 
-        Kept for compatibility; new message turns schedule reminders via tools.
+        Uses dateparser for deterministic time resolution (ADR 0002).
         """
         try:
             tz = user.get("timezone") or "UTC"
-            resolution = await self.agent.resolve_reminder_time(time_expr, tz)
+            resolved = parse_time_expression(time_expr, tz)
+            if not resolved:
+                logger.warning("Could not parse time expression: %s", time_expr)
+                return
             await self.schedule_reminder_tool.run(
                 user_id=user["user_id"],
                 task=task,
-                resolved_time=resolution.resolved_time,
+                resolved_time=resolved,
                 timezone=tz,
                 chat_id=chat_id,
             )

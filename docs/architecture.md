@@ -9,18 +9,18 @@ amigo/
 │   ├── cli.py              # CLI entrypoint for local dev (no Telegram)
 │   ├── config.py           # Pydantic Settings from .env
 │   ├── __main__.py         # python -m src.cli module entrypoint
-│   ├── agent/              # LLM orchestration: planning, task extraction,
-│   │                       #   status detection, conversation, models
+│   ├── agent/              # Pydantic AI agent with tool-calling loop
+│   │                       #   (ADR 0002: single turn, native tools)
 │   ├── bot/                # Telegram adapter: handlers, onboarding,
 │   │                       #   turns, reminder callbacks, keyboards
 │   ├── channels/           # MessageChannel protocol + implementations
 │   │                       #   (Telegram, CLI)
-│   ├── providers/          # ModelProvider protocol + Gemini implementation
+│   ├── providers/          # (deprecated — model handling by pydantic-ai)
 │   ├── memory/             # Supabase store, in-memory store, sessions,
 │   │                       #   context assembly
 │   ├── scheduler/          # APScheduler reminder management + reload
 │   ├── tools/              # Side-effect tools: create task, update status,
-│   │                       #   schedule/cancel reminders, tool executor
+│   │                       #   schedule/cancel reminders
 │   ├── utils/              # Clock, timezone helpers
 │   └── db/                 # Supabase client singleton
 ├── tests/                  # Pytest test suite (all unit, no network)
@@ -37,42 +37,42 @@ amigo/
 
 ## Key Modules
 
-- `src/agent/` — Core AI logic. `AmigoAgent` orchestrates chat, morning
-  planning, task extraction, and status updates. Returns structured
-  `AgentDecision`s with tool calls — never executes side effects directly.
-  Includes `models.py` (Pydantic schemas for LLM output) and
-  `task_matching.py` (fuzzy title matching).
+- `src/agent/` — Pydantic AI agent with native tool-calling loop
+  (see [ADR 0002](adr/0002-agentic-tool-calling-loop.md)). A single
+  `Agent` object handles the entire user turn: the model sees the
+  message, decides which tools to call, observes results, and produces
+  a reply. Tools execute side effects through injected services.
+  `AgentDeps` carries per-request context (store, scheduler, user).
 - `src/bot/` — Telegram-specific glue. `BotHandlers` routes messages
   through allowlist → onboarding → turn processing.
 - `src/channels/` — `MessageChannel` Protocol with `TelegramChannel` and
   `CLIChannel` implementations. All bot code depends on the protocol, never
   on a concrete channel.
-- `src/providers/` — `ModelProvider` Protocol with `GeminiProvider`.
-  Designed for future Claude/local model swaps.
 - `src/memory/` — `MemoryStore` (Supabase CRUD), `InMemoryStore`
   (dict-backed dev replacement), `SessionManager`, `ContextBuilder`.
 - `src/scheduler/` — `ReminderScheduler` wraps APScheduler with stable
   job IDs, snooze policy, and restart-safe reload from database.
-- `src/tools/` — Side-effect executors. `ToolExecutor` runs tool calls
-  from agent decisions. Individual tools: `CreateTaskTool`,
+- `src/tools/` — Side-effect service classes. Called by agent tools and
+  `ReminderActions` callback handlers. `CreateTaskTool`,
   `UpdateTaskStatusTool`, `ScheduleReminderTool`, `CancelRemindersTool`.
-  See [ADR 0001](adr/0001-separate-bot-agent-tools.md).
 
 ## Patterns
 
-- **Protocol-based abstraction**: `MessageChannel` and `ModelProvider`
-  are `typing.Protocol` classes. Implementations are swappable without
-  touching consumer code.
-- **Dependency injection via constructor**: All major classes accept
-  their dependencies in `__init__`, not via globals.
+- **Protocol-based abstraction**: `MessageChannel` is a `typing.Protocol`
+  class. Implementations are swappable without touching consumer code.
+- **Dependency injection**: Per-request state flows through `AgentDeps`
+  dataclass. Major classes accept dependencies in `__init__`.
 - **Async everywhere**: All store, channel, and agent methods are
   `async def`, even when the underlying call is synchronous (Supabase
   client is sync but wrapped for interface consistency).
 - **UTC internally, user-tz at boundaries**: All timestamps stored as
   naive UTC. Conversion to user timezone happens only at display/logic
   boundaries via `src/utils/`.
-- **Structured LLM output**: Task extraction and status detection use
-  Pydantic models as `response_schema` for JSON-mode generation.
+- **Agentic tool calling**: The LLM decides which tools to call based on
+  function signatures and docstrings. No more manual classify → extract →
+  resolve pipeline. See [ADR 0002](adr/0002-agentic-tool-calling-loop.md).
+- **Deterministic time resolution**: `dateparser` handles "3pm", "in 10
+  minutes", "after lunch" → UTC datetime conversion without an LLM call.
 
 ## Data Flow (message lifecycle)
 
@@ -95,21 +95,13 @@ graph TD
         RA["ReminderActions"]
     end
 
-    subgraph Agent
-        AA["AmigoAgent"]
+    subgraph Agent["Pydantic AI Agent"]
+        HM["handle_message"]
         CB["ContextBuilder"]
-    end
-
-    subgraph Tools
-        TE["ToolExecutor"]
-        CT["CreateTaskTool"]
-        SR["ScheduleReminderTool"]
-        US["UpdateTaskStatusTool"]
-        CR["CancelRemindersTool"]
-    end
-
-    subgraph Providers
-        GP["GeminiProvider"]
+        T_CT["create_task tool"]
+        T_US["update_task_status tool"]
+        T_SR["schedule_reminder tool"]
+        T_CR["cancel_reminders tool"]
     end
 
     subgraph Storage
@@ -130,23 +122,21 @@ graph TD
     BH --> TP
     BH --> RA
 
-    TP --> AA
-    AA --> CB
-    AA --> GP
+    TP --> HM
+    HM --> CB
     CB --> MS
     CB --> IMS
 
-    TP --> TE
-    TE --> CT
-    TE --> SR
-    TE --> US
-    TE --> CR
-    CT --> MS
-    CT --> IMS
-    SR --> RS
-    US --> MS
-    US --> IMS
-    CR --> RS
+    HM --> T_CT
+    HM --> T_US
+    HM --> T_SR
+    HM --> T_CR
+    T_CT --> MS
+    T_CT --> IMS
+    T_SR --> RS
+    T_US --> MS
+    T_US --> IMS
+    T_CR --> RS
 
     RA --> RS
     RS -->|fires reminder| TC
@@ -158,26 +148,25 @@ graph TD
 1. **Inbound**: Telegram webhook (or CLI input) delivers text + chat_id.
 2. **Routing**: `BotHandlers` checks allowlist → onboarding status →
    delegates to `TurnProcessor`.
-3. **Turn processing**: `TurnProcessor` checks for status updates
-   (e.g., "done with slides"), task lists, feedback commands, or
-   falls through to general chat.
-4. **Agent**: `AmigoAgent.chat()` stores the user message, builds
-   context via `ContextBuilder` (profile + yesterday + tasks + session
-   history), calls `GeminiProvider.generate()`, stores the response.
+3. **Turn processing**: `TurnProcessor` builds `AgentDeps` with per-request
+   context (user, session, timezone) and calls `handle_message`.
+4. **Agent**: `handle_message` stores the user message, builds context
+   via `ContextBuilder`, runs the Pydantic AI agent. The agent decides
+   which tools to call (create task, update status, schedule reminder)
+   and produces a natural language reply.
 5. **Outbound**: Response sent via `MessageChannel.send_message()`.
-6. **Reminders**: If tasks have reminder times, `ReminderActions`
-   resolves the time via LLM, persists a reminder row, and schedules
-   an APScheduler job. When it fires, it sends a message with
-   Done/Skip/Later buttons.
+6. **Reminders**: Reminder tools use `dateparser` for time resolution and
+   schedule APScheduler jobs. When a job fires, it sends a message with
+   Done/Skip/Later buttons. Callbacks handled by `ReminderActions`.
 
 ## Key Abstractions
 
-| Protocol | Location | Implementations |
-|----------|----------|-----------------|
-| `MessageChannel` | `channels/base.py` | `TelegramChannel`, `CLIChannel` |
-| `ModelProvider` | `providers/base.py` | `GeminiProvider` |
+| Abstraction | Location | Purpose |
+|-------------|----------|---------|
+| `MessageChannel` | `channels/base.py` | Protocol for sending messages (Telegram, CLI) |
+| `AgentDeps` | `agent/agent.py` | Per-request dependency injection for agent tools |
 | Store (duck-typed) | `memory/store.py` | `MemoryStore`, `InMemoryStore` |
-| `ToolExecutor` | `tools/executor.py` | Runs `ToolCall`s from agent decisions |
+| `amigo_agent` | `agent/agent.py` | Pydantic AI Agent with registered tools |
 
 ## Extensibility
 
@@ -189,8 +178,9 @@ graph TD
 
 ### Adding a new LLM provider
 
-1. Create `src/providers/your_provider.py` implementing `ModelProvider`.
-2. Pass it to `AmigoAgent(model=your_provider, store=store)`.
+Pydantic AI supports many providers natively. Change `DEFAULT_MODEL` in
+`.env` to any supported model string (e.g., `openai:gpt-4o`,
+`anthropic:claude-sonnet-4-20250514`). No code changes needed.
 
 ### Adding a new store backend
 
@@ -198,18 +188,26 @@ graph TD
    class to inherit from).
 2. Mirror changes in `InMemoryStore` and `tests/fakes.py:FakeStore`.
 
+### Adding a new tool
+
+1. Add a function decorated with `@amigo_agent.tool` in `src/agent/agent.py`.
+2. The function receives `RunContext[AgentDeps]` for access to store,
+   scheduler, user, etc. Docstring becomes the tool description for the LLM.
+
 ## Testing
 
 - **Framework**: pytest + pytest-asyncio (auto mode).
-- **Fakes**: All external dependencies are replaced with in-memory
-  fakes from `tests/fakes.py` — `FakeChannel`, `FakeStore`,
-  `FakeModel`, `FakeScheduler`. No network calls, no database.
+- **Agent testing**: Pydantic AI's `TestModel` replaces the LLM in tests.
+  Use `amigo_agent.override(model=TestModel())` to run deterministic tests.
+- **Fakes**: External dependencies replaced with in-memory fakes from
+  `tests/fakes.py` — `FakeChannel`, `FakeStore`, `FakeScheduler`.
+  No network calls, no database.
 - **Clock injection**: `SessionManager` and `ReminderScheduler` accept
   a `Clock` instance, allowing deterministic time in tests.
 
 | Test file | What it covers |
 |-----------|---------------|
-| `test_agent_planning.py` | Agent decision/planning and tool call generation |
+| `test_agent_planning.py` | Agent handle_message, tool execution, error handling |
 | `test_allowlist.py` | Chat ID allowlist enforcement |
 | `test_channels.py` | CLI and Telegram channel adapter behavior |
 | `test_onboarding.py` | Multi-step onboarding state machine |
@@ -217,10 +215,9 @@ graph TD
 | `test_scheduler.py` | Scheduler job registration, cancel, reload, send |
 | `test_session_boundaries.py` | Close signals, session type classification |
 | `test_session_rollover.py` | Midnight boundary, inactivity timeout |
-| `test_task_extraction.py` | Pydantic model validation for extractions |
 | `test_timezone.py` | UTC↔local conversion, date boundaries |
-| `test_tools.py` | Tool executor and individual tool behavior |
-| `test_turn_processing.py` | End-to-end turn processing with tools |
+| `test_tools.py` | Individual tool service class behavior |
+| `test_turn_processing.py` | End-to-end turn processing with TestModel |
 
 ### Smoke Checks
 
@@ -237,8 +234,10 @@ No Supabase writes. Safe for CI/CD.
 ## Further Reading
 
 - [README.md](../README.md) — User-facing setup and usage guide.
-- [ADR 0001](adr/0001-separate-bot-agent-tools.md) — Bot/Agent/Tools
-  separation decision.
+- [ADR 0001](adr/0001-separate-bot-agent-tools.md) — Original Bot/Agent/Tools
+  separation decision (superseded by ADR 0002).
+- [ADR 0002](adr/0002-agentic-tool-calling-loop.md) — Agentic tool-calling
+  loop replacing the classify→extract→resolve pipeline.
 - [implementation_plan.md](../implementation_plan.md) — Full Phase 1a
   design document with rationale and decisions.
 - [what-is-amigo.md](what-is-amigo.md) — Product vision and positioning.

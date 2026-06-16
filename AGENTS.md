@@ -14,6 +14,8 @@ data flow, and extensibility.
 # Install
 pip install -e ".[dev]"
 
+# project currently have .venv
+
 # Run locally (CLI — no Telegram/Supabase needed)
 APP_CHANNEL=cli GOOGLE_API_KEY=your-key python -m src.cli
 
