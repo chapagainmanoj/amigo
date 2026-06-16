@@ -5,7 +5,6 @@ import logging
 from src.agent.amigo import AmigoAgent
 from src.bot.onboarding import handle_onboarding
 from src.bot.reminder_actions import ReminderActions
-from src.bot.task_matching import TaskMatcher
 from src.bot.turns import TurnProcessor
 from src.channels.base import MessageChannel
 from src.memory.sessions import SessionManager
@@ -32,7 +31,6 @@ class BotHandlers:
         self.store = store
         self.session_mgr = session_mgr
         self.scheduler = reminder_scheduler
-        self.task_matcher = TaskMatcher()
         self.reminder_actions = ReminderActions(agent, channel, store, reminder_scheduler)
         self.tool_executor = ToolExecutor(store, reminder_scheduler)
         self.turn_processor = TurnProcessor(
@@ -41,7 +39,6 @@ class BotHandlers:
             store=store,
             session_mgr=session_mgr,
             reminder_actions=self.reminder_actions,
-            task_matcher=self.task_matcher,
             tool_executor=self.tool_executor,
         )
 
@@ -94,13 +91,6 @@ class BotHandlers:
         """Acknowledge all pending reminders for a task and cancel APScheduler jobs."""
         await self.reminder_actions.cancel_for_task(task_id, user_id)
 
-    def _fuzzy_match_task(self, title_match: str, tasks: list[dict]) -> dict | None:
-        """Simple fuzzy match: case-insensitive substring match against task titles.
-
-        Phase 1a — good enough. Phase 1b could use difflib.get_close_matches.
-        """
-        return self.task_matcher.fuzzy_match_task(title_match, tasks)
-
     def _is_allowed(self, chat_id: int) -> bool:
         """Check if chat_id is in the allowlist. Empty allowlist = allow all (dev mode)."""
         from src.config import settings
@@ -110,9 +100,3 @@ class BotHandlers:
         allowed_ids = {int(x.strip()) for x in allowed.split(",") if x.strip()}
         return chat_id in allowed_ids
 
-    def _looks_like_task_list(self, text: str) -> bool:
-        """Simple heuristic: does the message look like the user is listing tasks?
-
-        Phase 1a — intentionally simple. Better to over-extract than miss.
-        """
-        return self.task_matcher.looks_like_task_list(text)

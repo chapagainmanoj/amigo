@@ -61,7 +61,7 @@ Return an EMPTY tasks list and a brief confirmation_message of "" when:
 When the message DOES contain tasks, for each task:
 - Write a clear, short title
 - Categorize as: health, work, personal, social, or other
-- Note any mentioned time for reminders (keep as original text, don't convert)
+- Note any mentioned time for reminders (keep as original text with context, e.g. "dinner at 8:30" not just "8:30")
 - Mark as "high" priority if user expressed urgency ("I really need to", "must", "deadline")
 - Include the exact phrase from input that generated this task in raw_input
 
@@ -82,6 +82,7 @@ Context:
 If the time is exact (e.g., "3pm"), confidence is "high".
 If relative (e.g., "after lunch"), use best judgment and confidence is "medium".
 If relative to now (e.g., "in 10 minutes", "in 1 hour"), add to current local time and confidence is "high".
+If the task context suggests AM or PM (e.g., "dinner" implies evening, "breakfast" implies morning), use that to disambiguate bare times like "8:30".
 """
 
 

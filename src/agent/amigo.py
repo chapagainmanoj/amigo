@@ -177,7 +177,7 @@ Keep it to 2-4 sentences. Don't list every task mechanically — weave them into
             if task.reminder_time:
                 try:
                     resolution = await self.resolve_reminder_time(
-                        task.reminder_time, timezone
+                        task.reminder_time, timezone, task_title=task.title,
                     )
                     tool_calls.append(
                         ToolCall(
@@ -227,13 +227,16 @@ Keep it to 2-4 sentences. Don't list every task mechanically — weave them into
         return ExtractionResult(**json.loads(result))
 
     async def resolve_reminder_time(
-        self, time_expression: str, timezone: str = "Asia/Kathmandu"
+        self, time_expression: str, timezone: str = "Asia/Kathmandu",
+        task_title: str = "",
     ) -> ReminderTimeResolution:
         """Convert natural language time to HH:MM format."""
         tz_obj = now_in_tz(timezone)
         current_time = tz_obj.strftime("%Y-%m-%d %H:%M")
         prompt = REMINDER_TIME_PROMPT.format(timezone=timezone, current_time=current_time)
-        messages = [{"role": "user", "content": f"Time to resolve: {time_expression}"}]
+        task_context = f" (task: {task_title})" if task_title else ""
+        content = f"Time to resolve: {time_expression}{task_context}"
+        messages = [{"role": "user", "content": content}]
 
         result = await self.model.generate(
             messages,

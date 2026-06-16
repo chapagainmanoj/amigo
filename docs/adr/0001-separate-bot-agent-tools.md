@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR 0002](0002-agentic-tool-calling-loop.md)
 
 ## Context
 

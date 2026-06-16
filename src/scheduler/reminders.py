@@ -28,7 +28,7 @@ class ReminderScheduler:
     """
 
     def __init__(self, channel: MessageChannel, store: MemoryStore, clock: Clock = default_clock):
-        self.scheduler = AsyncIOScheduler()
+        self.scheduler = AsyncIOScheduler(timezone=ZoneInfo("UTC"))
         self.channel = channel
         self.store = store
         self.clock = clock

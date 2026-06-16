@@ -4,7 +4,6 @@ import logging
 
 from src.agent.amigo import AmigoAgent
 from src.bot.reminder_actions import ReminderActions
-from src.bot.task_matching import TaskMatcher
 from src.channels.base import MessageChannel
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
@@ -23,7 +22,6 @@ class TurnProcessor:
         store: MemoryStore,
         session_mgr: SessionManager,
         reminder_actions: ReminderActions,
-        task_matcher: TaskMatcher | None = None,
         tool_executor: ToolExecutor | None = None,
     ):
         self.agent = agent
@@ -31,7 +29,6 @@ class TurnProcessor:
         self.store = store
         self.session_mgr = session_mgr
         self.reminder_actions = reminder_actions
-        self.task_matcher = task_matcher or TaskMatcher()
         self.tool_executor = tool_executor or ToolExecutor(store, reminder_actions.scheduler)
 
     async def handle(self, chat_id: int, user: dict, text: str) -> None:
