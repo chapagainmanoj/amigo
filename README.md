@@ -142,6 +142,8 @@ Where to get these:
 # Terminal 1 — expose local server to the internet
 ngrok http 8000
 
+## copy command from ngrok dashboard to update the webhook url for telegram
+
 # Copy the HTTPS URL into .env as APP_BASE_URL
 
 # Terminal 2 — start Amigo
