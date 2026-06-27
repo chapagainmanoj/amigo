@@ -1,0 +1,31 @@
+# Render Blueprint — infrastructure-as-code for Render.com deployment
+# https://docs.render.com/blueprint-spec
+
+services:
+  - type: web
+    name: amigo
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    envVars:
+      - key: APP_CHANNEL
+        value: telegram
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: APP_BASE_URL
+        sync: false  # Set manually after service URL is assigned
+      - key: GOOGLE_API_KEY
+        sync: false  # Set via Render dashboard (secret)
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: ALLOWED_TELEGRAM_CHAT_IDS
+        sync: false
