@@ -1,11 +1,49 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { MessageCircle, Smartphone } from 'lucide-react'
+import { MessageCircle, Smartphone, CheckCircle } from 'lucide-react'
+import { apiRequest } from '../supabase'
 
-export default function ConnectView() {
+export default function ConnectView({ pairedUser, onPairSuccess }) {
   const [activeTab, setActiveTab] = useState('telegram')
-  const mockToken = 'tg_onboard_8f72a9b1'
-  const botLink = `https://t.me/amigo_agent_bot?start=${mockToken}`
+  const [pairingData, setPairingData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const fetchPairingToken = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await apiRequest('/api/pairing-token', { method: 'POST' })
+      setPairingData(data)
+    } catch (err) {
+      setError(err.message || 'Failed to generate pairing token')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'telegram' && !pairedUser) {
+      fetchPairingToken()
+    }
+  }, [activeTab, pairedUser])
+
+  // Polling for pairing status
+  useEffect(() => {
+    if (!pairingData || pairedUser) return
+
+    const interval = setInterval(async () => {
+      try {
+        await onPairSuccess()
+      } catch (err) {
+        // user profile not paired yet, ignore and keep polling
+      }
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [pairingData, pairedUser, onPairSuccess])
+
+  const botLink = pairingData?.bot_link || 'https://t.me/amigo_agent_bot'
 
   return (
     <div className="animate-slide-in">
@@ -50,25 +88,55 @@ export default function ConnectView() {
           {activeTab === 'telegram' && (
             <div className="animate-slide-in">
               <h2 style={{ fontSize: '1.5rem', marginBottom: '16px' }}>Connect via Telegram</h2>
-              <p style={{ color: 'var(--mist)', marginBottom: '32px', maxWidth: '400px' }}>
-                Scan this QR code with your phone's camera, or click the button below to open Telegram and link your account.
-              </p>
               
-              <div style={{ display: 'inline-block', background: 'white', padding: '16px', borderRadius: '16px', marginBottom: '32px' }}>
-                <QRCodeSVG value={botLink} size={200} level="M" />
-              </div>
-              
-              <div>
-                <a 
-                  href={botLink} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="btn-primary"
-                  style={{ display: 'inline-block', textDecoration: 'none' }}
-                >
-                  Open in Telegram
-                </a>
-              </div>
+              {pairedUser ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', textAlign: 'center' }}>
+                  <div style={{ background: 'rgba(29, 158, 117, 0.1)', padding: '24px', borderRadius: '50%', marginBottom: '24px', color: '#1D9E75' }}>
+                    <CheckCircle size={48} />
+                  </div>
+                  <h3 style={{ fontSize: '1.25rem', marginBottom: '8px', color: 'var(--paper)' }}>Telegram Connected</h3>
+                  <p style={{ color: 'var(--mist)', marginBottom: '4px' }}>
+                    Your account is successfully linked to Telegram.
+                  </p>
+                  <p style={{ fontSize: '0.9rem', color: 'var(--gold)' }}>
+                    Telegram Chat ID: {pairedUser.telegram_chat_id}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p style={{ color: 'var(--mist)', marginBottom: '32px', maxWidth: '400px' }}>
+                    Scan this QR code with your phone's camera, or click the button below to open Telegram and link your account.
+                  </p>
+                  
+                  {loading && <div style={{ color: 'var(--mist)', marginBottom: '32px' }}>Generating pairing link...</div>}
+                  {error && (
+                    <div style={{ marginBottom: '24px' }}>
+                      <div style={{ color: 'var(--ember)', marginBottom: '8px' }}>{error}</div>
+                      <button onClick={fetchPairingToken} className="btn-secondary" style={{ fontSize: '0.85rem' }}>Retry</button>
+                    </div>
+                  )}
+
+                  {pairingData && (
+                    <>
+                      <div style={{ display: 'inline-block', background: 'white', padding: '16px', borderRadius: '16px', marginBottom: '32px' }}>
+                        <QRCodeSVG value={botLink} size={200} level="M" />
+                      </div>
+                      
+                      <div>
+                        <a 
+                          href={botLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="btn-primary"
+                          style={{ display: 'inline-block', textDecoration: 'none' }}
+                        >
+                          Open in Telegram
+                        </a>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -89,3 +157,4 @@ export default function ConnectView() {
     </div>
   )
 }
+

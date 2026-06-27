@@ -1,16 +1,39 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { LayoutDashboard, Link2, LogOut } from 'lucide-react'
-import { supabase } from '../supabase'
+import { supabase, apiRequest } from '../supabase'
 import DashboardView from './DashboardView'
 import ConnectView from './ConnectView'
 
 export default function AppShell({ session }) {
   const [activeView, setActiveView] = useState('dashboard')
   const [activeMode, setActiveMode] = useState('daily')
+  const [pairedUser, setPairedUser] = useState(null)
+  const [checkingPairing, setCheckingPairing] = useState(true)
+
+  const checkPairing = async () => {
+    try {
+      const user = await apiRequest('/api/me')
+      setPairedUser(user)
+    } catch (err) {
+      setPairedUser(null)
+    } finally {
+      setCheckingPairing(false)
+    }
+  }
+
+  useEffect(() => {
+    checkPairing()
+  }, [])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
   }
+
+  if (checkingPairing) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--mist)' }}>Checking pairing status...</div>
+  }
+
+  const effectiveView = pairedUser ? activeView : 'connect'
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -29,8 +52,10 @@ export default function AppShell({ session }) {
         
         <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <button 
-            onClick={() => setActiveView('dashboard')}
-            className={`nav-item ${activeView === 'dashboard' ? 'nav-item--active' : ''}`}
+            onClick={() => pairedUser && setActiveView('dashboard')}
+            className={`nav-item ${effectiveView === 'dashboard' ? 'nav-item--active' : ''}`}
+            disabled={!pairedUser}
+            style={{ opacity: pairedUser ? 1 : 0.5, cursor: pairedUser ? 'pointer' : 'not-allowed' }}
           >
             <LayoutDashboard size={20} />
             <span style={{ fontWeight: 500 }}>Dashboard</span>
@@ -38,7 +63,7 @@ export default function AppShell({ session }) {
           
           <button 
             onClick={() => setActiveView('connect')}
-            className={`nav-item ${activeView === 'connect' ? 'nav-item--active' : ''}`}
+            className={`nav-item ${effectiveView === 'connect' ? 'nav-item--active' : ''}`}
           >
             <Link2 size={20} />
             <span style={{ fontWeight: 500 }}>Connect Apps</span>
@@ -62,9 +87,19 @@ export default function AppShell({ session }) {
       {/* Main Content Area */}
       <main style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--ink)' }}>
         <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 24px' }}>
-          {activeView === 'dashboard' ? <DashboardView activeMode={activeMode} setActiveMode={setActiveMode} /> : <ConnectView />}
+          {!pairedUser && (
+            <div style={{ background: 'rgba(255, 138, 91, 0.1)', border: '1px solid rgba(255, 138, 91, 0.2)', padding: '16px', borderRadius: '8px', marginBottom: '24px', color: '#FF8A5B' }}>
+              <strong>Account pairing required.</strong> Please connect your Telegram account to view your dashboard.
+            </div>
+          )}
+          {effectiveView === 'dashboard' ? (
+            <DashboardView activeMode={activeMode} setActiveMode={setActiveMode} pairedUser={pairedUser} />
+          ) : (
+            <ConnectView pairedUser={pairedUser} onPairSuccess={checkPairing} />
+          )}
         </div>
       </main>
     </div>
   )
 }
+
