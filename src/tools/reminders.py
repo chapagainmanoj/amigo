@@ -51,9 +51,10 @@ class ScheduleReminderTool:
             logger.info("Skipping reminder for %s — time already passed", task["title"])
             return {"reminder": None, "scheduled_time": send_time}
 
-        # Idempotency: cancel any existing pending reminders for this task before
-        # creating a new one. This prevents duplicates when the LLM calls both
-        # create_task(reminder_time=...) and schedule_reminder(...) in the same turn.
+        # Invariant: a task has at most one pending reminder at a time.
+        # Cancel any existing pending reminders before creating a new one.
+        # This naturally handles both duplicate scheduling within a single agent
+        # turn and explicit user reschedule requests.
         existing_ids = await self.store.acknowledge_reminders_for_task(
             task["task_id"], user_id
         )
@@ -61,7 +62,7 @@ class ScheduleReminderTool:
             self.scheduler.cancel_reminder(user_id, rid)
         if existing_ids:
             logger.info(
-                "Cancelled %d existing pending reminder(s) for task %s before rescheduling",
+                "Replaced %d existing pending reminder(s) for task %s",
                 len(existing_ids),
                 task["task_id"],
             )

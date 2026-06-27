@@ -158,13 +158,23 @@ class FakeStore:
     async def create_task(self, user_id, title, category="other",
                           session_id=None, suggested_time=None, timezone="UTC"):
         from src.utils import today_in_tz
+        today = today_in_tz(timezone).isoformat()
+        # Deduplication — mirror MemoryStore behaviour
+        for t in self.tasks:
+            if (
+                t["user_id"] == user_id
+                and t["title"] == title
+                and t["created_date"] == today
+                and t["status"] not in ("done", "skipped")
+            ):
+                return t
         task = {
             "task_id": str(uuid.uuid4()),
             "user_id": user_id,
             "title": title,
             "category": category,
             "status": "pending",
-            "created_date": today_in_tz(timezone).isoformat(),
+            "created_date": today,
             "source_session_id": session_id,
             "suggested_time": suggested_time,
             "deferred_count": 0,

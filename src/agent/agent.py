@@ -114,15 +114,14 @@ async def create_task(
 ) -> str:
     """Create a new task for the user.
 
-    If reminder_time is provided this tool schedules the reminder automatically.
-    Do NOT call schedule_reminder separately for the same task in the same turn —
-    that would create a duplicate reminder.
+    When reminder_time is provided the reminder is scheduled automatically
+    as part of this call — no separate schedule_reminder call is needed.
 
     Args:
         title: Clear, actionable task title.
         category: One of: health, work, personal, social, other.
         reminder_time: Optional natural language time like "3pm", "in 10 minutes",
-            "after lunch". Pass this instead of calling schedule_reminder afterwards.
+            "after lunch". Pass this to create the task and set the reminder in one step.
     """
     deps = ctx.deps
     tool = CreateTaskTool(deps.store)
@@ -177,9 +176,8 @@ async def schedule_reminder(
 ) -> str:
     """Schedule or reschedule a reminder for an already-created task.
 
-    Use this only when the task was created without a reminder_time, or when
-    the user wants to change the time of an existing reminder. Do NOT call this
-    after create_task(reminder_time=...) — the reminder is already set.
+    Use this to add or change a reminder on an existing task. When creating a
+    new task with a reminder, pass reminder_time to create_task instead.
 
     Args:
         task_id: The task_id to schedule a reminder for.

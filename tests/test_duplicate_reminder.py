@@ -1,11 +1,12 @@
-"""Regression test — duplicate reminder creation.
+"""Regression tests for the duplicate-task / duplicate-reminder bug.
 
-Reproduces the bug where the LLM calls both create_task(reminder_time=...) AND
-schedule_reminder(...) in the same turn, resulting in two DB reminder rows, two
-"Good time?" messages, and two "done" acknowledgements.
+Root cause: Gemini issued parallel create_task tool calls in a single agent turn,
+producing two task rows and two reminder rows. Both reminders fired, producing two
+"Good time?" messages and two "done" acknowledgements.
 
-The fix: ScheduleReminderTool.run() cancels existing pending reminders for the
-task before inserting a new one, making it idempotent.
+Fixes applied:
+  - create_task is now idempotent: same (user, title, date) returns the existing row.
+  - ScheduleReminderTool enforces at-most-one pending reminder per task.
 """
 
 from datetime import timedelta
@@ -106,3 +107,44 @@ async def test_schedule_reminder_cancels_previous_before_rescheduling(store, sch
     # Only one pending reminder remains
     pending = [r for r in store.reminders if r["status"] == "pending"]
     assert len(pending) == 1
+
+
+async def test_create_task_idempotent(store):
+    """Calling create_task twice with the same title on the same day returns the
+    same task — no duplicate row is created. Guards against the LLM issuing two
+    parallel create_task tool calls in one agent turn."""
+    user = await store.create_user(chat_id=5555)
+    user["timezone"] = "UTC"
+
+    task1 = await store.create_task(
+        user_id=user["user_id"], title="Go for a walk", timezone="UTC"
+    )
+    task2 = await store.create_task(
+        user_id=user["user_id"], title="Go for a walk", timezone="UTC"
+    )
+
+    assert task1["task_id"] == task2["task_id"], (
+        "Same title on same day must return the same task row."
+    )
+    assert len([t for t in store.tasks if t["title"] == "Go for a walk"]) == 1, (
+        "Only one task row should exist."
+    )
+
+
+async def test_create_task_after_done_creates_new(store):
+    """A completed task does NOT block creating a fresh same-titled task —
+    the dedup only applies to non-done/non-skipped tasks."""
+    user = await store.create_user(chat_id=6666)
+    user["timezone"] = "UTC"
+
+    task1 = await store.create_task(
+        user_id=user["user_id"], title="Go for a walk", timezone="UTC"
+    )
+    await store.update_task_status(task1["task_id"], "done")
+
+    task2 = await store.create_task(
+        user_id=user["user_id"], title="Go for a walk", timezone="UTC"
+    )
+    assert task1["task_id"] != task2["task_id"], (
+        "A new task should be created after the previous one is done."
+    )

@@ -169,13 +169,33 @@ class MemoryStore:
                           session_id: str | None = None,
                           suggested_time: str | None = None,
                           timezone: str = "UTC") -> dict:
-        """Create a new task. Sets created_date in user's timezone."""
+        """Create a new task. Sets created_date in user's timezone.
+
+        Idempotent: if a non-done task with the same title already exists today
+        for this user, returns the existing row instead of creating a duplicate.
+        This guards against the LLM calling create_task twice in the same turn.
+        """
+        today = today_in_tz(timezone).isoformat()
+        existing = (
+            self.db.table("tasks")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("title", title)
+            .eq("created_date", today)
+            .not_.in_("status", ["done", "skipped"])
+            .maybe_single()
+            .execute()
+        )
+        if existing and existing.data:
+            logger.info("Deduplicating create_task — returning existing task '%s'", title)
+            return existing.data
+
         data = {
             "user_id": user_id,
             "title": title,
             "category": category,
             "source_session_id": session_id,
-            "created_date": today_in_tz(timezone).isoformat(),
+            "created_date": today,
         }
         if suggested_time:
             data["suggested_time"] = suggested_time
