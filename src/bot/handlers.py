@@ -44,6 +44,13 @@ class BotHandlers:
             )
             return
 
+        # Deep-link pairing check
+        if text.startswith("/start pair_"):
+            token = text.replace("/start pair_", "").strip()
+            from src.bot.pairing import handle_start_pairing
+            await handle_start_pairing(chat_id, token, self.store, self.channel)
+            return
+
         # Get or create user
         user = await self.store.get_user_by_chat_id(chat_id)
 

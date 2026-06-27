@@ -49,7 +49,6 @@ Replace `datetime.utcnow()` with `datetime.now(datetime.UTC)` in:
 
 | Target | Reason |
 |--------|--------|
-| `src/providers/` directory | Contains only a docstring saying "deprecated." No imports reference it. |
 | `src/agent/prompts.py` L53–55 | Three empty-string constants (`TASK_EXTRACTION_PROMPT`, `REMINDER_TIME_PROMPT`, `TASK_STATUS_PROMPT`) marked deprecated. |
 | `ContextBuilder.build()` method | The public `build()` and `_build_profile_block()` in [context.py](src/memory/context.py) are never called after the Pydantic AI migration. Only `_build_tasks_block`, `_get_yesterday_summary`, and `_get_truncated_messages` are still used. |
 

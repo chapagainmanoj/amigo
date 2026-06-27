@@ -29,3 +29,21 @@ services:
         sync: false
       - key: ALLOWED_TELEGRAM_CHAT_IDS
         sync: false
+      - key: DASHBOARD_URL
+        sync: false
+
+  - type: web
+    name: amigo-dashboard
+    runtime: static
+    plan: free
+    region: singapore
+    buildCommand: cd web && npm ci && npm run build
+    staticPublishPath: web/dist
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: VITE_API_URL
+        value: https://amigo-agkb.onrender.com
+

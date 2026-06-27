@@ -53,6 +53,7 @@ class FakeStore:
         self.reminders: list[dict] = []
         self.feedback: list[dict] = []
         self.usage: list[dict] = []
+        self.pairing_tokens: dict[str, dict] = {}
         # Fake Supabase client for direct queries (used by SessionManager)
         self.db = FakeDB(self)
 
@@ -296,6 +297,47 @@ class FakeStore:
             "user_id": user_id, "model": model,
             "input_tokens": input_tokens, "output_tokens": output_tokens,
         })
+
+    # ── Pairing and Account Linking ──
+
+    async def get_user_by_auth_id(self, auth_id: str) -> dict | None:
+        """Find user profile linked to a Supabase auth.uid()."""
+        for user in self.users.values():
+            if user.get("supabase_auth_id") == auth_id:
+                return dict(user)
+        return None
+
+    async def create_pairing_token(self, token: str, auth_id: str, expires_at: datetime) -> dict:
+        """Create a new pairing token linked to a Supabase auth.uid()."""
+        row = {
+            "token": token,
+            "supabase_auth_id": auth_id,
+            "expires_at": expires_at.isoformat(),
+            "consumed": False,
+        }
+        self.pairing_tokens[token] = row
+        return dict(row)
+
+    async def consume_pairing_token(self, token: str) -> dict | None:
+        """Atomically claim/consume a pairing token if valid and not expired.
+
+        Returns token dict if consumed successfully, otherwise None.
+        """
+        row = self.pairing_tokens.get(token)
+        if not row:
+            return None
+        if row["consumed"]:
+            return None
+        expires_at = datetime.fromisoformat(row["expires_at"])
+        if expires_at.tzinfo is not None:
+            from zoneinfo import ZoneInfo
+            expires_at = expires_at.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+        from src.utils import utc_now
+        if expires_at < utc_now().replace(tzinfo=None):
+            return None
+        row["consumed"] = True
+        return dict(row)
+
 
 
 class FakeDB:

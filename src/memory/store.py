@@ -380,3 +380,46 @@ class MemoryStore:
             "estimated_cost": estimated_cost,
             "session_id": session_id,
         }).execute()
+
+    # ── Pairing and Account Linking ──
+
+    async def get_user_by_auth_id(self, auth_id: str) -> dict | None:
+        """Find user profile linked to a Supabase auth.uid()."""
+        result = (
+            self.db.table("user_profiles")
+            .select("*")
+            .eq("supabase_auth_id", auth_id)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result else None
+
+    async def create_pairing_token(self, token: str, auth_id: str, expires_at: datetime) -> dict:
+        """Create a new pairing token linked to a Supabase auth.uid()."""
+        result = (
+            self.db.table("pairing_tokens")
+            .insert({
+                "token": token,
+                "supabase_auth_id": auth_id,
+                "expires_at": expires_at.isoformat(),
+            })
+            .execute()
+        )
+        return result.data[0]
+
+    async def consume_pairing_token(self, token: str) -> dict | None:
+        """Atomically claim/consume a pairing token if valid and not expired.
+
+        Returns token dict if consumed successfully, otherwise None.
+        """
+        now_str = utc_now().isoformat()
+        result = (
+            self.db.table("pairing_tokens")
+            .update({"consumed": True})
+            .eq("token", token)
+            .eq("consumed", False)
+            .gte("expires_at", now_str)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
