@@ -5,14 +5,7 @@ import { timeOfDayGreeting } from '../mockData'
 import Toast from './Toast'
 import ModeChips from './ModeChips'
 
-const HORIZON_SUBTEXTS = {
-  daily: 'Keeping the momentum going.',
-  recommender: 'Discover mode is coming soon. For now, keep steering the day from Daily.',
-  coach: "Coach mode is coming soon. Today's tasks still get the front seat.",
-  reflect: 'Reflect mode is coming soon. Daily planning stays active for now.',
-}
-
-export default function DashboardView({ activeMode, setActiveMode, pairedUser }) {
+export default function DashboardView({ pairedUser }) {
   const [tasks, setTasks] = useState([])
   const [reminders, setReminders] = useState([])
   const [sessions, setSessions] = useState([])
@@ -226,9 +219,7 @@ export default function DashboardView({ activeMode, setActiveMode, pairedUser })
       <div className="horizon-card">
         <div className="horizon-copy">
           <h1 className="horizon-greeting">{greeting.headline}</h1>
-          <p className="horizon-subtext">
-            {activeMode === 'daily' ? greeting.subtext : HORIZON_SUBTEXTS[activeMode]}
-          </p>
+          <p className="horizon-subtext">{greeting.subtext}</p>
           <div className="horizon-progress-pill">
             <CheckCircle2 size={16} color="var(--ember)" />
             <span>
@@ -238,7 +229,7 @@ export default function DashboardView({ activeMode, setActiveMode, pairedUser })
         </div>
       </div>
 
-      <ModeChips activeMode={activeMode} onModeChange={setActiveMode} />
+      <ModeChips />
 
       <div className="dashboard-grid">
         {/* Main Column: Tasks */}

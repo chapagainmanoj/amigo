@@ -1,22 +1,28 @@
-# Amigo — Your AI Virtual Friend
+# Amigo — AI Accountability Companion
 
-A Telegram bot that helps you plan your day, sends gentle reminders,
-and evolves into a proactive virtual friend. Powered by Gemini Flash.
+Tell Amigo what you need to do in a Telegram conversation. It creates Tasks and sends Reminders
+at the time you choose, with simple Done, Skip, and Later controls. A paired web dashboard shows
+the current prototype state.
+
+Amigo is in invitation-only beta development. See the
+[capability matrix](docs/capability-matrix.md) before describing, demonstrating, or deploying it.
 
 ## What Can Amigo Do?
 
-- **Plan your day** — just tell Amigo what you need to do in plain
-  language and it extracts tasks, sets reminders, and checks in later.
-- **Smart reminders** — get nudges at the right time with Done, Skip,
-  or Later buttons. Snooze escalates so nothing falls through.
+- **Capture tasks conversationally** — tell Amigo what you need to do in plain language and it
+  creates Tasks, optionally with a time you choose.
+- **Receive Telegram reminders** — a scheduled Reminder includes Done, Skip, and Later buttons.
 - **Status updates** — say "done with slides" or "skip gym" and Amigo
   updates your tasks automatically.
-- **Morning planning** — first message of the day triggers a planning
-  session that reviews yesterday's unfinished tasks.
-- **Session memory** — Amigo remembers your conversation context within
-  and across sessions. Say "goodnight" to close the day.
+- **Continue recent context** — Amigo uses the current Session, recent Task context, and a recent
+  Session summary. This is not durable personal Memory.
+- **Review the prototype dashboard** — after pairing Telegram, view and edit current Tasks and see
+  pending Reminders and recent Sessions. Cross-surface consistency is still release-gated.
 - **Feedback capture** — `/feedback your thoughts` logs friction points
   for weekly review.
+
+Amigo does not currently provide autonomous morning/evening check-ins, a Memory Inspector,
+adaptive coaching Modes, wellbeing treatment, WhatsApp, voice, or native mobile apps.
 
 ## For Users
 
@@ -60,7 +66,7 @@ Supabase — just your Gemini key.
 
 ```bash
 # 1. Clone and set up
-git clone <repo-url> && cd amigo
+git clone https://github.com/chapagainmanoj/amigo.git && cd amigo
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -135,6 +141,10 @@ Where to get these:
 1. Create a Supabase project.
 2. Open the SQL editor in the Supabase dashboard.
 3. Run [`migrations/001_initial_schema.sql`](migrations/001_initial_schema.sql).
+4. Run [`migrations/002_auth_linking_and_rls.sql`](migrations/002_auth_linking_and_rls.sql).
+
+Apply migrations in numeric order. The second migration is required for dashboard pairing and
+row-level access control.
 
 #### 3. Run
 
@@ -159,7 +169,7 @@ Health check: `curl http://localhost:8000/health`
 ### Test & Lint
 
 ```bash
-python -m pytest tests/ -v         # 62 unit tests, no network needed
+python -m pytest tests/ -v         # 69 unit tests at the latest capability review
 ruff check src tests scripts       # lint
 ```
 
@@ -200,66 +210,16 @@ python scripts/smoke_check.py --all
 | `DEFAULT_MODEL` | `gemini-2.5-flash` | — |
 | `SMOKE_TEST_CHAT_ID` | — | Smoke checks (`--channel`) |
 
-### Deploy to Production (Fly.io)
+### Deployment Status
 
-Amigo deploys as one always-on Fly.io Machine. Keep production scaled to
-one Machine while reminders run inside the FastAPI process.
+Render is the canonical beta deployment target, described by [`render.yaml`](render.yaml). The
+invitation beta must use one always-on service and one scheduler owner; a sleeping free instance
+is suitable only for development. `fly.toml` and the Fly workflow are retained as inactive future
+deployment material and are not a second production path.
 
-#### 1. Create the Fly app
-
-```bash
-fly launch --no-deploy
-```
-
-If Fly creates a different app name, update `app` and `APP_BASE_URL` in
-`fly.toml`.
-
-#### 2. Set production secrets
-
-```bash
-fly secrets set \
-  GOOGLE_API_KEY=your-gemini-api-key \
-  TELEGRAM_BOT_TOKEN=your-bot-token \
-  TELEGRAM_WEBHOOK_SECRET=your-strong-random-secret \
-  ALLOWED_TELEGRAM_CHAT_IDS=your-chat-id \
-  SUPABASE_URL=https://your-project.supabase.co \
-  SUPABASE_SERVICE_KEY=your-service-role-key
-```
-
-Non-secret production config lives in `fly.toml`.
-
-#### 3. Deploy manually
-
-```bash
-fly deploy --remote-only
-```
-
-Or use the GitHub Actions `Deploy` workflow. It runs tests first, waits
-for approval in the `production` environment, then deploys with
-`FLY_API_TOKEN`.
-
-#### 4. Configure GitHub production deploys
-
-1. Create a GitHub environment named `production`.
-2. Add an environment secret named `FLY_API_TOKEN`.
-3. Require manual approval for the `production` environment.
-
-Create the token with:
-
-```bash
-fly tokens create deploy -x 999999h
-```
-
-#### 5. Verify
-
-```bash
-curl https://amigo.fly.dev/health
-fly logs
-```
-
-On startup, Amigo automatically registers the Telegram webhook at
-`{APP_BASE_URL}/webhook`. Send a message to your bot on Telegram to
-confirm everything works.
+The repository does not yet provide a supported self-hosting product. Before a real deployment,
+follow the security, staging, monitoring, backup, and end-to-end gates in the
+[pre-launch implementation plan](docs/pre-launch-implementation-plan.md).
 
 ### Architecture
 
@@ -280,3 +240,21 @@ abstractions, extensibility hooks, and testing strategy.
 - `/feedback` capture into Supabase
 - Allowlisted access for private dogfooding
 - Production smoke checks (scheduler + Telegram channel liveness)
+
+This list describes repository behavior, not proof that the external services work together in
+production. See the [capability matrix](docs/capability-matrix.md) for current limits and roadmap
+separation.
+
+## Contributing and Security
+
+Contributions require Developer Certificate of Origin 1.1 sign-off. See
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, checks, and submission guidance. Report suspected
+vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md); do not publish unpatched
+details in an issue.
+
+## License
+
+Amigo's original source code, scripts, and documentation are licensed under the
+[GNU Affero General Public License version 3](LICENSE). Identified third-party materials retain
+their applicable licenses and rights. The open-source license permits independent deployment but
+does not promise official support for self-hosted installations.

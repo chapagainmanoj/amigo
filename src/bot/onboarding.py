@@ -56,7 +56,7 @@ async def handle_onboarding(
     if step == 0:
         await channel.send_message(
             chat_id,
-            "Hey! I'm Amigo — think of me as a friend who helps you stay on track. 👋\n\n"
+            "Hey! I'm Amigo, an AI accountability companion for everyday tasks. 👋\n\n"
             "What should I call you?",
         )
         await store.update_user(user_id, {"onboarding_step": 1})
@@ -126,7 +126,7 @@ async def handle_onboarding(
         await channel.send_message(
             chat_id,
             f"All set, {name}! 🎉\n\n"
-            "So — what are you planning to do today?",
+            "Tell me one thing you're planning to do today and when you'd like a reminder.",
         )
         return False  # Onboarding complete, next message goes to regular handler
 

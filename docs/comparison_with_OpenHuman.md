@@ -1,5 +1,10 @@
 # Amigo vs OpenHuman — Architecture & Implementation Analysis
 
+> **Internal historical design research.** References to Memory, anti-nag behavior, coaching,
+> voice, additional channels, or proactive companion behavior describe hypotheses and roadmap
+> ideas—not shipped Amigo capabilities. Use the [capability matrix](capability-matrix.md) for
+> current product claims.
+
 ## Executive Summary
 
 **Similarity: ~25% overlap.** These projects are in adjacent conceptual spaces but solving fundamentally different problems. OpenHuman is a **privacy-first desktop platform** (Rust core + Tauri shell) that unifies messaging across apps. Amigo is a **proactive AI companion** (Python + FastAPI + Telegram) focused on daily task management and emotional attunement.

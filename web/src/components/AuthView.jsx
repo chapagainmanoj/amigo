@@ -48,7 +48,7 @@ export default function AuthView() {
       <div className="glass-panel animate-slide-in" style={{ padding: '40px', maxWidth: '400px', width: '100%' }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <h1 className="display-text" style={{ fontSize: '2rem', marginBottom: '8px' }}>Amigo</h1>
-          <p style={{ color: 'var(--mist)' }}>Your proactive daily planner</p>
+          <p style={{ color: 'var(--mist)' }}>Turn a conversation into tasks and Telegram reminders.</p>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
@@ -91,7 +91,7 @@ export default function AuthView() {
             />
           </div>
           <button type="submit" className="btn-primary" style={{ width: '100%' }} disabled={loading}>
-            {loading ? 'Processing...' : isSignUp ? 'Sign Up' : 'Sign In'}
+            {loading ? 'Processing...' : isSignUp ? 'Create account' : 'Sign in'}
           </button>
         </form>
       </div>

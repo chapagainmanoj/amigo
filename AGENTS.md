@@ -93,3 +93,19 @@ python scripts/smoke_check.py --scheduler
 - All secrets loaded from `.env` via `pydantic-settings` (gitignored).
 - `LazySettings` defers loading so tests never need production secrets.
 - CLI mode requires only `GOOGLE_API_KEY`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked as local Markdown files under `.scratch/`. See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Issues use workflow-state labels plus severity labels. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Amigo uses a single-context domain layout. See `docs/agents/domain.md`.

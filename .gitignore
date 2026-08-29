@@ -44,5 +44,8 @@ logs/
 .coverage
 htmlcov/
 
+# Node
+node_modules/
+
 # Agents / AI
 .agents/

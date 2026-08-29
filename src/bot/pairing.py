@@ -44,5 +44,8 @@ async def handle_start_pairing(
 
     await channel.send_message(
         chat_id=chat_id,
-        text="🎉 Successfully paired! You can now access your Amigo Web Dashboard.",
+        text=(
+            "🎉 Successfully paired! Telegram is connected to your Amigo dashboard. "
+            "Send another message to finish setup and create your first task."
+        ),
     )

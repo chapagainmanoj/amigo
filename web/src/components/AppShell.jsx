@@ -6,7 +6,6 @@ import ConnectView from './ConnectView'
 
 export default function AppShell({ session }) {
   const [activeView, setActiveView] = useState('dashboard')
-  const [activeMode, setActiveMode] = useState('daily')
   const [pairedUser, setPairedUser] = useState(null)
   const [checkingPairing, setCheckingPairing] = useState(true)
 
@@ -66,7 +65,7 @@ export default function AppShell({ session }) {
             className={`nav-item ${effectiveView === 'connect' ? 'nav-item--active' : ''}`}
           >
             <Link2 size={20} />
-            <span style={{ fontWeight: 500 }}>Connect Apps</span>
+            <span style={{ fontWeight: 500 }}>Connect Telegram</span>
           </button>
         </nav>
 
@@ -89,11 +88,11 @@ export default function AppShell({ session }) {
         <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 24px' }}>
           {!pairedUser && (
             <div style={{ background: 'rgba(255, 138, 91, 0.1)', border: '1px solid rgba(255, 138, 91, 0.2)', padding: '16px', borderRadius: '8px', marginBottom: '24px', color: '#FF8A5B' }}>
-              <strong>Account pairing required.</strong> Please connect your Telegram account to view your dashboard.
+              <strong>Connect Telegram to continue.</strong> Pair your account to chat with Amigo, schedule reminders, and view your dashboard.
             </div>
           )}
           {effectiveView === 'dashboard' ? (
-            <DashboardView activeMode={activeMode} setActiveMode={setActiveMode} pairedUser={pairedUser} />
+            <DashboardView pairedUser={pairedUser} />
           ) : (
             <ConnectView pairedUser={pairedUser} onPairSuccess={checkPairing} />
           )}
@@ -102,4 +101,3 @@ export default function AppShell({ session }) {
     </div>
   )
 }
-

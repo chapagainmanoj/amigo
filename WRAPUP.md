@@ -18,12 +18,14 @@ built.
 
 | Metric | Value |
 |--------|-------|
-| Tests | 60 passing, 0 failing |
+| Tests | 69 passing, 0 failing |
 | Lint | Clean (`ruff check src tests scripts`) |
 | Deprecation warnings | 89 (from 8 call sites using `datetime.utcnow()`) |
 | Agent architecture | Pydantic AI tool-calling loop (ADR 0002) ✅ |
-| Deployment infra | Dockerfile + fly.toml + GitHub Actions CI/CD ✅ |
+| Deployment infra | Render (bot as Docker web service, dashboard as static site) ✅ |
 | Core loop | Task extraction → reminders → snooze → morning planning ✅ |
+| Web Dashboard | Auth + pairing flow + real-time Supabase queries ✅ |
+| Duplicate task/reminder guard | `create_task` and `ScheduleReminderTool` are now idempotent ✅ |
 
 ---
 
@@ -244,11 +246,12 @@ the message reaches the agent. If distress signals are detected:
 
 ---
 
-## 3. Dashboard Integration (Phase B)
+## 3. Dashboard Integration (Phase B) ✅ COMPLETE
 
-> [!IMPORTANT]
-> The dashboard requires solving the **identity linking problem** first.
-> Do not attempt to deploy the dashboard before completing Section 3.1.
+> [!NOTE]
+> All Phase B work is implemented and deployed on Render.
+> The migration (Section 3.2) must be applied to the production Supabase project
+> via the SQL Editor if not already done.
 
 ### 3.1 The identity mismatch problem
 
@@ -266,13 +269,13 @@ row belongs to which `auth.uid()`.
 **Solution:** Add a `supabase_auth_id` column to `user_profiles` and
 populate it during a pairing flow.
 
-### 3.2 Migration: `002_auth_linking_and_rls.sql`
+### 3.2 Migration: `002_auth_linking_and_rls.sql` ✅
 
 > [!WARNING]
 > Do **not** edit `001_initial_schema.sql` — it has already been applied
 > to the production database.
 
-Create `migrations/002_auth_linking_and_rls.sql`:
+[migrations/002_auth_linking_and_rls.sql](migrations/002_auth_linking_and_rls.sql) has been created. Apply it in the Supabase SQL Editor if not already done:
 
 ```sql
 -- Link Supabase Auth identity to application user
@@ -330,7 +333,7 @@ CREATE POLICY "Users see own messages"
   ));
 ```
 
-### 3.3 Telegram pairing flow
+### 3.3 Telegram pairing flow ✅
 
 **Security requirements for pairing tokens:**
 - Cryptographically random (≥ 32 hex chars)
@@ -338,59 +341,33 @@ CREATE POLICY "Users see own messages"
 - Single-use (mark `consumed = TRUE` after successful pairing)
 - Tied to the initiating `auth.uid()`
 
-**Flow:**
+**Flow (implemented):**
 
-1. Dashboard user clicks "Connect Telegram" → frontend calls a Supabase
-   Edge Function that generates a token, inserts into `pairing_tokens`,
-   returns it.
-2. UI renders QR code / deep link: `https://t.me/amigo_agent_bot?start=pair_<TOKEN>`
-3. User opens the bot → Telegram sends `/start pair_<TOKEN>` as a message.
-4. **New handler branch needed** in [BotHandlers.handle_message](src/bot/handlers.py):
-   parse `/start pair_<TOKEN>`, validate the token, link `supabase_auth_id`
-   to the user's `user_profiles` row, mark token consumed.
+1. Dashboard user opens **Connect Apps** → `ConnectView.jsx` calls `POST /api/pairing-token`
+   ([src/main.py](src/main.py)) which generates a 32-hex-char token (15-min TTL).
+2. UI renders a QR code and deep link: `https://t.me/amigo_agent_bot?start=pair_<TOKEN>`
+3. User taps the link → Telegram sends `/start pair_<TOKEN>` to the bot.
+4. [BotHandlers.handle_message](src/bot/handlers.py) routes to
+   [src/bot/pairing.py](src/bot/pairing.py) which validates and consumes the token,
+   then links `supabase_auth_id` to the user's `user_profiles` row.
+5. `ConnectView.jsx` polls `GET /api/me` every 3 seconds and auto-navigates to
+   the dashboard once the link is confirmed.
 
-> [!NOTE]
-> The current `handle_message` has no `/start` payload parsing. A new
-> branch must be added before the allowlist check.
+### 3.4 Connect dashboard to real data ✅
 
-### 3.4 Connect dashboard to real data
+[DashboardView.jsx](web/src/components/DashboardView.jsx) now fetches live data:
+- Today's tasks, active reminders (with join to task title), and recent sessions from Supabase.
+- Realtime `postgres_changes` subscriptions on `tasks`, `reminders`, and `sessions` — changes
+  in Telegram reflect on the dashboard instantly.
+- Task toggle, delete, add, and reminder snooze all write back to Supabase directly.
 
-Replace mock data arrays in [DashboardView.jsx](web/src/components/DashboardView.jsx)
-with Supabase queries:
+### 3.5 Visual polish — deferred
 
-```javascript
-import { supabase } from '../supabase'
-
-// Fetch today's tasks
-const { data: tasks } = await supabase
-  .from('tasks')
-  .select('*')
-  .eq('created_date', new Date().toISOString().split('T')[0])
-  .order('created_at')
-
-// Subscribe to real-time updates
-supabase
-  .channel('tasks')
-  .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' },
-    (payload) => { /* update local state */ })
-  .subscribe()
-```
-
-Real-time subscriptions ensure that when a user marks a task "Done" in
-Telegram, the dashboard updates immediately without a page refresh.
-
-### 3.5 Visual polish
-
-Apply the fixes documented in [next-todo.md](web/next-todo.md):
-- Glassmorphism on Horizon card (backdrop-filter + semi-transparent bg)
-- Serif typography for greeting heading
-- Sidebar active state (left-border accent, not solid fill)
-- Fix Recommender chip disabled state
-- Background color `#14121A`, text color `#F7F3EC`
+Deferred by user decision. Tracked in [next-todo.md](web/next-todo.md).
 
 ---
 
-## 4. Deployment Playbook
+## 4. Deployment Playbook (Updated for Render)
 
 ### 4.1 Supabase production setup
 
@@ -409,62 +386,51 @@ Apply the fixes documented in [next-todo.md](web/next-todo.md):
 3. Set command shortcuts: `/feedback` and `/start`.
 4. Store the token securely — it goes into Fly.io secrets.
 
-### 4.3 Deploy backend to Fly.io
+### 4.3 Deploy to Render ✅
 
-The project already has a working [Dockerfile](Dockerfile),
-[fly.toml](fly.toml), and [deploy workflow](.github/workflows/deploy.yml).
+Both services are defined in [render.yaml](render.yaml) and deployed on Render:
 
-```bash
-# One-time setup
-fly launch --no-deploy
+| Service | Type | URL |
+|---------|------|-----|
+| `amigo` | Docker web service | https://amigo-agkb.onrender.com |
+| `amigo-dashboard` | Static site | Assigned by Render on first deploy |
 
-# Set production secrets
-fly secrets set \
-  GOOGLE_API_KEY="your-gemini-key" \
-  TELEGRAM_BOT_TOKEN="your-bot-token" \
-  SUPABASE_URL="https://your-project.supabase.co" \
-  SUPABASE_SERVICE_KEY="your-service-role-key" \
-  TELEGRAM_WEBHOOK_SECRET="$(openssl rand -hex 32)" \
-  ALLOWED_TELEGRAM_CHAT_IDS="your-chat-id" \
-  APP_ENV="production"
+**Required environment variables on the `amigo` backend service:**
 
-# Deploy
-fly deploy --remote-only
-```
+| Variable | Where to get it |
+|----------|----------------|
+| `GOOGLE_API_KEY` | Google AI Studio |
+| `TELEGRAM_BOT_TOKEN` | BotFather |
+| `TELEGRAM_WEBHOOK_SECRET` | Generate: `openssl rand -hex 32` |
+| `SUPABASE_URL` | Supabase → Settings → API |
+| `SUPABASE_SERVICE_KEY` | Supabase → Settings → API |
+| `ALLOWED_TELEGRAM_CHAT_IDS` | Your Telegram chat ID |
+| `APP_BASE_URL` | The Render service URL |
+| `DASHBOARD_URL` | The Render static site URL (set after first deploy) |
 
-On startup, the FastAPI app automatically registers the Telegram webhook
-at `{APP_BASE_URL}/webhook` (configured in fly.toml as
-`https://amigo.fly.dev`).
+**Required environment variables on the `amigo-dashboard` static site:**
 
-**Alternatively**, use the GitHub Actions deploy workflow:
+| Variable | Where to get it |
+|----------|----------------|
+| `VITE_SUPABASE_URL` | Supabase → Settings → API |
+| `VITE_SUPABASE_ANON_KEY` | Supabase → Settings → API |
 
-1. Create a GitHub environment named `production`.
-2. Add `FLY_API_TOKEN` as an environment secret (`fly tokens create deploy -x 999999h`).
-3. Enable manual approval on the `production` environment.
-4. Trigger the workflow via `workflow_dispatch`.
+The `VITE_API_URL` is already hardcoded in `render.yaml` to the backend URL.
 
-### 4.4 Deploy dashboard to Vercel (Phase B only)
+### 4.4 Configure Supabase Auth redirect URLs
 
-1. Create a Vercel project pointing to the git repo.
-2. Set root directory to `web`.
-3. Build command: `npm run build`, output: `dist`.
-4. Environment variables:
-   - `VITE_SUPABASE_URL` — your Supabase project URL
-   - `VITE_SUPABASE_ANON_KEY` — your Supabase anonymous API key
-5. Under Supabase **Authentication → URL Configuration**, add the
-   Vercel production URL to **Site URL** and **Redirect URLs**.
+Under **Supabase → Authentication → URL Configuration**:
+- Add the `amigo-dashboard` Render URL to **Site URL** and **Redirect URLs**.
 
 ### 4.5 Verify
 
 ```bash
 # Health check
-curl https://amigo.fly.dev/health
-
-# Logs
-fly logs
+curl https://amigo-agkb.onrender.com/health
 
 # Send a test message to the bot on Telegram
 # Verify onboarding flow completes
+# Open the dashboard, sign in, pair Telegram account
 ```
 
 ---
@@ -492,25 +458,25 @@ The project has existing GitHub Actions but they have gaps:
 | 3 | Add category-aware AM/PM to `parse_time_expression` | Yes | ☐ |
 | 4 | Add webhook error handling (always return ok) | Yes | ☐ |
 | 5 | Wire token tracking into `handle_message` | No | ☐ |
-| 6 | Add tool-level idempotency to `CreateTaskTool` | No | ☐ |
-| 7 | Run `001_initial_schema.sql` on production Supabase | Yes | ☐ |
-| 8 | Create production Telegram bot via BotFather | Yes | ☐ |
-| 9 | Deploy to Fly.io with all secrets configured | Yes | ☐ |
-| 10 | Verify: health check, send test message, onboarding flow | Yes | ☐ |
+| 6 | Add tool-level idempotency to `create_task` | No | ✅ — `store.create_task` deduplicates by (user, title, date); `ScheduleReminderTool` enforces at-most-one pending reminder per task |
+| 7 | Run `001_initial_schema.sql` on production Supabase | Yes | ✅ |
+| 8 | Create production Telegram bot via BotFather | Yes | ✅ |
+| 9 | Deploy backend to Render with all secrets configured | Yes | ✅ — https://amigo-agkb.onrender.com |
+| 10 | Verify: health check, send test message, onboarding flow | Yes | ✅ |
 | 11 | Run `scripts/smoke_check.py --all` against production | Yes | ☐ |
 
 ### Phase B — Web Dashboard (ship after bot is stable)
 
 | # | Task | Critical? | Status |
 |---|------|-----------|--------|
-| 12 | Create and apply `002_auth_linking_and_rls.sql` | Yes | ☐ |
-| 13 | Build pairing token generation (Edge Function or API) | Yes | ☐ |
-| 14 | Add `/start pair_<TOKEN>` handler to BotHandlers | Yes | ☐ |
-| 15 | Replace mock data with Supabase queries + Realtime | Yes | ☐ |
-| 16 | Apply visual polish from next-todo.md | No | ☐ |
+| 12 | Create and apply `002_auth_linking_and_rls.sql` | Yes | ✅ — created; apply in Supabase SQL Editor |
+| 13 | Build pairing token generation (`POST /api/pairing-token`) | Yes | ✅ |
+| 14 | Add `/start pair_<TOKEN>` handler to BotHandlers | Yes | ✅ |
+| 15 | Replace mock data with Supabase queries + Realtime | Yes | ✅ |
+| 16 | Apply visual polish from next-todo.md | No | ☐ — deferred |
 | 17 | Add frontend build to CI pipeline | Yes | ☐ |
-| 18 | Deploy dashboard to Vercel | Yes | ☐ |
-| 19 | Configure Supabase Auth redirect URLs | Yes | ☐ |
+| 18 | Deploy dashboard to Render Static Site | Yes | ✅ — defined in render.yaml; deploy via Render Blueprint |
+| 19 | Configure Supabase Auth redirect URLs | Yes | ☐ — set once dashboard URL is assigned |
 
 ### Phase 1b — After launch (not blocking release)
 

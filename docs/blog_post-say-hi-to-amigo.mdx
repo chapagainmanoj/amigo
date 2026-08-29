@@ -1,0 +1,84 @@
+---
+title: "Meet Amigo: Conversational Accountability in Telegram"
+description: "An honest look at Amigo's invitation-beta task and reminder loop, what works today, and what remains roadmap."
+date: "2026-08-29T00:00:00.000Z"
+published: false
+---
+
+Productivity tools often assume that you will keep opening an app, organizing a list, and checking
+it at the right time. For people who repeatedly abandon task apps, maintaining the system can
+become another task.
+
+Amigo is testing a narrower approach: capture an intention in conversation and ask for the
+follow-up you want.
+
+> Tell Amigo what you need to do. It turns the conversation into a Task and sends a Telegram
+> Reminder at the time you choose, with simple Done, Skip, or Later controls.
+
+Amigo is an early, invitation-only beta—not a finished virtual friend or clinical product.
+
+## The Current Loop
+
+A participant creates a dashboard account and pairs it with Telegram. In Telegram, they can write:
+
+> I need to send the proposal at 3 PM. Remind me then.
+
+Amigo creates the Task and schedules the Reminder. At the requested time, Telegram presents Done,
+Skip, and Later controls. The participant can also update a Task naturally, such as “done with the
+proposal.” The dashboard provides a prototype view of Tasks, pending Reminders, and recent
+Sessions.
+
+This is what “reaches out first” means today: Amigo delivers a Reminder the participant explicitly
+requested. It does not yet initiate autonomous morning planning, evening accountability, meal
+check-ins, or general companion conversations.
+
+## What Exists Today
+
+- Telegram conversation and chat setup for name and timezone.
+- Natural-language Task creation and status changes.
+- User-scheduled Telegram Reminders.
+- Done, Skip, and Later actions.
+- Dashboard authentication and Telegram pairing.
+- Prototype Task, Reminder, and Session views with realtime refresh.
+- Limited continuity from the current Session, Task context, and a recent Session summary.
+- A `/feedback` command for beta feedback.
+
+These are repository capabilities, not proof of production readiness. We are still working through
+security, lifecycle consistency, reminder reliability, observability, privacy rights, onboarding,
+and end-to-end deployment gates before inviting the external cohort.
+
+## What Is Not Shipped
+
+Amigo does not currently have durable personal Memory, a Memory Inspector, an anti-nag governor,
+adaptive coaching, Recommender/Coach/Reflect Modes, sentiment-based intervention, WhatsApp, voice,
+or native mobile apps. Those are evidence-gated maps, and any one of them may end in a decision not
+to build.
+
+Amigo is also non-clinical. It does not provide therapy, diagnosis, treatment, medication advice,
+emergency dispatch, or monitored crisis support. Future non-clinical reflection or Mood Entry work
+would require separate safety and privacy evidence before release.
+
+## Why an External Beta
+
+The first question is not whether Amigo can accumulate more features. It is whether the narrow
+Task-to-Reminder loop helps real people follow through without becoming annoying or burdensome.
+
+The initial beta will measure whether participants can activate without founder rescue, whether
+Reminders arrive reliably, whether Task state remains consistent, whether the interaction feels
+useful, and whether anyone wants to continue after the free 30-day period.
+
+## Open Source and Participation
+
+Amigo's original source and documentation are available under AGPL-3.0. The open-source license
+does not imply that independent deployments receive official support. Contributions use Developer
+Certificate of Origin sign-off, and suspected vulnerabilities should be reported through GitHub's
+private vulnerability-reporting flow rather than a public issue.
+
+The repository is [chapagainmanoj/amigo](https://github.com/chapagainmanoj/amigo). The complete
+[capability matrix](capability-matrix.md) separates shipped prototype behavior, beta experiments,
+and roadmap ideas.
+
+We will publish a trial link only after the invitation-beta release gates pass. Until then, the
+most useful contribution is honest feedback on the problem, the activation journey, and the narrow
+product promise.
+

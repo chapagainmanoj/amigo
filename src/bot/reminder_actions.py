@@ -115,7 +115,7 @@ class ReminderActions:
             )
             await self.store.update_reminder(reminder_id, {"status": "acknowledged"})
             await self.channel.send_message(
-                chat_id, "Got it — I'll bring it up tomorrow morning."
+                chat_id, "Moved to tomorrow. Open Amigo tomorrow when you're ready to continue."
             )
             return
 
