@@ -10,6 +10,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
+from src.utils import utc_now
+
 
 class FakeChannel:
     """In-memory message channel. Records all sent messages for assertions."""
@@ -70,7 +72,7 @@ class FakeStore:
             "onboarding_complete": False,
             "wake_time": "07:30",
             "session_timeout_minutes": 120,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": utc_now().isoformat(),
         }
         self.users[chat_id] = user
         return user
@@ -93,8 +95,8 @@ class FakeStore:
             "session_id": str(uuid.uuid4()),
             "user_id": user_id,
             "session_type": session_type,
-            "started_at": datetime.utcnow().isoformat(),
-            "last_activity_at": datetime.utcnow().isoformat(),
+            "started_at": utc_now().isoformat(),
+            "last_activity_at": utc_now().isoformat(),
             "ended_at": None,
             "message_count": 0,
             "context_summary": None,
@@ -105,13 +107,13 @@ class FakeStore:
     async def close_session(self, session_id: str, summary: str | None = None) -> None:
         for s in self.sessions:
             if s["session_id"] == session_id:
-                s["ended_at"] = datetime.utcnow().isoformat()
+                s["ended_at"] = utc_now().isoformat()
                 s["context_summary"] = summary
 
     async def touch_session(self, session_id: str) -> None:
         for s in self.sessions:
             if s["session_id"] == session_id:
-                s["last_activity_at"] = datetime.utcnow().isoformat()
+                s["last_activity_at"] = utc_now().isoformat()
                 s["message_count"] = (s.get("message_count") or 0) + 1
 
     async def add_message(self, session_id, user_id, role, content, channel="telegram"):
@@ -121,7 +123,7 @@ class FakeStore:
             "role": role,
             "content": content,
             "channel": channel,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": utc_now().isoformat(),
         }
         self.messages.append(msg)
         return msg
@@ -179,7 +181,7 @@ class FakeStore:
             "suggested_time": suggested_time,
             "deferred_count": 0,
             "actual_completion": None,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": utc_now().isoformat(),
         }
         self.tasks.append(task)
         return task
@@ -204,7 +206,7 @@ class FakeStore:
             if t["task_id"] == task_id:
                 t["status"] = status
                 if status == "done":
-                    t["actual_completion"] = datetime.utcnow().isoformat()
+                    t["actual_completion"] = utc_now().isoformat()
                 if status == "deferred":
                     t["deferred_count"] = (t.get("deferred_count") or 0) + 1
                 return t

@@ -1,6 +1,6 @@
 # Amigo Capability Matrix
 
-**Last verified against the repository:** 2026-08-29  
+**Last verified against the repository:** 2026-08-30
 **Release scope:** Invitation-only beta  
 **Canonical beta promise:** Tell Amigo what you need to do. It turns the conversation into a Task
 and sends a Telegram Reminder at the time you choose, with Done, Skip, or Later controls.
@@ -24,6 +24,7 @@ described in the present tense.
 | Dashboard realtime refresh from Supabase | Free 30-day invitation-beta offer and founder-operated support | Native mobile apps; a PWA requires its own demand gate |
 | `/feedback` capture | Eight-person external beta and willingness-to-pay research | Multi-machine scheduling and paid billing |
 | Local CLI development mode | English output with code-mixed input comprehension | Automatic sentiment-based intervention or emotional profiling |
+| Reproducible dashboard install, lint, and production build | — | — |
 
 ## Important Limits in the Current Prototype
 
@@ -53,4 +54,3 @@ Before publishing copy, screenshots, a demo script, or a sales claim:
 3. Call future behavior roadmap and avoid dates or “coming soon” promises unless it has an
    approved release gate and committed delivery plan.
 4. Update this matrix only after implementation evidence and the governing Wayfinder gate agree.
-

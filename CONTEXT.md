@@ -1,6 +1,9 @@
 # Amigo
 
-A conversational AI friend delivered as a Telegram bot that helps a single user stay on track with their day through task extraction, reminders, and session-aware context.
+An AI accountability companion delivered through Telegram with a paired dashboard. The current
+prototype supports conversational Task capture, participant-scheduled Reminders, and
+Session-scoped context; it is not a human friend, durable-Memory system, clinical service, or
+multi-channel product.
 
 ## Language
 
@@ -31,7 +34,9 @@ state back to pending.
 _Avoid_: Alert, notification, alarm
 
 **Session**:
-A bounded conversation window. Rolls over at local midnight or after inactivity timeout. Typed: `morning_planning`, `default`, `proactive_checkin`.
+A bounded conversation window. It rolls over at local midnight or after an inactivity timeout.
+Current prototype types include `morning_planning`, `check_in`, `evening`, and the store's default
+`casual` value. Session types are context metadata, not user-selectable Modes.
 _Avoid_: Conversation, thread, chat
 
 **Memory**:

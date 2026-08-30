@@ -41,7 +41,7 @@ When a reminder fires, you'll see three buttons:
 |--------|-------------|
 | **Done ✅** | Marks the task complete |
 | **Skip ⏭️** | Skips the task for today |
-| **Later ⏰** | Snoozes (60 min → 30 min → defers to tomorrow) |
+| **Later ⏰** | Uses the current prototype delay flow; the canonical +60 min → +30 min → next local planning day replacement lifecycle is still release-gated |
 
 ### Commands
 
@@ -98,7 +98,8 @@ APP_CHANNEL=cli GOOGLE_API_KEY=your-key python -m src.cli --onboard
 
 ### Full Setup (Telegram Mode)
 
-Required for production or end-to-end Telegram testing.
+Required for local or deployed Telegram testing. This setup is not by itself production- or
+beta-ready; the release gates below still apply.
 
 #### 1. Configure environment
 
@@ -143,8 +144,8 @@ Where to get these:
 3. Run [`migrations/001_initial_schema.sql`](migrations/001_initial_schema.sql).
 4. Run [`migrations/002_auth_linking_and_rls.sql`](migrations/002_auth_linking_and_rls.sql).
 
-Apply migrations in numeric order. The second migration is required for dashboard pairing and
-row-level access control.
+Apply migrations in numeric order. The second migration provides dashboard pairing and baseline
+row-level policies, but the pairing-token grants/RLS and two-user security gate are still open.
 
 #### 3. Run
 
@@ -204,10 +205,10 @@ python scripts/smoke_check.py --all
 | `SUPABASE_URL` | `""` | Telegram mode |
 | `SUPABASE_SERVICE_KEY` | `""` | Telegram mode |
 | `ALLOWED_TELEGRAM_CHAT_IDS` | `""` | Telegram mode (empty = allow all) |
-| `APP_BASE_URL` | `localhost:8000` | Telegram mode |
+| `APP_BASE_URL` | `http://localhost:8000` | Telegram mode |
 | `APP_ENV` | `development` | — |
 | `LOG_LEVEL` | `INFO` | — |
-| `DEFAULT_MODEL` | `gemini-2.5-flash` | — |
+| `DEFAULT_MODEL` | `gemini-3.5-flash` | — |
 | `SMOKE_TEST_CHAT_ID` | — | Smoke checks (`--channel`) |
 
 ### Deployment Status
@@ -227,7 +228,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the full picture:
 repository structure, design patterns, data flow diagram, key
 abstractions, extensibility hooks, and testing strategy.
 
-### What Works in Phase 1a
+### What Works in the Current Prototype
 
 - Three-step Telegram onboarding: name, timezone, first planning prompt
 - Local CLI mode for development (no external services needed)

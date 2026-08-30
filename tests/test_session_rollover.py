@@ -4,11 +4,12 @@ Tests that session boundaries respect USER's timezone for midnight,
 not server UTC. Uses frozen time to test deterministically.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
 
 from src.memory.sessions import SessionManager
+from src.utils import utc_now
 from tests.fakes import FakeStore
 
 
@@ -33,7 +34,7 @@ class TestMidnightRollover:
         session = await store.create_session(uid, "casual")
 
         # Last activity 1 hour ago — same day
-        one_hour_ago = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+        one_hour_ago = (utc_now() - timedelta(hours=1)).isoformat()
         session["last_activity_at"] = one_hour_ago
 
         result, is_new = await mgr.get_or_create_session(uid, timezone="UTC")
@@ -48,7 +49,7 @@ class TestMidnightRollover:
         session = await store.create_session(uid, "casual")
 
         # Last activity 25 hours ago — yesterday for sure
-        old_time = (datetime.utcnow() - timedelta(hours=25)).isoformat()
+        old_time = (utc_now() - timedelta(hours=25)).isoformat()
         session["last_activity_at"] = old_time
         session["started_at"] = old_time
 
@@ -98,7 +99,7 @@ class TestInactivityTimeout:
         session = await store.create_session(uid, "casual")
 
         # 3 hours ago — exceeds 120min timeout
-        old_time = (datetime.utcnow() - timedelta(hours=3)).isoformat()
+        old_time = (utc_now() - timedelta(hours=3)).isoformat()
         session["last_activity_at"] = old_time
 
         result, is_new = await mgr.get_or_create_session(uid, timeout_minutes=120, timezone="UTC")

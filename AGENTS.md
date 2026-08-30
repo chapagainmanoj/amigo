@@ -1,9 +1,10 @@
 # Project Overview
 
-Amigo is an AI virtual friend delivered as a Telegram bot (with a local
-CLI mode for dev). It extracts tasks from natural language via Gemini
-Flash, schedules reminders with snooze logic, and maintains session-aware
-context. Phase 1a — single-user dogfooding.
+Amigo is an AI accountability companion delivered through Telegram with a
+paired dashboard and local CLI development mode. It extracts Tasks through
+the configured Gemini model, schedules participant-requested Reminders, and
+maintains Session-scoped context. The repository is in internal pre-beta
+development/dogfooding; the approved first external cohort starts only after Gate B passes.
 
 See [docs/architecture.md](docs/architecture.md) for structure, patterns,
 data flow, and extensibility.
@@ -85,7 +86,7 @@ python scripts/smoke_check.py --scheduler
 | `APP_BASE_URL` | `http://localhost:8000` | Public URL for webhooks |
 | `APP_ENV` | `development` | Environment name |
 | `LOG_LEVEL` | `INFO` | Python logging level |
-| `DEFAULT_MODEL` | `gemini-2.5-flash` | LLM model identifier |
+| `DEFAULT_MODEL` | `gemini-3.5-flash` | LLM model identifier |
 | `SMOKE_TEST_CHAT_ID` | `""` | Chat ID for `--channel` smoke check |
 
 ## Secrets

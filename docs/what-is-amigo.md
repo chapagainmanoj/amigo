@@ -46,7 +46,8 @@ conversations.
 ## Shipped Foundation
 
 - Telegram text conversation and resumable chat setup.
-- Natural-language Task creation and status updates using Gemini 2.5 Flash and Pydantic AI.
+- Natural-language Task creation and status updates using the configured Gemini model and
+  Pydantic AI (`gemini-3.5-flash` by default).
 - User-scheduled Telegram Reminders with Done, Skip, and Later buttons.
 - Supabase persistence, authentication, account pairing, and dashboard realtime refresh.
 - Session-scoped context, recent Task context, and a recent-session summary.
@@ -68,8 +69,8 @@ or separate Pause Learning and Pause Memory Use controls.
 ## Product Boundary
 
 Amigo is a non-clinical accountability companion. It is not a therapist, clinician, diagnostic
-tool, treatment, medical device, emergency responder, or monitored crisis service. The current
-beta should not be recruited or demonstrated to people seeking those services.
+tool, treatment, medical device, emergency responder, or monitored crisis service. The external
+beta must not recruit or demonstrate Amigo to people seeking those services.
 
 Future non-clinical reflection exercises, Mood Entries, and Crisis Referral are separate,
 evidence-gated maps with their own privacy, safety, review, and release requirements.
@@ -92,7 +93,7 @@ roadmap.
 |---|---|
 | Messaging | Telegram bot; local CLI for development |
 | Backend | Python 3.12, FastAPI, Pydantic AI |
-| Model | Gemini 2.5 Flash by default |
+| Model | Gemini 3.5 Flash by default |
 | Persistence and auth | Supabase PostgreSQL and Supabase Auth |
 | Scheduling | APScheduler in one application process, with pending Reminder reload |
 | Dashboard | React and Vite with Supabase realtime subscriptions |

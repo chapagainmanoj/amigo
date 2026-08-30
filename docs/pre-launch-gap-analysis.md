@@ -5,6 +5,29 @@
 **Scope:** Product, Telegram bot, web dashboard, backend, persistence, scheduling,
 deployment, security, privacy, documentation, analytics, legal readiness, and customer demos.
 
+> **Document role:** This is the dated baseline assessment that produced the current roadmap. Its
+> observations are preserved as historical evidence, not as a live backlog. The
+> [complete-product decision map](../.scratch/amigo-complete-product/MAP.md) is authoritative for
+> decisions, and the [pre-launch implementation plan](pre-launch-implementation-plan.md) tracks
+> current implementation status.
+
+## Current disposition — 2026-08-30
+
+- The beta promise, target segment, offer/support contract, privacy/retention contract,
+  Task/Reminder lifecycle, cross-surface contract, runtime strategy, model-evaluation contract,
+  Activation Journey, cohort protocol, pricing hypothesis, product boundaries, expansion posture,
+  reliability semantics, and AGPL-3.0 contribution/security contract are now closed decisions.
+- Local public copy has been narrowed to the Telegram Core Loop and unavailable Modes/WhatsApp
+  have been hidden. Deployment and screenshot verification are still required before that evidence
+  can close a release gate.
+- `LICENSE`, `CONTRIBUTING.md`, and `SECURITY.md` now implement the repository source contract;
+  enabling GitHub private vulnerability reporting still requires authenticated repository setup.
+- The deprecated UTC calls and dead agent/context code identified here are removed. Python tests
+  and Ruff pass without warnings; a clean dashboard install, lint, build, and npm audit also pass.
+- Security/RLS hardening, canonical lifecycle implementation, shared backend dashboard commands,
+  production validation, observability, data-rights operations, Activation, integration tests,
+  and Gate A/B evidence remain open. Amigo is still in pre-beta development.
+
 ## Executive assessment
 
 Amigo is **not ready for a public launch or an unqualified customer presentation**.
@@ -188,16 +211,17 @@ The same evidence exposes the following gaps that must be treated explicitly:
 11. Collect real beta outcomes or testimonials.
 12. Describe the dashboard as a task-control surface, not a Memory Inspector.
 
-## Can improve after launch
+## Evidence-gated after Customer Readiness
 
-- Temporal and semantic memory.
-- Adaptive coaching profiles.
-- Recommender, Coach, and Reflect modes.
+- Potential temporal and semantic Memory, only if its demand and trust gates pass.
+- Potential participant-controlled Interaction Style and specialized Modes, each independently
+  gated; automatic routing remains an open decision.
 - Non-clinical supportive reflection, CBT-informed exercises, mood journaling, and crisis-resource
   referral only after safety, consent, sensitive-data, referral, and evidence gates pass.
 - Diagnosis, clinical treatment, therapy, and monitored crisis response are outside the current
   Amigo product destination.
-- WhatsApp, voice, and native mobile applications.
+- WhatsApp, voice, PWA, and native mobile remain **No Expansion Yet** until observed demand opens
+  the matching decision ticket.
 - Distributed scheduling when multiple workers are required.
 - Prompt caching and database-round-trip optimization.
 - PACT-style session evaluation.

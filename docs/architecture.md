@@ -15,9 +15,8 @@ amigo/
 │   │                       #   turns, reminder callbacks, keyboards
 │   ├── channels/           # MessageChannel protocol + implementations
 │   │                       #   (Telegram, CLI)
-│   ├── providers/          # (deprecated — model handling by pydantic-ai)
 │   ├── memory/             # Supabase store, in-memory store, sessions,
-│   │                       #   context assembly
+│   │                       #   context fragments
 │   ├── scheduler/          # APScheduler reminder management + reload
 │   ├── tools/              # Side-effect tools: create task, update status,
 │   │                       #   schedule/cancel reminders
@@ -51,7 +50,8 @@ amigo/
 - `src/memory/` — `MemoryStore` (Supabase CRUD), `InMemoryStore`
   (dict-backed dev replacement), `SessionManager`, `ContextBuilder`.
 - `src/scheduler/` — `ReminderScheduler` wraps APScheduler with stable
-  job IDs, snooze policy, and restart-safe reload from database.
+  job IDs and restart-safe pending-Reminder reload from the database. The current callback path
+  also implements a prototype Later delay flow that does not yet satisfy the canonical lifecycle.
 - `src/tools/` — Side-effect service classes. Called by agent tools and
   `ReminderActions` callback handlers. `CreateTaskTool`,
   `UpdateTaskStatusTool`, `ScheduleReminderTool`, `CancelRemindersTool`.
@@ -71,8 +71,10 @@ amigo/
 - **Agentic tool calling**: The LLM decides which tools to call based on
   function signatures and docstrings. No more manual classify → extract →
   resolve pipeline. See [ADR 0002](adr/0002-agentic-tool-calling-loop.md).
-- **Deterministic time resolution**: `dateparser` handles "3pm", "in 10
-  minutes", "after lunch" → UTC datetime conversion without an LLM call.
+- **Prototype deterministic time parsing**: `dateparser` currently reduces expressions to an
+  `HH:MM` value before UTC conversion. This handles explicit and relative times but does not yet
+  preserve the full local date/time/timezone decision or reliably clarify ambiguous/fuzzy input;
+  the approved lifecycle requires that replacement before beta.
 
 ## Data Flow (message lifecycle)
 
@@ -155,9 +157,10 @@ graph TD
    which tools to call (create task, update status, schedule reminder)
    and produces a natural language reply.
 5. **Outbound**: Response sent via `MessageChannel.send_message()`.
-6. **Reminders**: Reminder tools use `dateparser` for time resolution and
-   schedule APScheduler jobs. When a job fires, it sends a message with
-   Done/Skip/Later buttons. Callbacks handled by `ReminderActions`.
+6. **Reminders**: Reminder tools use the current `dateparser`-based prototype resolver and
+   schedule APScheduler jobs. When a job fires, it sends a message with Done/Skip/Later buttons.
+   Callbacks are handled by `ReminderActions`. The canonical full-instant clarification and
+   immutable replacement-Reminder behavior remain implementation work.
 
 ## Key Abstractions
 
@@ -178,9 +181,10 @@ graph TD
 
 ### Adding a new LLM provider
 
-Pydantic AI supports many providers natively. Change `DEFAULT_MODEL` in
-`.env` to any supported model string (e.g., `openai:gpt-4o`,
-`anthropic:claude-sonnet-4-20250514`). No code changes needed.
+The repository currently configures Google credentials and a Gemini model through Pydantic AI.
+Pydantic AI supports other providers, but changing provider is not a configuration-only product
+promise: add the provider's credentials/settings, verify error and usage handling, and rerun the
+applicable model-evaluation gate before release.
 
 ### Adding a new store backend
 
@@ -211,7 +215,7 @@ Pydantic AI supports many providers natively. Change `DEFAULT_MODEL` in
 | `test_allowlist.py` | Chat ID allowlist enforcement |
 | `test_channels.py` | CLI and Telegram channel adapter behavior |
 | `test_onboarding.py` | Multi-step onboarding state machine |
-| `test_reminders.py` | Snooze escalation policy |
+| `test_reminders.py` | Current prototype Later behavior and duplicate-send claiming |
 | `test_scheduler.py` | Scheduler job registration, cancel, reload, send |
 | `test_session_boundaries.py` | Close signals, session type classification |
 | `test_session_rollover.py` | Midnight boundary, inactivity timeout |
@@ -238,8 +242,10 @@ No Supabase writes. Safe for CI/CD.
   separation decision (superseded by ADR 0002).
 - [ADR 0002](adr/0002-agentic-tool-calling-loop.md) — Agentic tool-calling
   loop replacing the classify→extract→resolve pipeline.
-- [implementation_plan.md](../implementation_plan.md) — Full Phase 1a
-  design document with rationale and decisions.
+- [pre-launch implementation plan](pre-launch-implementation-plan.md) — Current release roadmap
+  and implementation sequence.
+- [complete-product decision map](../.scratch/amigo-complete-product/MAP.md) — Authoritative closed
+  and open product decisions.
 - [what-is-amigo.md](what-is-amigo.md) — Product vision and positioning.
 - [comparison_with_OpenHuman.md](comparison_with_OpenHuman.md) —
   Competitive analysis.

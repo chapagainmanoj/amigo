@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { LayoutDashboard, Link2, LogOut } from 'lucide-react'
 import { supabase, apiRequest } from '../supabase'
 import DashboardView from './DashboardView'
@@ -9,20 +9,20 @@ export default function AppShell({ session }) {
   const [pairedUser, setPairedUser] = useState(null)
   const [checkingPairing, setCheckingPairing] = useState(true)
 
-  const checkPairing = async () => {
+  const checkPairing = useCallback(async () => {
     try {
       const user = await apiRequest('/api/me')
       setPairedUser(user)
-    } catch (err) {
+    } catch {
       setPairedUser(null)
     } finally {
       setCheckingPairing(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     checkPairing()
-  }, [])
+  }, [checkPairing])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()

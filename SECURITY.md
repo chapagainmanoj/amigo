@@ -5,24 +5,25 @@ vulnerabilities privately and avoid accessing or retaining data that is not your
 
 ## Supported Versions
 
-Amigo is in invitation beta and does not yet publish supported release branches.
+Amigo is in pre-beta development and does not yet publish supported release branches.
 
 | Version | Supported |
 |---|---|
-| Current hosted beta and current default branch | Yes |
+| Current default branch and founder-operated development deployment | Yes |
 | Older commits, deployments, and forks | No |
 
 The open-source license does not make third-party deployments supported Amigo services.
 
 ## Report a Vulnerability
 
-Use GitHub's private vulnerability-reporting flow:
+GitHub private vulnerability reporting is the intended primary flow and must be enabled before
+the external beta. When available, use:
 
 <https://github.com/chapagainmanoj/amigo/security/advisories/new>
 
 Do not disclose an unpatched vulnerability in a public issue, discussion, chat, or support
-message. If private reporting is temporarily unavailable, do not post exploit details publicly;
-retry the private channel after the repository owner restores it.
+message. If private reporting is unavailable, do not post exploit details publicly; retry after
+the repository owner enables or restores the private channel.
 
 Include, when available:
 
@@ -48,4 +49,3 @@ currently operate a bug-bounty program and does not promise payment or broad leg
 Reports made in good faith will be evaluated respectfully. Testing must not disrupt service,
 degrade availability, use social engineering, or access, modify, retain, or disclose another
 person's data.
-

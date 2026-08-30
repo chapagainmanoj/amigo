@@ -29,6 +29,7 @@ Run the required checks before submitting a pull request:
 python -m pytest tests/ -v
 ruff check src tests scripts
 python scripts/smoke_check.py --scheduler
+cd web && npm ci && npm run lint && npm run build
 ```
 
 Explain the behavior changed, the reason for the change, and the verification performed in the
@@ -62,4 +63,3 @@ Unless explicitly identified otherwise, submitted contributions are licensed und
 [GNU Affero General Public License version 3](LICENSE). Third-party materials retain their own
 applicable licenses. Submission does not guarantee acceptance, and maintainers may request
 changes or decline work that does not fit the project's direction.
-

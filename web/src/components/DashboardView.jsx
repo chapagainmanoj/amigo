@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { CheckCircle2, Circle, Clock, MessageSquare, Trash2, Plus } from 'lucide-react'
 import { supabase } from '../supabase'
 import { timeOfDayGreeting } from '../mockData'
@@ -15,7 +15,7 @@ export default function DashboardView({ pairedUser }) {
 
   const tz = pairedUser?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
 
-  const getLocalDateString = () => {
+  const getLocalDateString = useCallback(() => {
     try {
       const formatter = new Intl.DateTimeFormat('en-US', {
         timeZone: tz,
@@ -28,12 +28,12 @@ export default function DashboardView({ pairedUser }) {
       const day = parts.find((p) => p.type === 'day').value
       const year = parts.find((p) => p.type === 'year').value
       return `${year}-${month}-${day}`
-    } catch (err) {
+    } catch {
       return new Date().toISOString().split('T')[0]
     }
-  }
+  }, [tz])
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     const todayStr = getLocalDateString()
     const { data, error } = await supabase
       .from('tasks')
@@ -43,9 +43,9 @@ export default function DashboardView({ pairedUser }) {
     if (!error && data) {
       setTasks(data)
     }
-  }
+  }, [getLocalDateString])
 
-  const fetchReminders = async () => {
+  const fetchReminders = useCallback(async () => {
     const { data, error } = await supabase
       .from('reminders')
       .select('*, tasks(title, category)')
@@ -64,9 +64,9 @@ export default function DashboardView({ pairedUser }) {
       })
       setReminders(mapped)
     }
-  }
+  }, [])
 
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     const { data, error } = await supabase
       .from('sessions')
       .select('*')
@@ -93,7 +93,7 @@ export default function DashboardView({ pairedUser }) {
       })
       setSessions(mapped)
     }
-  }
+  }, [])
 
   useEffect(() => {
     // Update greeting if they keep it open across day boundaries
@@ -133,7 +133,7 @@ export default function DashboardView({ pairedUser }) {
       supabase.removeChannel(remindersChannel)
       supabase.removeChannel(sessionsChannel)
     }
-  }, [pairedUser])
+  }, [fetchReminders, fetchSessions, fetchTasks])
 
   const handleToggleTask = async (id, currentStatus) => {
     const nextStatus = currentStatus === 'done' ? 'pending' : 'done'

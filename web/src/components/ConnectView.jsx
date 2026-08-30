@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { CheckCircle, MessageCircle } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { apiRequest } from '../supabase'
@@ -8,7 +8,7 @@ export default function ConnectView({ pairedUser, onPairSuccess }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const fetchPairingToken = async () => {
+  const fetchPairingToken = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -19,13 +19,13 @@ export default function ConnectView({ pairedUser, onPairSuccess }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (!pairedUser) {
       fetchPairingToken()
     }
-  }, [pairedUser])
+  }, [fetchPairingToken, pairedUser])
 
   useEffect(() => {
     if (!pairingData || pairedUser) return
@@ -147,4 +147,3 @@ export default function ConnectView({ pairedUser, onPairSuccess }) {
     </div>
   )
 }
-

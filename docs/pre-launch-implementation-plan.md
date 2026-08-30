@@ -189,10 +189,15 @@ product destination; a disclaimer does not authorize those functions or claims.
 7. Finish the prepared `node_modules/` cleanup: review and commit the index removals and ignore
    rule, then prove clean install, lint, test, and build behavior without reintroducing generated
    files.
+   **Local status (2026-08-30):** complete. `node_modules/` is ignored and no longer tracked;
+   `npm ci`, ESLint, and the Vite production build pass from the lockfile. The missing ESLint
+   dependencies and flat configuration were added, React Hook dependency findings were fixed,
+   and both the full and production-only npm audits report zero vulnerabilities.
 8. Correct model names, deployment instructions, migration order, test counts, and broken doc
    links.
-   **Local status (2026-08-29):** README model, Render/Fly status, both-migration order, current
-   test count, and repository URL are corrected. A full clean-clone and link audit remains pending.
+   **Local status (2026-08-30):** README model, Render/Fly status, both-migration order, current
+   test count, repository URL, and current `gemini-3.5-flash` default are corrected. The local
+   Markdown link audit passes; a full clean-clone contributor walkthrough remains pending.
 
 ### Acceptance criteria
 
@@ -860,9 +865,9 @@ payment evidence, repricing triggers, and beta-exit branches are defined in
 5. Reassess pricing after 10 paying subscribers or 90 paid days, and sooner when cost, support,
    conversion, or shipped scope crosses the approved trigger. If fewer than two people pay, test
    value and positioning before discounting.
-6. Remove “completely free and open source” claims. Do not claim open source until a separate
-   founder-approved project license is present; hosted-first does not itself decide source
-   licensing.
+6. Keep open-source claims tied to the implemented AGPL-3.0 source contract. Do not describe the
+   hosted offer as “completely free,” and do not turn source availability into a supported
+   self-hosting, managed-deployment, or open-core promise.
 
 ### Acceptance criteria
 
