@@ -48,6 +48,7 @@ def test_schedule_reminder_registers_job_with_stable_id_and_kwargs():
     job = scheduler.scheduler.get_job("user-1:reminder-1")
     assert job is not None
     assert job.kwargs == {
+        "user_id": "user-1",
         "chat_id": 123,
         "reminder_id": "reminder-1",
         "task_title": "finish slides",
@@ -88,7 +89,9 @@ async def test_send_reminder_sends_buttons_and_marks_sent():
     _, _, reminder = await _create_user_task_reminder(store)
     scheduler = ReminderScheduler(channel=channel, store=store)
 
-    await scheduler._send_reminder(123, reminder["reminder_id"], "finish slides")
+    await scheduler._send_reminder(
+        reminder["user_id"], 123, reminder["reminder_id"], "finish slides"
+    )
 
     assert len(channel.sent) == 1
     assert channel.sent[0]["buttons"] is not None
@@ -97,14 +100,16 @@ async def test_send_reminder_sends_buttons_and_marks_sent():
 
 
 async def test_send_reminder_skips_done_or_skipped_tasks():
-    for status in ("done", "skipped"):
+    for status in ("completed", "skipped", "cancelled"):
         store = FakeStore()
         channel = FakeChannel()
         _, task, reminder = await _create_user_task_reminder(store)
-        await store.update_task_status(task["task_id"], status)
+        await store.update_task_status(task["task_id"], status, task["user_id"])
         scheduler = ReminderScheduler(channel=channel, store=store)
 
-        await scheduler._send_reminder(123, reminder["reminder_id"], "finish slides")
+        await scheduler._send_reminder(
+            reminder["user_id"], 123, reminder["reminder_id"], "finish slides"
+        )
 
         assert channel.sent == []
         assert reminder["status"] == "acknowledged"

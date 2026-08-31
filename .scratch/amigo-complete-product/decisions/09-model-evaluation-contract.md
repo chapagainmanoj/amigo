@@ -5,7 +5,7 @@ Status: closed
 Label: `wayfinder:grilling`
 Type: HITL / grilling
 Severity: `severity:high`
-Owner: Codex
+Owner: unassigned
 Blocked by: [Define Release Evidence and Gate Thresholds](01-release-evidence-and-gates.md), [Resolve the Task and Reminder Lifecycle](05-task-reminder-lifecycle.md)
 
 ## Question

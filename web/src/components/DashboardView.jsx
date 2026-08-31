@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CheckCircle2, Circle, Clock, MessageSquare, Trash2, Plus } from 'lucide-react'
-import { supabase } from '../supabase'
+import { apiRequest, supabase } from '../supabase'
 import { timeOfDayGreeting } from '../mockData'
 import Toast from './Toast'
 import ModeChips from './ModeChips'
 
 export default function DashboardView({ pairedUser }) {
   const [tasks, setTasks] = useState([])
+  const [inboxTasks, setInboxTasks] = useState([])
   const [reminders, setReminders] = useState([])
   const [sessions, setSessions] = useState([])
   const [toastMsg, setToastMsg] = useState(null)
@@ -38,17 +39,29 @@ export default function DashboardView({ pairedUser }) {
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
-      .eq('created_date', todayStr)
+      .eq('due_date', todayStr)
       .order('created_at', { ascending: false })
     if (!error && data) {
       setTasks(data)
     }
   }, [getLocalDateString])
 
+  const fetchInboxTasks = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .is('due_date', null)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+    if (!error && data) {
+      setInboxTasks(data)
+    }
+  }, [])
+
   const fetchReminders = useCallback(async () => {
     const { data, error } = await supabase
       .from('reminders')
-      .select('*, tasks(title, category)')
+      .select('*, tasks(title, category, version)')
       .eq('status', 'pending')
       .order('scheduled_time', { ascending: true })
     if (!error && data) {
@@ -60,6 +73,7 @@ export default function DashboardView({ pairedUser }) {
           label: r.tasks?.title || 'Reminder',
           time: timeStr,
           scheduled_time: r.scheduled_time,
+          task_version: r.tasks?.version,
         }
       })
       setReminders(mapped)
@@ -103,6 +117,7 @@ export default function DashboardView({ pairedUser }) {
 
   useEffect(() => {
     fetchTasks()
+    fetchInboxTasks()
     fetchReminders()
     fetchSessions()
 
@@ -111,6 +126,7 @@ export default function DashboardView({ pairedUser }) {
       .channel('tasks-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
         fetchTasks()
+        fetchInboxTasks()
       })
       .subscribe()
 
@@ -133,31 +149,27 @@ export default function DashboardView({ pairedUser }) {
       supabase.removeChannel(remindersChannel)
       supabase.removeChannel(sessionsChannel)
     }
-  }, [fetchReminders, fetchSessions, fetchTasks])
+  }, [fetchInboxTasks, fetchReminders, fetchSessions, fetchTasks])
 
-  const handleToggleTask = async (id, currentStatus) => {
-    const nextStatus = currentStatus === 'done' ? 'pending' : 'done'
-    const actualCompletion = nextStatus === 'done' ? new Date().toISOString() : null
+  const handleResolveTask = async (task, outcome) => {
+    if (task.status !== 'pending') return
 
-    const { error } = await supabase
-      .from('tasks')
-      .update({ status: nextStatus, actual_completion: actualCompletion })
-      .eq('task_id', id)
-
-    if (error) {
-      setToastMsg('Failed to update task')
-    } else {
-      setToastMsg(nextStatus === 'done' ? 'Task completed' : 'Task updated')
-    }
-  }
-
-  const handleDeleteTask = async (id) => {
-    const { error } = await supabase.from('tasks').delete().eq('task_id', id)
-
-    if (error) {
-      setToastMsg('Failed to delete task')
-    } else {
-      setToastMsg('Task removed')
+    try {
+      await apiRequest(`/api/tasks/${task.task_id}/resolve`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ outcome, expected_version: task.version }),
+      })
+      setToastMsg(
+        outcome === 'completed'
+          ? 'Task completed'
+          : outcome === 'skipped'
+            ? 'Task skipped'
+            : 'Task cancelled',
+      )
+      await Promise.all([fetchTasks(), fetchInboxTasks(), fetchReminders()])
+    } catch {
+      setToastMsg('Task changed elsewhere — refresh and try again')
     }
   }
 
@@ -165,52 +177,37 @@ export default function DashboardView({ pairedUser }) {
     e.preventDefault()
     if (!newTaskTitle.trim()) return
 
-    const todayStr = getLocalDateString()
-    const { error } = await supabase.from('tasks').insert({
-      title: newTaskTitle,
-      status: 'pending',
-      category: 'other',
-      user_id: pairedUser.user_id,
-      created_date: todayStr,
-    })
-
-    if (error) {
-      setToastMsg('Failed to add task')
-    } else {
-      setNewTaskTitle('')
-      setToastMsg('Task added')
-    }
-  }
-
-  const handleSnooze = async (id, scheduledTime) => {
-    const current = new Date(scheduledTime)
-    const nextTime = new Date(current.getTime() + 15 * 60 * 1000).toISOString()
-
-    const { data: remData } = await supabase
-      .from('reminders')
-      .select('snooze_count')
-      .eq('reminder_id', id)
-      .single()
-
-    const currentCount = remData?.snooze_count || 0
-
-    const { error } = await supabase
-      .from('reminders')
-      .update({
-        scheduled_time: nextTime,
-        status: 'pending',
-        snooze_count: currentCount + 1,
+    try {
+      await apiRequest('/api/tasks', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ title: newTaskTitle, category: 'other' }),
       })
-      .eq('reminder_id', id)
-
-    if (error) {
-      setToastMsg('Failed to snooze reminder')
-    } else {
-      setToastMsg('Snoozed for 15m')
+      setNewTaskTitle('')
+      setToastMsg('Task added to Inbox')
+      await fetchInboxTasks()
+    } catch {
+      setToastMsg('Failed to add task')
     }
   }
 
-  const doneCount = tasks.filter((t) => t.status === 'done').length
+  const handleSnooze = async (reminder) => {
+    try {
+      const result = await apiRequest(`/api/reminders/${reminder.id}/later`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ expected_task_version: reminder.task_version }),
+      })
+      setToastMsg(
+        `Next: ${result.intended_local_date} ${result.intended_local_time.slice(0, 5)} ${result.intended_timezone}`,
+      )
+      await fetchReminders()
+    } catch {
+      setToastMsg('Failed to snooze reminder')
+    }
+  }
+
+  const doneCount = tasks.filter((task) => task.status === 'completed').length
   const totalCount = tasks.length
 
   return (
@@ -283,20 +280,22 @@ export default function DashboardView({ pairedUser }) {
                     padding: '12px',
                     background: 'rgba(255,255,255,0.02)',
                     borderRadius: '8px',
-                    opacity: task.status === 'done' ? 0.6 : 1,
+                    opacity: task.status === 'completed' ? 0.6 : 1,
                     transition: 'opacity 0.2s ease',
                   }}
                 >
                   <button
-                    onClick={() => handleToggleTask(task.task_id, task.status)}
+                    onClick={() => handleResolveTask(task, 'completed')}
+                    disabled={task.status !== 'pending'}
+                    aria-label={task.status === 'completed' ? 'Task completed' : 'Mark task done'}
                     style={{
                       background: 'transparent',
-                      color: task.status === 'done' ? 'var(--ember)' : 'var(--mist)',
+                      color: task.status === 'completed' ? 'var(--ember)' : 'var(--mist)',
                       marginRight: '12px',
                       flexShrink: 0,
                     }}
                   >
-                    {task.status === 'done' ? (
+                    {task.status === 'completed' ? (
                       <CheckCircle2 size={24} className="animate-pop" />
                     ) : (
                       <Circle size={24} />
@@ -305,14 +304,28 @@ export default function DashboardView({ pairedUser }) {
                   <span
                     style={{
                       flex: 1,
-                      textDecoration: task.status === 'done' ? 'line-through' : 'none',
-                      color: task.status === 'done' ? 'var(--mist)' : 'var(--paper)',
+                      textDecoration: task.status === 'completed' ? 'line-through' : 'none',
+                      color: task.status === 'completed' ? 'var(--mist)' : 'var(--paper)',
                     }}
                   >
                     {task.title}
                   </span>
+                  {task.status === 'pending' && (
+                    <button
+                      onClick={() => handleResolveTask(task, 'skipped')}
+                      style={{
+                        background: 'transparent',
+                        color: 'var(--mist)',
+                        padding: '4px 8px',
+                      }}
+                    >
+                      Skip
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleDeleteTask(task.task_id)}
+                    onClick={() => handleResolveTask(task, 'cancelled')}
+                    disabled={task.status !== 'pending'}
+                    aria-label="Cancel task"
                     style={{ background: 'transparent', color: 'var(--mist)', padding: '4px' }}
                   >
                     <Trash2 size={16} />
@@ -325,6 +338,30 @@ export default function DashboardView({ pairedUser }) {
                 </div>
               )}
             </div>
+          </div>
+
+          <h2 className="display-text" style={{ fontSize: '1.25rem', margin: '24px 0 12px' }}>
+            Inbox
+          </h2>
+          <div className="flat-card" style={{ padding: '16px' }}>
+            {inboxTasks.map((task) => (
+              <div
+                key={task.task_id}
+                style={{
+                  padding: '12px',
+                  background: 'rgba(255,255,255,0.02)',
+                  borderRadius: '8px',
+                  marginBottom: '8px',
+                }}
+              >
+                {task.title}
+              </div>
+            ))}
+            {inboxTasks.length === 0 && (
+              <div style={{ color: 'var(--mist)', textAlign: 'center', padding: '12px 0' }}>
+                Inbox is clear.
+              </div>
+            )}
           </div>
         </section>
 
@@ -355,11 +392,11 @@ export default function DashboardView({ pairedUser }) {
                     {rem.label}
                   </div>
                   <button
-                    onClick={() => handleSnooze(rem.id, rem.scheduled_time)}
+                    onClick={() => handleSnooze(rem)}
                     className="btn-secondary"
                     style={{ width: '100%', fontSize: '0.85rem' }}
                   >
-                    Snooze 15m
+                    Later
                   </button>
                 </div>
               ))}

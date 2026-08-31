@@ -3,9 +3,41 @@
 import logging
 from datetime import datetime
 
+from src.commands.base import (
+    IdempotencyConflictError,
+    InvalidTransitionError,
+    StaleVersionError,
+)
+from src.memory.pairing import PairingTokenRateLimitError
+from src.memory.reminders import validate_reminder_updates
+from src.memory.tasks import validate_task_status
 from src.utils import local_day_utc_range, today_in_tz, utc_now, yesterday_in_tz
 
 logger = logging.getLogger(__name__)
+
+
+def _raise_command_error(error: Exception) -> None:
+    message = str(error)
+    if "idempotency_key_conflict" in message:
+        raise IdempotencyConflictError(
+            "Idempotency key was reused with different input"
+        ) from None
+    if "task_not_found" in message:
+        raise ValueError("Task not found") from None
+    if "reminder_not_found" in message:
+        raise ValueError("Reminder not found") from None
+    if "reminder_not_active" in message:
+        raise ValueError("Reminder not found") from None
+    if "task_not_pending" in message:
+        raise ValueError("Task not found") from None
+    if "user_not_found" in message:
+        raise ValueError("User not found") from None
+    if "stale_task_version" in message:
+        raise StaleVersionError("Task version is stale") from None
+    if "task_already_resolved" in message:
+        raise InvalidTransitionError("Task is already resolved") from None
+    if "later_step_stale" in message:
+        raise StaleVersionError("Later action is stale") from None
 
 
 class MemoryStore:
@@ -27,7 +59,7 @@ class MemoryStore:
             .maybe_single()
             .execute()
         )
-        return result.data if result else None
+        return result.data if result and result.data else None
 
     async def create_user(self, chat_id: int) -> dict:
         """Create a new user profile during onboarding."""
@@ -48,6 +80,40 @@ class MemoryStore:
             .execute()
         )
         return result.data[0]
+
+    # ── Telegram Update Claims ──
+
+    async def claim_telegram_update(
+        self, update_id: int, chat_id: int, update_kind: str
+    ) -> dict:
+        """Atomically reserve one Telegram update for its first delivery."""
+        result = self.db.rpc(
+            "claim_telegram_update",
+            {
+                "p_update_id": update_id,
+                "p_telegram_chat_id": chat_id,
+                "p_update_kind": update_kind,
+            },
+        ).execute()
+        return result.data
+
+    async def finish_telegram_update(
+        self,
+        update_id: int,
+        *,
+        status: str,
+        failure_code: str | None = None,
+    ) -> dict:
+        """Record a claimed update's terminal status without retaining message content."""
+        result = self.db.rpc(
+            "finish_telegram_update",
+            {
+                "p_update_id": update_id,
+                "p_status": status,
+                "p_failure_code": failure_code,
+            },
+        ).execute()
+        return result.data
 
     # ── Sessions ──
 
@@ -165,6 +231,85 @@ class MemoryStore:
 
     # ── Tasks ──
 
+    async def create_task_command(
+        self,
+        *,
+        user_id: str,
+        idempotency_key: str,
+        payload_hash: str,
+        title: str,
+        category: str,
+        due_date: str | None,
+        session_id: str | None,
+    ) -> dict:
+        """Atomically create an Inbox/planned Task and persist its command receipt."""
+        try:
+            result = self.db.rpc(
+                "create_task_command",
+                {
+                    "p_user_id": user_id,
+                    "p_idempotency_key": idempotency_key,
+                    "p_payload_hash": payload_hash,
+                    "p_title": title,
+                    "p_category": category,
+                    "p_due_date": due_date,
+                    "p_source_session_id": session_id,
+                },
+            ).execute()
+        except Exception as error:
+            if "idempotency_key_conflict" in str(error):
+                raise IdempotencyConflictError(
+                    "Idempotency key was reused with different input"
+                ) from None
+            if "user_not_found" in str(error):
+                raise ValueError("User not found") from None
+            if "session_not_found" in str(error):
+                raise ValueError("Session not found") from None
+            raise
+        return result.data
+
+    async def get_inbox_tasks(self, user_id: str) -> list[dict]:
+        result = (
+            self.db.table("tasks")
+            .select("*")
+            .eq("user_id", user_id)
+            .is_("due_date", "null")
+            .eq("status", "pending")
+            .order("created_at")
+            .execute()
+        )
+        return result.data
+
+    async def resolve_task_command(
+        self,
+        *,
+        user_id: str,
+        idempotency_key: str,
+        payload_hash: str,
+        task_id: str,
+        outcome: str,
+        expected_version: int | None,
+        acted_reminder_id: str | None,
+    ) -> dict:
+        """Atomically resolve a Task, its active Reminders, receipt, and cancel effects."""
+        try:
+            result = self.db.rpc(
+                "resolve_task_command",
+                {
+                    "p_user_id": user_id,
+                    "p_idempotency_key": idempotency_key,
+                    "p_payload_hash": payload_hash,
+                    "p_task_id": task_id,
+                    "p_outcome": outcome,
+                    "p_expected_version": expected_version,
+                    "p_acted_reminder_id": acted_reminder_id,
+                },
+            ).execute()
+        except Exception as error:
+            _raise_command_error(error)
+            raise
+        return result.data
+
     async def create_task(self, user_id: str, title: str, category: str = "other",
                           session_id: str | None = None,
                           suggested_time: str | None = None,
@@ -182,7 +327,7 @@ class MemoryStore:
             .eq("user_id", user_id)
             .eq("title", title)
             .eq("created_date", today)
-            .not_.in_("status", ["done", "skipped"])
+            .not_.in_("status", ["completed", "skipped", "cancelled"])
             .maybe_single()
             .execute()
         )
@@ -196,6 +341,7 @@ class MemoryStore:
             "category": category,
             "source_session_id": session_id,
             "created_date": today,
+            "due_date": today,
         }
         if suggested_time:
             data["suggested_time"] = suggested_time
@@ -203,13 +349,13 @@ class MemoryStore:
         return result.data[0]
 
     async def get_today_tasks(self, user_id: str, timezone: str = "UTC") -> list[dict]:
-        """Get all tasks for today (in user's timezone, not server's)."""
+        """Get Tasks assigned to today's planning day in the user's timezone."""
         today = today_in_tz(timezone).isoformat()
         result = (
             self.db.table("tasks")
             .select("*")
             .eq("user_id", user_id)
-            .eq("created_date", today)
+            .eq("due_date", today)
             .order("created_at")
             .execute()
         )
@@ -223,29 +369,125 @@ class MemoryStore:
             .select("*")
             .eq("user_id", user_id)
             .eq("created_date", yesterday)
-            .in_("status", ["pending", "deferred"])
+            .eq("status", "pending")
             .execute()
         )
         return result.data
 
-    async def update_task_status(self, task_id: str, status: str) -> dict:
-        """Update task status. Handles deferred_count increment."""
+    async def update_task_status(self, task_id: str, status: str, user_id: str) -> dict:
+        """Update an owned Task to a canonical lifecycle state."""
+        validate_task_status(status)
         updates: dict = {"status": status}
-        if status == "done":
+        if status == "completed":
             updates["actual_completion"] = utc_now().isoformat()
-        if status == "deferred":
-            # Increment deferred_count
-            task = self.db.table("tasks").select("deferred_count").eq(
-                "task_id", task_id).single().execute()
-            updates["deferred_count"] = (task.data["deferred_count"] or 0) + 1
-        result = self.db.table("tasks").update(updates).eq("task_id", task_id).execute()
+        result = (
+            self.db.table("tasks")
+            .update(updates)
+            .eq("task_id", task_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        if not result.data:
+            raise ValueError("Task not found")
         return result.data[0]
 
     # ── Reminders ──
 
+    async def schedule_reminder_command(
+        self,
+        *,
+        user_id: str,
+        idempotency_key: str,
+        payload_hash: str,
+        task_id: str | None,
+        replace_reminder_id: str | None,
+        scheduled_time: str,
+        intended_local_date: str,
+        intended_local_time: str,
+        intended_timezone: str,
+    ) -> dict:
+        try:
+            result = self.db.rpc(
+                "schedule_reminder_command",
+                {
+                    "p_user_id": user_id,
+                    "p_idempotency_key": idempotency_key,
+                    "p_payload_hash": payload_hash,
+                    "p_task_id": task_id,
+                    "p_replace_reminder_id": replace_reminder_id,
+                    "p_scheduled_time": scheduled_time,
+                    "p_intended_local_date": intended_local_date,
+                    "p_intended_local_time": intended_local_time,
+                    "p_intended_timezone": intended_timezone,
+                },
+            ).execute()
+        except Exception as error:
+            _raise_command_error(error)
+            raise
+        return result.data
+
+    async def cancel_reminder_command(
+        self,
+        *,
+        user_id: str,
+        idempotency_key: str,
+        payload_hash: str,
+        reminder_id: str,
+    ) -> dict:
+        try:
+            result = self.db.rpc(
+                "cancel_reminder_command",
+                {
+                    "p_user_id": user_id,
+                    "p_idempotency_key": idempotency_key,
+                    "p_payload_hash": payload_hash,
+                    "p_reminder_id": reminder_id,
+                },
+            ).execute()
+        except Exception as error:
+            _raise_command_error(error)
+            raise
+        return result.data
+
+    async def claim_scheduler_effects(self, limit: int, worker_id: str) -> list[dict]:
+        result = self.db.rpc(
+            "claim_scheduler_outbox",
+            {"p_limit": limit, "p_worker_id": worker_id},
+        ).execute()
+        return result.data or []
+
+    async def complete_scheduler_effect(
+        self,
+        effect_id: str,
+        user_id: str,
+        *,
+        succeeded: bool,
+        error_type: str | None,
+    ) -> None:
+        self.db.rpc(
+            "complete_scheduler_outbox",
+            {
+                "p_effect_id": effect_id,
+                "p_user_id": user_id,
+                "p_succeeded": succeeded,
+                "p_error_type": error_type,
+            },
+        ).execute()
+
     async def create_reminder(self, task_id: str, user_id: str,
                               scheduled_time: str) -> dict:
         """Schedule a reminder for a task."""
+        task = (
+            self.db.table("tasks")
+            .select("task_id")
+            .eq("task_id", task_id)
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        if not task or not task.data:
+            raise ValueError("Task not found")
+
         result = (
             self.db.table("reminders")
             .insert({
@@ -257,14 +499,18 @@ class MemoryStore:
         )
         return result.data[0]
 
-    async def update_reminder(self, reminder_id: str, updates: dict) -> dict:
+    async def update_reminder(self, reminder_id: str, updates: dict, user_id: str) -> dict:
         """Update reminder fields (status, snooze_count, telegram_message_id)."""
+        validate_reminder_updates(updates)
         result = (
             self.db.table("reminders")
             .update(updates)
             .eq("reminder_id", reminder_id)
+            .eq("user_id", user_id)
             .execute()
         )
+        if not result.data:
+            raise ValueError("Reminder not found")
         return result.data[0]
 
     async def get_pending_reminders(self, user_id: str) -> list[dict]:
@@ -279,29 +525,80 @@ class MemoryStore:
         )
         return result.data
 
-    async def get_reminder_with_task(self, reminder_id: str) -> dict | None:
+    async def get_reminder_with_task(self, reminder_id: str, user_id: str) -> dict | None:
         """Fetch a reminder with task title/category for callback handling."""
         result = (
             self.db.table("reminders")
             .select("*, tasks(title, category)")
             .eq("reminder_id", reminder_id)
+            .eq("user_id", user_id)
             .maybe_single()
             .execute()
         )
-        return result.data if result else None
+        return result.data if result and result.data else None
 
-    async def get_reminder_for_send(self, reminder_id: str) -> dict | None:
-        """Fetch reminder/task status immediately before sending a reminder."""
+    async def get_later_context(self, reminder_id: str, user_id: str) -> dict | None:
+        """Load the owned Reminder, Task, and timing preferences needed by LaterPolicy."""
         result = (
             self.db.table("reminders")
-            .select("status, tasks(status)")
+            .select(
+                "*, tasks(*), "
+                "user_profiles!reminders_user_id_fkey("
+                "user_id, telegram_chat_id, timezone, wake_time, sleep_time)"
+            )
             .eq("reminder_id", reminder_id)
+            .eq("user_id", user_id)
             .maybe_single()
             .execute()
         )
-        return result.data if result else None
+        if not result or not result.data:
+            return None
+        row = dict(result.data)
+        task = row.pop("tasks")
+        user = row.pop("user_profiles")
+        return {"reminder": row, "task": task, "user": user}
 
-    async def claim_reminder_for_send(self, reminder_id: str) -> dict | None:
+    async def apply_later_command(
+        self,
+        *,
+        user_id: str,
+        idempotency_key: str,
+        payload_hash: str,
+        reminder_id: str,
+        expected_task_version: int | None,
+        step: int,
+        scheduled_at: str,
+        intended_local_date: str,
+        intended_local_time: str,
+        timezone: str,
+        quiet_hours_adjusted: bool,
+        task_due_date: str | None,
+    ) -> dict:
+        """Atomically acknowledge a Reminder and create its Later replacement."""
+        try:
+            result = self.db.rpc(
+                "apply_later_command",
+                {
+                    "p_user_id": user_id,
+                    "p_idempotency_key": idempotency_key,
+                    "p_payload_hash": payload_hash,
+                    "p_reminder_id": reminder_id,
+                    "p_expected_task_version": expected_task_version,
+                    "p_step": step,
+                    "p_scheduled_time": scheduled_at,
+                    "p_intended_local_date": intended_local_date,
+                    "p_intended_local_time": intended_local_time,
+                    "p_intended_timezone": timezone,
+                    "p_quiet_hours_adjusted": quiet_hours_adjusted,
+                    "p_task_due_date": task_due_date,
+                },
+            ).execute()
+        except Exception as error:
+            _raise_command_error(error)
+            raise
+        return result.data
+
+    async def claim_reminder_for_send(self, reminder_id: str, user_id: str) -> dict | None:
         """Atomically claim a pending reminder before sending it.
 
         Returns reminder/task state only for the process that successfully
@@ -311,6 +608,7 @@ class MemoryStore:
             self.db.table("reminders")
             .update({"status": "sending"})
             .eq("reminder_id", reminder_id)
+            .eq("user_id", user_id)
             .eq("status", "pending")
             .execute()
         )
@@ -321,6 +619,7 @@ class MemoryStore:
             self.db.table("reminders")
             .select("status, tasks(status)")
             .eq("reminder_id", reminder_id)
+            .eq("user_id", user_id)
             .maybe_single()
             .execute()
         )
@@ -414,32 +713,34 @@ class MemoryStore:
         )
         return result.data if result else None
 
+    async def get_dashboard_snapshot(self, user_id: str) -> dict:
+        """Return one transactionally consistent dashboard read model."""
+        result = self.db.rpc("get_dashboard_snapshot", {"p_user_id": user_id}).execute()
+        return result.data
+
     async def create_pairing_token(self, token: str, auth_id: str, expires_at: datetime) -> dict:
-        """Create a new pairing token linked to a Supabase auth.uid()."""
-        result = (
-            self.db.table("pairing_tokens")
-            .insert({
-                "token": token,
-                "supabase_auth_id": auth_id,
-                "expires_at": expires_at.isoformat(),
-            })
-            .execute()
-        )
-        return result.data[0]
+        """Atomically issue a rate-limited token and invalidate older tokens."""
+        try:
+            result = self.db.rpc(
+                "issue_pairing_token",
+                {
+                    "p_token": token,
+                    "p_auth_id": auth_id,
+                    "p_expires_at": expires_at.isoformat(),
+                },
+            ).execute()
+        except Exception as exc:
+            if "pairing_token_rate_limited" in str(exc):
+                raise PairingTokenRateLimitError from None
+            raise
 
-    async def consume_pairing_token(self, token: str) -> dict | None:
-        """Atomically claim/consume a pairing token if valid and not expired.
+        data = result.data
+        return data[0] if isinstance(data, list) else data
 
-        Returns token dict if consumed successfully, otherwise None.
-        """
-        now_str = utc_now().isoformat()
-        result = (
-            self.db.table("pairing_tokens")
-            .update({"consumed": True})
-            .eq("token", token)
-            .eq("consumed", False)
-            .gte("expires_at", now_str)
-            .execute()
-        )
-        return result.data[0] if result.data else None
-
+    async def complete_pairing(self, token: str, chat_id: int) -> dict:
+        """Atomically consume a token and link identities without reassignment."""
+        result = self.db.rpc(
+            "complete_pairing",
+            {"p_token": token, "p_telegram_chat_id": chat_id},
+        ).execute()
+        return result.data

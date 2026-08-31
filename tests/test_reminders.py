@@ -32,8 +32,12 @@ async def test_duplicate_send_attempts_claim_reminder_once():
     scheduler = ReminderScheduler(channel=channel, store=store)
 
     await asyncio.gather(
-        scheduler._send_reminder(123, reminder["reminder_id"], "finish slides"),
-        scheduler._send_reminder(123, reminder["reminder_id"], "finish slides"),
+        scheduler._send_reminder(
+            reminder["user_id"], 123, reminder["reminder_id"], "finish slides"
+        ),
+        scheduler._send_reminder(
+            reminder["user_id"], 123, reminder["reminder_id"], "finish slides"
+        ),
     )
 
     assert len(channel.sent) == 1
@@ -45,7 +49,9 @@ async def test_send_failure_releases_reminder_for_retry():
     reminder = await _create_due_reminder(store)
     scheduler = ReminderScheduler(channel=FailingChannel(), store=store)
 
-    await scheduler._send_reminder(123, reminder["reminder_id"], "finish slides")
+    await scheduler._send_reminder(
+        reminder["user_id"], 123, reminder["reminder_id"], "finish slides"
+    )
 
     assert reminder["status"] == "pending"
 

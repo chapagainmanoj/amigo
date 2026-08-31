@@ -13,6 +13,8 @@ from datetime import timedelta
 
 import pytest
 
+from src.commands.base import CommandContext
+from src.scheduler.outbox import SchedulerOutboxWorker
 from src.tools.reminders import ScheduleReminderTool
 from src.utils import utc_now
 from tests.fakes import FakeScheduler, FakeStore
@@ -50,20 +52,18 @@ async def test_schedule_reminder_tool_idempotent(store, scheduler):
 
     # First call — simulates create_task(reminder_time=...) internally scheduling
     await tool.run(
-        user_id=user["user_id"],
+        context=CommandContext(user["user_id"], "telegram", "schedule-replay-1"),
         task=task,
         resolved_time=send_time_str,
         timezone="UTC",
-        chat_id=1234,
     )
 
     # Second call — simulates the LLM also calling schedule_reminder explicitly
     await tool.run(
-        user_id=user["user_id"],
+        context=CommandContext(user["user_id"], "telegram", "schedule-replay-1"),
         task=task,
         resolved_time=send_time_str,
         timezone="UTC",
-        chat_id=1234,
     )
 
     pending = [r for r in store.reminders if r["status"] == "pending"]
@@ -71,6 +71,8 @@ async def test_schedule_reminder_tool_idempotent(store, scheduler):
         f"Expected 1 pending reminder, got {len(pending)}. "
         "Duplicate reminder creation bug has regressed."
     )
+    assert len(store.scheduler_outbox) == 1
+    assert scheduler.scheduled == []
 
 
 async def test_schedule_reminder_cancels_previous_before_rescheduling(store, scheduler):
@@ -82,27 +84,24 @@ async def test_schedule_reminder_cancels_previous_before_rescheduling(store, sch
     second_time = (utc_now() + timedelta(minutes=30)).strftime("%H:%M")
 
     await tool.run(
-        user_id=user["user_id"],
+        context=CommandContext(user["user_id"], "telegram", "schedule-first"),
         task=task,
         resolved_time=first_time,
         timezone="UTC",
-        chat_id=1234,
     )
 
     first_reminder_id = store.reminders[0]["reminder_id"]
 
     await tool.run(
-        user_id=user["user_id"],
+        context=CommandContext(user["user_id"], "telegram", "schedule-second"),
         task=task,
         resolved_time=second_time,
         timezone="UTC",
-        chat_id=1234,
     )
 
-    # The first reminder_id must have been cancelled in the scheduler
-    assert first_reminder_id in scheduler.cancelled, (
-        "Old reminder job should be cancelled when rescheduling."
-    )
+    worker = SchedulerOutboxWorker(store, scheduler)
+    assert await worker.drain_once() == 3
+    assert first_reminder_id in scheduler.cancelled
 
     # Only one pending reminder remains
     pending = [r for r in store.reminders if r["status"] == "pending"]
@@ -140,7 +139,7 @@ async def test_create_task_after_done_creates_new(store):
     task1 = await store.create_task(
         user_id=user["user_id"], title="Go for a walk", timezone="UTC"
     )
-    await store.update_task_status(task1["task_id"], "done")
+    await store.update_task_status(task1["task_id"], "completed", user["user_id"])
 
     task2 = await store.create_task(
         user_id=user["user_id"], title="Go for a walk", timezone="UTC"

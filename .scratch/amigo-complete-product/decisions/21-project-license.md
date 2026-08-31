@@ -5,7 +5,7 @@ Status: closed
 Label: `wayfinder:grilling`
 Type: HITL / grilling
 Severity: `severity:high`
-Owner: Codex
+Owner: unassigned
 Blocked by: [Define Customer Readiness and the Sustainable Offer](12-customer-readiness-and-pricing.md)
 
 ## Question

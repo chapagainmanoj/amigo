@@ -35,7 +35,12 @@ class ContextBuilder:
         if today_tasks:
             lines.append("Today:")
             for t in today_tasks:
-                status_emoji = {"pending": "⏳", "done": "✅", "skipped": "⏭️", "deferred": "🔄"}
+                status_emoji = {
+                    "pending": "⏳",
+                    "completed": "✅",
+                    "skipped": "⏭️",
+                    "cancelled": "🚫",
+                }
                 emoji = status_emoji.get(t["status"], "❓")
                 lines.append(f"  {emoji} {t['title']}")
 

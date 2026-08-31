@@ -90,6 +90,17 @@ class ReminderScheduler:
         self.scheduler.shutdown(wait=False)
         logger.info("Reminder scheduler stopped")
 
+    def start_outbox_worker(self, callback) -> None:
+        """Poll durable scheduler effects through the single scheduler owner."""
+        self.scheduler.add_job(
+            callback,
+            trigger="interval",
+            seconds=2,
+            id="scheduler-outbox-worker",
+            replace_existing=True,
+            max_instances=1,
+        )
+
     def schedule_reminder(
         self,
         user_id: str,
@@ -117,6 +128,7 @@ class ReminderScheduler:
             id=job_id,
             replace_existing=True,
             kwargs={
+                "user_id": user_id,
                 "chat_id": chat_id,
                 "reminder_id": reminder_id,
                 "task_title": task_title,
@@ -134,7 +146,7 @@ class ReminderScheduler:
             logger.debug("Reminder %s not found in scheduler (may have already fired)", job_id)
 
     async def _send_reminder(
-        self, chat_id: int, reminder_id: str, task_title: str
+        self, user_id: str, chat_id: int, reminder_id: str, task_title: str
     ) -> None:
         """Fire a reminder — send Telegram message with Done/Skip/Later buttons.
 
@@ -144,13 +156,15 @@ class ReminderScheduler:
         try:
             # Guard: atomically claim the reminder before sending so deploy overlap
             # or accidental scale-out cannot send the same reminder twice.
-            reminder = await self.store.claim_reminder_for_send(reminder_id)
+            reminder = await self.store.claim_reminder_for_send(reminder_id, user_id)
             if not reminder:
                 return
             task_status = reminder.get("tasks", {}).get("status")
-            if task_status in ("done", "skipped"):
+            if task_status in ("completed", "skipped", "cancelled"):
                 logger.debug("Skipping reminder %s — task already %s", reminder_id, task_status)
-                await self.store.update_reminder(reminder_id, {"status": "acknowledged"})
+                await self.store.update_reminder(
+                    reminder_id, {"status": "acknowledged"}, user_id
+                )
                 return
 
             try:
@@ -160,15 +174,19 @@ class ReminderScheduler:
                     buttons=reminder_keyboard(reminder_id),
                 )
             except Exception:
-                await self.store.update_reminder(reminder_id, {"status": "pending"})
+                await self.store.update_reminder(reminder_id, {"status": "pending"}, user_id)
                 raise
 
             # Store telegram_message_id for later button editing
             if message_id:
-                await self.store.update_reminder(reminder_id, {
-                    "status": "sent",
-                    "telegram_message_id": message_id,
-                })
+                await self.store.update_reminder(
+                    reminder_id,
+                    {
+                        "status": "sent",
+                        "telegram_message_id": message_id,
+                    },
+                    user_id,
+                )
 
         except Exception:
             logger.exception("Failed to send reminder %s", reminder_id)

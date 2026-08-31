@@ -11,6 +11,20 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: amigo_test
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d amigo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -21,6 +35,32 @@ jobs:
 
       - name: Install dependencies
         run: pip install -e ".[dev]"
+
+      - name: Validate migrations and tenant isolation
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d amigo_test \
+            -f tests/sql/bootstrap_supabase_roles.sql \
+            -f migrations/001_initial_schema.sql \
+            -f migrations/002_auth_linking_and_rls.sql \
+            -f migrations/003_secure_pairing_tokens.sql \
+            -f migrations/004_tenant_isolation_policies.sql \
+            -f tests/sql/seed_legacy_task_states.sql \
+            -f migrations/005_canonical_task_command.sql \
+            -f tests/sql/assert_canonical_task_backfill.sql \
+            -f tests/sql/seed_legacy_reminders.sql \
+            -f migrations/006_durable_reminder_outbox.sql \
+            -f tests/sql/assert_reminder_backfill.sql \
+            -f migrations/007_consistent_task_reminder_resolution.sql \
+            -f migrations/008_atomic_later_command.sql \
+            -f migrations/009_telegram_update_claims.sql \
+            -f tests/sql/tenant_isolation.sql \
+            -f tests/sql/create_task_command.sql \
+            -f tests/sql/reminder_outbox.sql \
+            -f tests/sql/resolve_task_command.sql \
+            -f tests/sql/apply_later_command.sql \
+            -f tests/sql/telegram_update_claims.sql
 
       - name: Lint
         run: ruff check src tests

@@ -23,6 +23,8 @@ services:
         sync: false
       - key: TELEGRAM_WEBHOOK_SECRET
         sync: false
+      - key: ACCESS_MODE
+        sync: false  # Set explicitly to closed, allowlist, or invite
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY
@@ -44,4 +46,3 @@ services:
         sync: false
       - key: VITE_API_URL
         value: https://amigo-agkb.onrender.com
-

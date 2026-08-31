@@ -16,6 +16,8 @@ from src.channels.cli import CLIChannel
 from src.config import settings
 from src.memory.memory_store import InMemoryStore
 from src.memory.sessions import SessionManager
+from src.runtime_config import validate_runtime_configuration
+from src.scheduler.outbox import SchedulerOutboxWorker
 from src.scheduler.reminders import ReminderScheduler
 
 # ANSI
@@ -65,7 +67,12 @@ async def _handle_cli_commands(text: str, store: InMemoryStore) -> bool:
             tasks = await store.get_today_tasks(user["user_id"], DEV_TIMEZONE)
             if tasks:
                 print(f"\n{_BOLD}Today's tasks:{_RESET}")
-                status_emoji = {"pending": "⏳", "done": "✅", "skipped": "⏭️", "deferred": "🔄"}
+                status_emoji = {
+                    "pending": "⏳",
+                    "completed": "✅",
+                    "skipped": "⏭️",
+                    "cancelled": "🚫",
+                }
                 for t in tasks:
                     emoji = status_emoji.get(t["status"], "❓")
                     print(f"  {emoji} {t['title']} ({t['status']})")
@@ -89,6 +96,7 @@ async def _handle_cli_commands(text: str, store: InMemoryStore) -> bool:
 
 async def run_cli(onboard: bool = False):
     """Main CLI loop — wire components and run an interactive chat session."""
+    validate_runtime_configuration(settings)
     logging.basicConfig(
         level=getattr(logging, settings.log_level),
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
@@ -101,6 +109,7 @@ async def run_cli(onboard: bool = False):
     store = InMemoryStore()
     session_mgr = SessionManager(store)
     reminder_scheduler = ReminderScheduler(channel=channel, store=store)
+    outbox_worker = SchedulerOutboxWorker(store, reminder_scheduler)
 
     handlers = BotHandlers(
         channel=channel,
@@ -111,6 +120,7 @@ async def run_cli(onboard: bool = False):
 
     # Start the scheduler so reminders fire in the terminal
     reminder_scheduler.start()
+    reminder_scheduler.start_outbox_worker(outbox_worker.drain_once)
 
     # Seed dev user unless --onboard flag is set
     if not onboard:

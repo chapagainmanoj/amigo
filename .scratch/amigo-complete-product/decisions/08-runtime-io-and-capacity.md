@@ -5,7 +5,7 @@ Status: closed
 Label: `wayfinder:grilling`
 Type: HITL / grilling
 Severity: `severity:high`
-Owner: Codex
+Owner: unassigned
 Blocked by: [Define Release Evidence and Gate Thresholds](01-release-evidence-and-gates.md), [Capture the Render and Supabase Runtime Baseline](07-runtime-baseline.md)
 
 ## Question

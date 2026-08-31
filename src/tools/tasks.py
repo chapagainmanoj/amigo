@@ -1,7 +1,10 @@
 """Task tools used by the app layer."""
 
+from datetime import date
+
+from src.commands.base import CommandContext
+from src.commands.tasks import CreateTaskCommand, CreateTaskInput, ResolveTaskCommand
 from src.memory.store import MemoryStore
-from src.tools.reminders import CancelRemindersTool
 
 
 class CreateTaskTool:
@@ -10,39 +13,49 @@ class CreateTaskTool:
     name = "create_task"
 
     def __init__(self, store: MemoryStore):
-        self.store = store
+        self.command = CreateTaskCommand(store)
 
     async def run(
         self,
         *,
-        user_id: str,
+        context: CommandContext,
         title: str,
         category: str = "other",
         session_id: str | None = None,
-        suggested_time: str | None = None,
-        timezone: str = "UTC",
+        planning_day: date | None = None,
     ) -> dict:
-        task = await self.store.create_task(
-            user_id=user_id,
-            title=title,
-            category=category,
-            session_id=session_id,
-            suggested_time=suggested_time,
-            timezone=timezone,
+        return await self.command.run(
+            context,
+            CreateTaskInput(
+                title=title,
+                category=category,
+                planning_day=planning_day,
+                source_session_id=session_id,
+            ),
         )
-        return {"task": task}
 
 
 class UpdateTaskStatusTool:
-    """Update task status and cancel pending reminders for that task."""
+    """Resolve a Task and its active Reminders through the shared command."""
 
     name = "update_task_status"
 
-    def __init__(self, store: MemoryStore, cancel_reminders: CancelRemindersTool):
-        self.store = store
-        self.cancel_reminders = cancel_reminders
+    def __init__(self, store: MemoryStore):
+        self.command = ResolveTaskCommand(store)
 
-    async def run(self, *, task_id: str, status: str, user_id: str) -> dict:
-        task = await self.store.update_task_status(task_id, status)
-        cancelled = await self.cancel_reminders.run(task_id=task_id, user_id=user_id)
-        return {"task": task, "cancelled_reminders": cancelled["reminder_ids"]}
+    async def run(
+        self,
+        *,
+        context: CommandContext,
+        task_id: str,
+        status: str,
+        expected_version: int | None = None,
+        acted_reminder_id: str | None = None,
+    ) -> dict:
+        return await self.command.run(
+            context,
+            task_id=task_id,
+            outcome=status,
+            expected_version=expected_version,
+            acted_reminder_id=acted_reminder_id,
+        )

@@ -6,7 +6,7 @@ Label: `wayfinder:grilling`
 Type: HITL / grilling
 Severity: `severity:critical`
 Owner: unassigned
-Blocked by: [Define the Non-Clinical Wellbeing and Crisis-Referral Contract](15-nonclinical-wellbeing-contract.md)
+Blocked by: [Define the Non-Clinical Wellbeing and Crisis-Referral Contract](15-nonclinical-wellbeing-contract.md), [Collect International Crisis-Referral Demand Evidence](29-international-referral-demand-evidence.md)
 
 ## Question
 

@@ -53,14 +53,53 @@ class TestAllowlist:
         handlers, *_ = setup
 
         with patch("src.config.settings") as mock_settings:
+            mock_settings.access_mode = "open"
             mock_settings.allowed_telegram_chat_ids = ""
-            assert handlers._is_allowed(99999) is True
+            assert await handlers._is_allowed(99999) is True
 
     @pytest.mark.asyncio
     async def test_populated_allowlist_blocks_unknown(self, setup):
         handlers, *_ = setup
 
         with patch("src.config.settings") as mock_settings:
+            mock_settings.access_mode = "allowlist"
             mock_settings.allowed_telegram_chat_ids = "111,222"
-            assert handlers._is_allowed(333) is False
-            assert handlers._is_allowed(111) is True
+            assert await handlers._is_allowed(333) is False
+            assert await handlers._is_allowed(111) is True
+
+    @pytest.mark.asyncio
+    async def test_closed_mode_blocks_messages_and_callbacks(self, setup):
+        handlers, channel, store = setup
+
+        with patch("src.config.settings") as mock_settings:
+            mock_settings.access_mode = "closed"
+            await handlers.handle_message(111, "hello")
+            await handlers.handle_callback(111, 1, "done:guessed-task")
+
+        assert len(channel.sent) == 2
+        assert 111 not in store.users
+        assert store.tasks == []
+
+    @pytest.mark.asyncio
+    async def test_invite_mode_allows_pairing_and_paired_profiles_only(self, setup):
+        handlers, *_channel, store = setup
+        paired = await store.create_user(111)
+        await store.update_user(paired["user_id"], {"supabase_auth_id": "auth-user"})
+
+        with patch("src.config.settings") as mock_settings:
+            mock_settings.access_mode = "invite"
+            assert await handlers._is_allowed(222, pairing_attempt=True) is True
+            assert await handlers._is_allowed(111) is True
+            assert await handlers._is_allowed(222) is False
+
+    @pytest.mark.asyncio
+    async def test_malformed_allowlist_fails_closed(self, setup, caplog):
+        handlers, *_ = setup
+
+        with patch("src.config.settings") as mock_settings:
+            mock_settings.access_mode = "allowlist"
+            mock_settings.allowed_telegram_chat_ids = "111,not-an-id"
+            assert await handlers._is_allowed(111) is False
+
+        assert "ALLOWED_TELEGRAM_CHAT_IDS" in caplog.text
+        assert "not-an-id" not in caplog.text

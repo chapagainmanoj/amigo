@@ -3,7 +3,7 @@ export const nextId = () => `mock_${idCounter++}`
 
 export const mockTasks = [
   { id: nextId(), title: 'Review PR for the new caching layer', status: 'pending', category: 'work' },
-  { id: nextId(), title: 'Drink water', status: 'done', category: 'health' },
+  { id: nextId(), title: 'Drink water', status: 'completed', category: 'health' },
   { id: nextId(), title: 'Reply to Sarah about weekend plans', status: 'pending', category: 'personal' },
 ]
 

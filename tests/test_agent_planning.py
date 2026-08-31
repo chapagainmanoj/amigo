@@ -9,6 +9,7 @@ from datetime import timedelta
 from pydantic_ai.models.test import TestModel
 
 from src.agent.agent import AgentDeps, amigo_agent, handle_message
+from src.commands.base import CommandContext
 from src.utils import now_in_tz
 from tests.fakes import FakeChannel, FakeScheduler, FakeStore
 
@@ -27,14 +28,15 @@ def _make_deps(store, scheduler, channel, user, session_id="session-1"):
         session_id=session_id,
         chat_id=123,
         timezone="Asia/Kathmandu",
+        turn_id="test-turn",
     )
 
 
 async def test_handle_message_stores_user_and_assistant_messages():
     """handle_message should store the user message and agent response."""
     store = FakeStore()
-    channel = FakeChannel()
     scheduler = FakeScheduler()
+    channel = FakeChannel()
     user = await store.create_user(123)
     await store.update_user(user["user_id"], {
         "name": "Dev", "timezone": "Asia/Kathmandu",
@@ -93,15 +95,19 @@ async def test_create_task_tool_creates_task_in_store():
         "onboarding_complete": True, "onboarding_step": 3,
     })
     user = await store.get_user_by_chat_id(123)
+    session = await store.create_session(user["user_id"])
 
     from src.tools.tasks import CreateTaskTool
     tool = CreateTaskTool(store)
     result = await tool.run(
-        user_id=user["user_id"],
+        context=CommandContext(
+            actor_user_id=user["user_id"],
+            surface="telegram",
+            idempotency_key="test:agent-create-task",
+        ),
         title="Call mom",
         category="social",
-        session_id="session-1",
-        timezone="Asia/Kathmandu",
+        session_id=session["session_id"],
     )
 
     assert result["task"]["title"] == "Call mom"
@@ -111,21 +117,19 @@ async def test_create_task_tool_creates_task_in_store():
 async def test_update_task_status_tool_marks_done_and_cancels_reminders():
     """update_task_status should update the task and cancel pending reminders."""
     store = FakeStore()
-    scheduler = FakeScheduler()
     user = await store.create_user(123)
     task = await store.create_task(user["user_id"], "finish slides")
     await store.create_reminder(task["task_id"], user["user_id"], "2099-01-01T00:00:00")
 
-    from src.tools.reminders import CancelRemindersTool
     from src.tools.tasks import UpdateTaskStatusTool
-    cancel_tool = CancelRemindersTool(store, scheduler)
-    tool = UpdateTaskStatusTool(store, cancel_tool)
+    tool = UpdateTaskStatusTool(store)
 
     result = await tool.run(
+        context=CommandContext(user["user_id"], "telegram", "resolve-agent-test"),
         task_id=task["task_id"],
-        status="done",
-        user_id=user["user_id"],
+        status="completed",
     )
 
-    assert result["task"]["status"] == "done"
-    assert len(scheduler.cancelled) == 1
+    assert result["task"]["status"] == "completed"
+    assert result["effect_state"] == "queued"
+    assert len(store.scheduler_outbox) == 1

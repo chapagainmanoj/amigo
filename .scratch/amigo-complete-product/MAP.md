@@ -1,4 +1,4 @@
-# Wayfinder Map: Amigo Complete Product
+# Amigo Complete Product
 
 Label: `wayfinder:map`
 Status: open
@@ -89,7 +89,7 @@ anything shipped meets its demand, safety, cost, privacy, and reliability gate.
   Approved a bounded exercise and Mood Entry scope, explicit sensitive-data consent and retention,
   a limitation-first response ladder, verified U.S./Canada referral registry, non-monitoring safety
   telemetry and kill switch, and strict automated, human-review, usability, and trial gates.
-- [Choose the Surface Expansion Portfolio and Priority](decisions/16-channel-expansion-priority.md):
+- [Choose the Channel Expansion Priority](decisions/16-channel-expansion-priority.md):
   Separated Messaging Channels, Interaction Modalities, and Client Surfaces; chose No Expansion Yet,
   defined observed-demand gates, one canonical identity and Primary Messaging Channel contract,
   evidence collection, single-expansion sequencing, and a common parity/reliability release gate.
@@ -104,13 +104,6 @@ anything shipped meets its demand, safety, cost, privacy, and reliability gate.
 
 ## Not yet specified
 
-- Which durable-memory storage and retrieval technology fits the approved Memory contract.
-- [Which narrow recommendation domain and data sources justify Recommender Mode?](decisions/22-recommender-domain.md)
-- [Can evidence ever justify automatic mode routing or unconfirmed adaptation?](decisions/23-automatic-routing-and-adaptation.md)
-- [When should verified Crisis Referral coverage expand beyond the U.S. and Canada?](decisions/24-international-crisis-referrals.md)
-- [Which WhatsApp product and integration contract should govern an approved expansion?](decisions/17-whatsapp-contract.md)
-- [Should voice use asynchronous messages, live conversation, or neither?](decisions/18-voice-contract.md)
-- [Does validated mobile demand require responsive web, a PWA, native mobile, or no separate app?](decisions/19-mobile-contract.md)
 - Detailed implementation slices for post-beta capabilities; these graduate only after their
   governing decision tickets close.
 

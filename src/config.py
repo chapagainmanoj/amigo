@@ -1,5 +1,7 @@
 """Application configuration via environment variables."""
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings
 
 
@@ -22,10 +24,12 @@ class Settings(BaseSettings):
 
     # App
     app_base_url: str = "http://localhost:8000"
+    dashboard_url: str = "http://localhost:5173"
     app_env: str = "development"
     log_level: str = "INFO"
 
-    # Access control — comma-separated Telegram chat IDs allowed to use the bot
+    # Access control — open is development-only; production must choose a closed posture
+    access_mode: Literal["open", "closed", "allowlist", "invite"] = "open"
     allowed_telegram_chat_ids: str = ""  # e.g. "123456789,987654321"
 
     # LLM defaults

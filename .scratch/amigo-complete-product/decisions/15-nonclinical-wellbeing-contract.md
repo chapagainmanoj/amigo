@@ -5,7 +5,7 @@ Status: closed
 Label: `wayfinder:grilling`
 Type: HITL / grilling
 Severity: `severity:critical`
-Owner: Codex
+Owner: unassigned
 Blocked by: [Define the Proportionate Beta Privacy and Retention Contract](04-beta-privacy-retention.md), [Choose the Invitation Cohort and Recruitment Protocol](11-cohort-and-recruitment.md)
 
 ## Question

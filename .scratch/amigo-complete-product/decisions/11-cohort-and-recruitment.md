@@ -5,7 +5,7 @@ Status: closed
 Label: `wayfinder:grilling`
 Type: HITL / grilling
 Severity: `severity:high`
-Owner: Codex
+Owner: unassigned
 Blocked by: [Define Release Evidence and Gate Thresholds](01-release-evidence-and-gates.md), [Lock the Beta Promise and Capability Exclusions](02-beta-promise-and-exclusions.md), [Choose the Beta Offer and Support Contract](03-beta-offer-and-support.md), [Define the Proportionate Beta Privacy and Retention Contract](04-beta-privacy-retention.md), [Approve the Dashboard-First Activation Journey](10-dashboard-activation-prototype.md)
 
 ## Question

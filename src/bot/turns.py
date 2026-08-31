@@ -26,7 +26,7 @@ class TurnProcessor:
         self.session_mgr = session_mgr
         self.scheduler = scheduler
 
-    async def handle(self, chat_id: int, user: dict, text: str) -> None:
+    async def handle(self, chat_id: int, user: dict, text: str, *, update_id: int) -> None:
         """Handle regular message flow after access control and onboarding."""
         timeout = user.get("session_timeout_minutes", 120)
         user_tz = user.get("timezone") or "UTC"
@@ -52,6 +52,7 @@ class TurnProcessor:
             session_id=session_id,
             chat_id=chat_id,
             timezone=user_tz,
+            turn_id=str(update_id),
         )
         response = await handle_message(deps, text)
         await self.channel.send_message(chat_id, response)

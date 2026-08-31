@@ -11,7 +11,7 @@ deployment, security, privacy, documentation, analytics, legal readiness, and cu
 > decisions, and the [pre-launch implementation plan](pre-launch-implementation-plan.md) tracks
 > current implementation status.
 
-## Current disposition — 2026-08-30
+## Current disposition — 2026-08-31
 
 - The beta promise, target segment, offer/support contract, privacy/retention contract,
   Task/Reminder lifecycle, cross-surface contract, runtime strategy, model-evaluation contract,
@@ -24,9 +24,17 @@ deployment, security, privacy, documentation, analytics, legal readiness, and cu
   enabling GitHub private vulnerability reporting still requires authenticated repository setup.
 - The deprecated UTC calls and dead agent/context code identified here are removed. Python tests
   and Ruff pass without warnings; a clean dashboard install, lint, build, and npm audit also pass.
-- Security/RLS hardening, canonical lifecycle implementation, shared backend dashboard commands,
-  production validation, observability, data-rights operations, Activation, integration tests,
-  and Gate A/B evidence remain open. Amigo is still in pre-beta development.
+- Pairing tokens are backend-only and single-use. Task and Reminder ownership predicates now span
+  all Store implementations, and a two-participant PostgreSQL/Supabase-role matrix runs in CI.
+- Production configuration now fails closed locally for unsafe identity, webhook, database,
+  model, dashboard-origin, and access settings. Deployment verification remains open.
+- Task capture, Reminder schedule/reschedule/cancel, and Task Done/Skip/Cancel now use shared
+  backend commands with canonical state, idempotent receipts, exact intended time, stale-version
+  protection, and a durable scheduler outbox. Later now uses one quiet-hours-aware replacement
+  policy across Telegram and dashboard. Reminder-time resolution now preserves and confirms the
+  exact local date, wall time, timezone, and UTC instant while blocking ambiguous or invalid wall
+  times. Observability, data-rights operations, Activation, end-to-end integration tests, and Gate
+  A/B evidence remain open. Amigo is still in pre-beta development.
 
 ## Executive assessment
 
@@ -56,7 +64,7 @@ changes are reviewed, deployed, and verified across every public surface.
 - Supabase persistence and dashboard account pairing.
 - Dashboard task, reminder, and session views with realtime refresh.
 - Reasonable module separation and dependency injection.
-- All 69 backend tests passed and Ruff passed at the 2026-08-29 review.
+- All 177 backend tests and Ruff passed at the 2026-08-31 capability review.
 - The dashboard production build succeeds.
 
 The automated tests use fakes. They do not prove that Gemini, Telegram, Supabase Auth/RLS,
@@ -107,7 +115,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | No user-facing reminder preferences | Users cannot set quiet hours, wake/sleep times, categories, cadence, or notification limits. | **High** | Add minimal Preferences UI and Telegram controls for mute, quiet hours, timezone, and reminder intensity. | Before broader beta |
 | Dashboard snooze does not reschedule the live job | React updates the reminder row directly, but APScheduler is not notified; the old in-memory job may still fire. Its 15-minute policy also conflicts with Telegram's 60-minute, then 30-minute policy. | **High** | Route dashboard mutations through authenticated backend endpoints and one shared snooze policy used by Telegram and the dashboard. | Before external beta |
 | “Deferred to tomorrow” is incomplete | A deferred task is not proactively carried over or scheduled for review; it is only seen when the user initiates another turn. | **High** | Define carry-over semantics and schedule a next-day check-in or create a correctly dated task. | Before claiming automatic follow-up |
-| Ambiguous times can resolve incorrectly | A direct check resolved `at 8` to `00:00`; phrases such as `dinner at 8` did not parse. | **High** | Ask for clarification when meridiem/date is ambiguous; support common phrases and add locale/DST tests. | Before launch |
+| Reminder time resolution required hardening | The earlier parser could resolve `at 8` incorrectly and did not preserve a complete local-time decision. The typed resolver now blocks bare/fuzzy/contradictory/passed inputs, handles DST gaps and folds, confirms quiet-hour requests, and stores the confirmed UTC instant. | **Resolved locally** | Verify the confirmation conversation and UTC anchoring in staging before closing the release gate. | Staging evidence before launch |
 | Dashboard exposes unavailable modes | Recommender, Coach, Reflect, and WhatsApp are prominent despite being unavailable. Unavailable mode chips are still clickable. | **Medium** | Hide unfinished modes from customer builds or place them on a clearly labeled roadmap. | Before customer demo |
 
 ## Onboarding, UX, design, and accessibility gaps
@@ -128,8 +136,8 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | Gap | Why it matters | Severity | Recommended fix | Gate |
 |---|---|---:|---|---|
 | No end-to-end integration suite | Passing fake-based tests do not validate the actual product path. | **High** | Add staging coverage for onboarding → task → reminder → callback → dashboard update. | Before launch |
-| Webhook processing is not idempotent | Telegram retries can process the same update again after an exception; update IDs are not claimed or recorded. | **High** | Persist and atomically claim Telegram `update_id`; safely acknowledge delivery and separately retry internal work. | Before launch |
-| No per-user turn serialization | Concurrent messages can race session creation, context, tools, and responses. | **Medium** | Add a per-user lock or ordered queue and burst tests. | Before scale; recommended for beta |
+| Telegram replay required a durable claim | The webhook now atomically claims each `update_id`, acknowledges duplicates, retains content-free completion/failure state, and derives command replay keys from the stable update ID. | **Resolved locally** | Replay non-sensitive fixtures in staging and alert on stuck or failed claims. | Staging evidence before launch |
+| Turn ordering required participant serialization | A participant-scoped lock now serializes Turns in arrival order while different participants proceed concurrently in the single beta web process. | **Resolved locally** | Verify ordering under the representative staging burst before increasing process count. | Staging evidence before scale |
 | Synchronous Supabase calls run inside async methods | Slow database calls can block the event loop, delay turns, and make reminder delivery late. | **High** | Instrument event-loop delay, then adopt a supported async client or isolate synchronous calls behind a bounded worker-thread adapter with explicit limits and timeouts. | Before external beta |
 | Repeated reads inflate latency and cost | Turn context fetches task data more than once and tools add further network calls. | **Medium** | Assemble one immutable Turn Context snapshot and reuse it. | After beta |
 | No explicit dependency timeouts | Slow model, database, auth, or Telegram calls can tie up the process. | **High** | Define bounded connect/read/total timeouts, retries, and user-safe fallbacks per dependency. | Before launch |
@@ -184,12 +192,12 @@ The same evidence exposes the following gaps that must be treated explicitly:
 3. Publish privacy, terms, retention, export, and deletion behavior.
 4. Remove clinical wellbeing claims and enforce the approved non-clinical safety boundary.
 5. Route dashboard reminder mutations through backend scheduling logic.
-6. Add webhook idempotency and safe failure handling.
+6. Verify webhook idempotency, safe failure inspection, and Turn ordering in staging.
 7. Choose one production platform and one scheduler owner.
 8. Add production configuration validation, rate limits, usage tracking, and spend controls.
 9. Add monitoring, exception tracking, readiness checks, and alerts.
 10. Pass a real staging end-to-end test.
-11. Fix ambiguous time handling and timezone/DST coverage.
+11. Verify the implemented time clarification and timezone/DST behavior in staging.
 12. Add backup/restore and rollback procedures.
 13. Add a project license before describing Amigo as open source.
 14. Fix frontend CI and signed-in mobile behavior.

@@ -5,7 +5,7 @@ Status: closed
 Label: `wayfinder:prototype`
 Type: HITL / prototype
 Severity: `severity:high`
-Owner: Codex
+Owner: unassigned
 Blocked by: [Lock the Beta Promise and Capability Exclusions](02-beta-promise-and-exclusions.md), [Define the Proportionate Beta Privacy and Retention Contract](04-beta-privacy-retention.md), [Resolve the Task and Reminder Lifecycle](05-task-reminder-lifecycle.md), [Choose the Cross-Surface State Contract](06-cross-surface-state-contract.md)
 
 ## Question

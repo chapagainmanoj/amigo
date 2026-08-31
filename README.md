@@ -116,6 +116,7 @@ GOOGLE_API_KEY=your-gemini-api-key
 # Telegram
 TELEGRAM_BOT_TOKEN=your-bot-token-from-botfather
 TELEGRAM_WEBHOOK_SECRET=generate-a-random-string
+ACCESS_MODE=open
 ALLOWED_TELEGRAM_CHAT_IDS=123456789
 
 # Supabase
@@ -143,9 +144,21 @@ Where to get these:
 2. Open the SQL editor in the Supabase dashboard.
 3. Run [`migrations/001_initial_schema.sql`](migrations/001_initial_schema.sql).
 4. Run [`migrations/002_auth_linking_and_rls.sql`](migrations/002_auth_linking_and_rls.sql).
+5. Run [`migrations/003_secure_pairing_tokens.sql`](migrations/003_secure_pairing_tokens.sql).
+6. Run [`migrations/004_tenant_isolation_policies.sql`](migrations/004_tenant_isolation_policies.sql).
+7. Run [`migrations/005_canonical_task_command.sql`](migrations/005_canonical_task_command.sql).
+8. Run [`migrations/006_durable_reminder_outbox.sql`](migrations/006_durable_reminder_outbox.sql).
+9. Run [`migrations/007_consistent_task_reminder_resolution.sql`](migrations/007_consistent_task_reminder_resolution.sql).
+10. Run [`migrations/008_atomic_later_command.sql`](migrations/008_atomic_later_command.sql).
+11. Run [`migrations/009_telegram_update_claims.sql`](migrations/009_telegram_update_claims.sql).
 
-Apply migrations in numeric order. The second migration provides dashboard pairing and baseline
-row-level policies, but the pairing-token grants/RLS and two-user security gate are still open.
+Apply migrations in numeric order. Migrations 003 and 004 make Pairing backend-only and enforce
+the reviewed cross-tenant grants and row-level policies. Migration 005 adds canonical Task states
+and the backend-only, idempotent Create Task command boundary. Migration 006 adds canonical
+Reminder states and the durable, backend-only scheduling outbox. Migration 007 makes Task
+resolution and its Reminder cancellation effects one backend-only transaction. Migration 008
+adds the shared atomic Later replacement command. Migration 009 atomically claims Telegram updates
+and retains their content-free completion or failure status for safe replay inspection.
 
 #### 3. Run
 
@@ -170,13 +183,14 @@ Health check: `curl http://localhost:8000/health`
 ### Test & Lint
 
 ```bash
-python -m pytest tests/ -v         # 69 unit tests at the latest capability review
+python -m pytest tests/ -v         # 184 tests at the latest capability review
 ruff check src tests scripts       # lint
 ```
 
-All tests use in-memory fakes — no Supabase, Telegram, or Gemini
-calls. See [`tests/fakes.py`](tests/fakes.py) for the shared test
-doubles.
+Python tests use in-memory fakes and make no Supabase, Telegram, or Gemini calls. CI additionally
+applies every migration to PostgreSQL 15 and runs legacy backfill, two-participant isolation, and
+durable command/outbox regressions. See
+[`tests/fakes.py`](tests/fakes.py) for the shared test doubles.
 
 ### Smoke Checks
 
@@ -204,8 +218,10 @@ python scripts/smoke_check.py --all
 | `TELEGRAM_WEBHOOK_SECRET` | `""` | Telegram mode |
 | `SUPABASE_URL` | `""` | Telegram mode |
 | `SUPABASE_SERVICE_KEY` | `""` | Telegram mode |
-| `ALLOWED_TELEGRAM_CHAT_IDS` | `""` | Telegram mode (empty = allow all) |
+| `ACCESS_MODE` | `open` | Production requires `closed`, `allowlist`, or `invite` |
+| `ALLOWED_TELEGRAM_CHAT_IDS` | `""` | Required and non-empty in `allowlist` mode |
 | `APP_BASE_URL` | `http://localhost:8000` | Telegram mode |
+| `DASHBOARD_URL` | `http://localhost:5173` | Public HTTPS dashboard origin in production |
 | `APP_ENV` | `development` | — |
 | `LOG_LEVEL` | `INFO` | — |
 | `DEFAULT_MODEL` | `gemini-3.5-flash` | — |

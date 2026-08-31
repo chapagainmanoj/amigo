@@ -7,20 +7,22 @@ services (store, scheduler), keeping testability via fakes.
 See ADR 0002 for rationale.
 """
 
+import hashlib
 import logging
 from dataclasses import dataclass
 
-import dateparser
 from pydantic_ai import Agent, RunContext
 
 from src.agent.prompts import build_system_prompt
 from src.channels.base import MessageChannel
+from src.commands.base import CommandContext
 from src.memory.context import ContextBuilder
 from src.memory.store import MemoryStore
 from src.scheduler.reminders import ReminderScheduler
+from src.time_resolution import TimeResolution, resolve_reminder_time
 from src.tools.reminders import CancelRemindersTool, ScheduleReminderTool
 from src.tools.tasks import CreateTaskTool, UpdateTaskStatusTool
-from src.utils import local_time_to_utc, now_in_tz, utc_now
+from src.utils import now_in_tz
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,7 @@ class AgentDeps:
     session_id: str
     chat_id: int
     timezone: str
+    turn_id: str
 
 
 def _get_model_name() -> str:
@@ -77,7 +80,7 @@ async def _build_system_prompt(ctx: RunContext[AgentDeps]) -> str:
 
     # Pending tasks with IDs for status update tool
     pending = await deps.store.get_today_tasks(user["user_id"], tz)
-    pending_tasks = [t for t in pending if t["status"] in ("pending", "deferred")]
+    pending_tasks = [task for task in pending if task["status"] == "pending"]
 
     sections = [base_prompt]
 
@@ -111,6 +114,7 @@ async def create_task(
     title: str,
     category: str = "other",
     reminder_time: str | None = None,
+    confirmed_reminder_time: str | None = None,
 ) -> str:
     """Create a new task for the user.
 
@@ -122,24 +126,37 @@ async def create_task(
         category: One of: health, work, personal, social, other.
         reminder_time: Optional natural language time like "3pm", "in 10 minutes",
             "after lunch". Pass this to create the task and set the reminder in one step.
+        confirmed_reminder_time: The exact confirmation label returned by a previous tool
+            result, supplied only after the user explicitly confirms it.
     """
     deps = ctx.deps
+    resolution = None
+    if reminder_time:
+        resolution = _resolve_time(deps, reminder_time)
+        blocked = _resolution_block_message(resolution, confirmed_reminder_time)
+        if blocked:
+            return blocked
+
     tool = CreateTaskTool(deps.store)
+    input_fingerprint = hashlib.sha256(
+        f"{title.strip()}\0{category}\0{deps.session_id}".encode()
+    ).hexdigest()[:16]
     result = await tool.run(
-        user_id=deps.user["user_id"],
+        context=CommandContext(
+            actor_user_id=deps.user["user_id"],
+            surface="telegram",
+            idempotency_key=f"telegram:{deps.turn_id}:create-task:{input_fingerprint}",
+        ),
         title=title,
         category=category,
         session_id=deps.session_id,
-        timezone=deps.timezone,
     )
     task = result["task"]
 
     # Schedule reminder if time was provided
-    if reminder_time:
-        reminder_result = await _schedule_reminder_for_task(deps, task, reminder_time)
-        if reminder_result:
-            return f"Created task '{title}' with reminder at {reminder_result}."
-        return f"Created task '{title}' (couldn't parse reminder time '{reminder_time}')."
+    if resolution:
+        reminder_result = await _schedule_resolved_reminder(deps, task, resolution)
+        return f"Created task '{title}' with reminder for {reminder_result}."
 
     return f"Created task '{title}'."
 
@@ -154,15 +171,18 @@ async def update_task_status(
 
     Args:
         task_id: The task_id from the pending tasks list in context.
-        status: One of: "done", "skipped", "deferred".
+        status: One of: "completed", "skipped", "cancelled".
     """
     deps = ctx.deps
-    cancel_tool = CancelRemindersTool(deps.store, deps.scheduler)
-    tool = UpdateTaskStatusTool(deps.store, cancel_tool)
+    tool = UpdateTaskStatusTool(deps.store)
     result = await tool.run(
+        context=CommandContext(
+            actor_user_id=deps.user["user_id"],
+            surface="telegram",
+            idempotency_key=f"telegram:{deps.turn_id}:resolve-task:{task_id}:{status}",
+        ),
         task_id=task_id,
         status=status,
-        user_id=deps.user["user_id"],
     )
     task_title = result["task"].get("title", "task")
     return f"Updated '{task_title}' to {status}."
@@ -173,6 +193,7 @@ async def schedule_reminder(
     ctx: RunContext[AgentDeps],
     task_id: str,
     time_expression: str,
+    confirmed_time: str | None = None,
 ) -> str:
     """Schedule or reschedule a reminder for an already-created task.
 
@@ -182,11 +203,14 @@ async def schedule_reminder(
     Args:
         task_id: The task_id to schedule a reminder for.
         time_expression: Natural language time like "3pm", "in 30 minutes", "after lunch".
+        confirmed_time: The exact confirmation label returned by a previous tool result,
+            supplied only after the user explicitly confirms it.
     """
     deps = ctx.deps
     task = None
     today_tasks = await deps.store.get_today_tasks(deps.user["user_id"], deps.timezone)
-    for t in today_tasks:
+    inbox_tasks = await deps.store.get_inbox_tasks(deps.user["user_id"])
+    for t in [*today_tasks, *inbox_tasks]:
         if t["task_id"] == task_id:
             task = t
             break
@@ -194,10 +218,12 @@ async def schedule_reminder(
     if not task:
         return f"Task {task_id} not found."
 
-    result = await _schedule_reminder_for_task(deps, task, time_expression)
-    if result:
-        return f"Reminder scheduled for '{task['title']}' at {result}."
-    return f"Couldn't parse time '{time_expression}'."
+    resolution = _resolve_time(deps, time_expression)
+    blocked = _resolution_block_message(resolution, confirmed_time)
+    if blocked:
+        return blocked
+    exact = await _schedule_resolved_reminder(deps, task, resolution)
+    return f"Reminder scheduled for '{task['title']}' on {exact}."
 
 
 @amigo_agent.tool
@@ -220,52 +246,65 @@ async def cancel_reminders(
 # ── Time resolution helper ──
 
 
-def parse_time_expression(time_expr: str, timezone: str) -> str | None:
-    """Parse natural language time to HH:MM using dateparser.
-
-    Returns HH:MM string or None if unparseable.
-    """
-    settings = {
-        "TIMEZONE": timezone,
-        "RETURN_AS_TIMEZONE_AWARE": True,
-        "PREFER_DATES_FROM": "future",
-        "RELATIVE_BASE": now_in_tz(timezone).replace(tzinfo=None),
-    }
-    parsed = dateparser.parse(time_expr, settings=settings)
-    if parsed is None:
-        return None
-    return parsed.strftime("%H:%M")
+def parse_time_expression(time_expr: str, timezone: str) -> TimeResolution:
+    """Compatibility entry point returning the full typed time interpretation."""
+    return resolve_reminder_time(time_expr, timezone)
 
 
-async def _schedule_reminder_for_task(
-    deps: AgentDeps, task: dict, time_expr: str
+def _resolve_time(deps: AgentDeps, expression: str) -> TimeResolution:
+    return resolve_reminder_time(
+        expression,
+        deps.timezone,
+        wake_time=deps.user.get("wake_time", "07:30"),
+        sleep_time=deps.user.get("sleep_time", "23:00"),
+    )
+
+
+def _resolution_block_message(
+    resolution: TimeResolution,
+    confirmed_interpretation: str | None,
 ) -> str | None:
-    """Parse time and schedule a reminder. Returns resolved time or None."""
-    resolved = parse_time_expression(time_expr, deps.timezone)
-    if not resolved:
-        logger.warning("Could not parse time expression: %s", time_expr)
-        return None
-
-    try:
-        hour, minute = map(int, resolved.split(":"))
-        send_time = local_time_to_utc(hour, minute, deps.timezone)
-
-        if send_time <= utc_now():
-            logger.info("Skipping reminder for %s — time already passed", task["title"])
-            return None
-
-        tool = ScheduleReminderTool(deps.store, deps.scheduler)
-        await tool.run(
-            user_id=deps.user["user_id"],
-            task=task,
-            resolved_time=resolved,
-            timezone=deps.timezone,
-            chat_id=deps.chat_id,
+    if resolution.clarification_required:
+        return f"I need clarification before saving a reminder: {resolution.reason}"
+    if (
+        resolution.confirmation_required
+        and confirmed_interpretation != resolution.exact_label
+    ):
+        detail = f" {resolution.reason}" if resolution.reason else ""
+        return (
+            f"Please confirm the reminder for {resolution.exact_label}.{detail} "
+            "Nothing has been scheduled yet."
         )
-        return resolved
-    except Exception:
-        logger.exception("Failed to schedule reminder for '%s'", task["title"])
-        return None
+    return None
+
+
+async def _schedule_resolved_reminder(
+    deps: AgentDeps,
+    task: dict,
+    resolution: TimeResolution,
+) -> str:
+    if resolution.utc_instant is None or resolution.exact_label is None:
+        raise ValueError("Reminder time is not resolved")
+    tool = ScheduleReminderTool(deps.store, deps.scheduler)
+    input_fingerprint = hashlib.sha256(
+        (
+            f"{task['task_id']}\0{resolution.utc_instant.isoformat()}\0"
+            f"{resolution.timezone}"
+        ).encode()
+    ).hexdigest()[:16]
+    await tool.run_exact(
+        context=CommandContext(
+            actor_user_id=deps.user["user_id"],
+            surface="telegram",
+            idempotency_key=(
+                f"telegram:{deps.turn_id}:schedule-reminder:{input_fingerprint}"
+            ),
+        ),
+        task=task,
+        scheduled_at=resolution.utc_instant,
+        timezone=resolution.timezone,
+    )
+    return resolution.exact_label
 
 
 # ── Entry point ──

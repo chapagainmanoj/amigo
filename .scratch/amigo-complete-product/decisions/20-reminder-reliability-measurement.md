@@ -5,7 +5,7 @@ Status: closed
 Label: `wayfinder:grilling`
 Type: HITL / grilling
 Severity: `severity:high`
-Owner: Codex
+Owner: unassigned
 Blocked by: [Resolve the Task and Reminder Lifecycle](05-task-reminder-lifecycle.md), [Capture the Render and Supabase Runtime Baseline](07-runtime-baseline.md)
 
 ## Question

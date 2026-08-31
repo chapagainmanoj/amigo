@@ -82,8 +82,10 @@ python scripts/smoke_check.py --scheduler
 | `TELEGRAM_WEBHOOK_SECRET` | `""` | Webhook auth secret |
 | `SUPABASE_URL` | `""` | Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | `""` | Supabase service role key |
+| `ACCESS_MODE` | `open` | `closed`, `allowlist`, or `invite` in production |
 | `ALLOWED_TELEGRAM_CHAT_IDS` | `""` | Comma-separated allowlist |
 | `APP_BASE_URL` | `http://localhost:8000` | Public URL for webhooks |
+| `DASHBOARD_URL` | `http://localhost:5173` | Allowed dashboard origin |
 | `APP_ENV` | `development` | Environment name |
 | `LOG_LEVEL` | `INFO` | Python logging level |
 | `DEFAULT_MODEL` | `gemini-3.5-flash` | LLM model identifier |

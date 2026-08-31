@@ -227,6 +227,10 @@ product destination; a disclaimer does not authorize those functions or claims.
 7. Add pairing-token generation limits and invalidate older unconsumed tokens for the same auth
    account.
 
+**Local status (2026-08-30):** Items 1 through 7 are implemented in migrations 003–004, the Store
+layer, and automated Pairing/ownership tests. CI applies all migrations and runs a two-participant
+PostgreSQL matrix with Supabase-compatible roles. Staging/production application remains manual.
+
 ### Workstream 1.2: Production access control
 
 1. Add explicit access modes such as `closed`, `allowlist`, and `invite`.
@@ -235,6 +239,10 @@ product destination; a disclaimer does not authorize those functions or claims.
 3. Add per-chat request limits, maximum message length, model quotas, and a global kill switch.
 4. Start recording token usage and configurable cost alarms.
 5. Redact message content, tokens, pairing links, and personal data from operational logs.
+
+**Local status (2026-08-30):** Items 1 and 2 are implemented with production-safe access modes,
+startup validation, callback enforcement, and configuration tests. Items 3 through 5 remain open,
+and the configuration validator has not yet been verified in staging.
 
 ### Workstream 1.3: Privacy and user rights
 
@@ -314,29 +322,46 @@ All surfaces must implement that behavior through the approved
 8. Return `202 Accepted` when durable scheduler effects remain queued, including the canonical
    resource/result, version, intended time, and effect state.
 
+**Local status (2026-08-31):** Create Task and Reminder schedule/reschedule/cancel now use shared
+authenticated Telegram/dashboard commands. Reviewed PostgreSQL functions atomically persist
+participant-scoped receipts, canonical Task/Reminder state, aggregate versions, exact intended
+time, and stable scheduler-outbox effects. The worker safely replays committed effects, dashboard
+scheduling returns `202 Accepted`, and direct browser Reminder updates are revoked. Task and
+Reminder Done/Skip/Cancel now use one atomic command across Telegram and dashboard, with stale
+version protection, sent-Reminder acknowledgement, durable cancellation effects, and direct
+browser Task mutations revoked. Telegram and dashboard Later now share the +60/+30/next-day
+replacement policy, quiet-hour adjustment, exact local-time receipt, and atomic scheduler effects.
+Reminder-time resolution now returns the complete local date, wall time, IANA timezone, UTC
+instant, confidence, and clarification/confirmation state. Ambiguous, contradictory, passed, and
+nonexistent DST wall times cannot mutate Reminder state; repeated hours use the earlier occurrence
+unless the participant explicitly selects the later one.
+Telegram ingestion now atomically claims each supported `update_id`, safely acknowledges duplicate
+deliveries, retains content-free terminal outcomes, derives command keys from the stable update ID,
+and serializes active Turns per participant within the single beta web process.
+
 ### Workstream 2.2: Telegram idempotency and ordering
 
-1. Persist Telegram `update_id` with an atomic claim before processing.
-2. Return a safe Telegram acknowledgment without silently discarding failed internal work.
-3. Make tools idempotent under update replay.
-4. Add per-user turn serialization to preserve message order.
-5. Add deduplication keys for task and reminder creation that do not prevent legitimate repeated
+1. [x] Persist Telegram `update_id` with an atomic claim before processing.
+2. [x] Return a safe Telegram acknowledgment without silently discarding failed internal work.
+3. [x] Make tools idempotent under update replay.
+4. [x] Add per-user turn serialization to preserve message order.
+5. [x] Add deduplication keys for task and reminder creation that do not prevent legitimate repeated
    tasks on different days.
 
 ### Workstream 2.3: Time semantics
 
-1. Replace `HH:MM`-only parsing with a result that includes date, time, timezone, confidence, and
+1. [x] Replace `HH:MM`-only parsing with a result that includes date, time, timezone, confidence, and
    whether clarification is required.
-2. Ask the user to clarify bare hours such as “at 8.”
-3. Clarify or explicitly confirm fuzzy periods such as breakfast, lunch, dinner, tonight,
+2. [x] Ask the user to clarify bare hours such as “at 8.”
+3. [x] Clarify or explicitly confirm fuzzy periods such as breakfast, lunch, dinner, tonight,
    tomorrow morning, and after work before persistence; do not silently assign a conventional
    clock time.
-4. Make DST gaps and repeated hours explicit.
-5. Store Task `due_date` as the intended local planning day and each Reminder's UTC instant plus
+4. [x] Make DST gaps and repeated hours explicit.
+5. [x] Store Task `due_date` as the intended local planning day and each Reminder's UTC instant plus
    intended local date/time/IANA timezone. Implement the approved DST-gap and repeated-hour rules.
 6. Treat `created_at`/legacy `created_date` as audit metadata. Use due date, user timezone, and
    lifecycle state for daily views; leave commitments without an explicit planning day in Inbox.
-7. Apply configured `sleep_time` → `wake_time` quiet hours, including confirmation for explicit
+7. [x] Apply configured `sleep_time` → `wake_time` quiet hours, including confirmation for explicit
    quiet-hour scheduling and wake-time adjustment for automatic Later actions.
 
 ### Workstream 2.4: Scheduler invariants
@@ -1291,8 +1316,8 @@ support process. Gate C requires tested self-service export and account deletion
 - [ ] Dashboard and Telegram use the same Later policy and replacement-Reminder transition.
 - [ ] Task list, daily progress, and reminders use one tested population/read model.
 - [ ] Stale sessions are reconciled and session labels/durations are customer-readable.
-- [ ] Telegram update replay is idempotent.
-- [ ] Ambiguous time causes clarification.
+- [x] Telegram update replay is idempotent.
+- [x] Ambiguous time causes clarification.
 - [ ] Scheduler owner and deployment platform are unambiguous.
 - [ ] Staging end-to-end test passes.
 - [ ] Supabase I/O is non-blocking or isolated behind a bounded worker adapter.

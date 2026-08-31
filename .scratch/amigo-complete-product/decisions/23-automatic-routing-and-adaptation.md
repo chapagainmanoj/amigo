@@ -6,7 +6,7 @@ Label: `wayfinder:grilling`
 Type: HITL / grilling
 Severity: `severity:high`
 Owner: unassigned
-Blocked by: [Choose the Mode and Adaptive Coaching Contract](14-mode-and-adaptation-contract.md)
+Blocked by: [Choose the Mode and Adaptive Coaching Contract](14-mode-and-adaptation-contract.md), [Validate Specialized Mode Releases and Switching Friction](28-specialized-mode-routing-evidence.md)
 
 ## Question
 

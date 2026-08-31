@@ -5,7 +5,7 @@ Status: closed
 Label: `wayfinder:grilling`
 Type: HITL / grilling
 Severity: `severity:high`
-Owner: Codex
+Owner: unassigned
 Blocked by: [Choose the Memory and Memory Inspector Trust Contract](13-memory-trust-contract.md)
 
 ## Question

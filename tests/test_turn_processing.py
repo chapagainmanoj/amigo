@@ -59,3 +59,27 @@ async def test_close_signal_closes_session():
         await handlers.handle_message(123, "goodnight")
 
     assert "night" in channel.last_text.lower() or "🌙" in channel.last_text
+
+
+async def test_telegram_update_id_becomes_stable_turn_id():
+    store = FakeStore()
+    channel = FakeChannel()
+    handlers = BotHandlers(channel, store, SessionManager(store), FakeScheduler())
+    user = await store.create_user(123)
+    await store.update_user(
+        user["user_id"],
+        {"timezone": "UTC", "onboarding_complete": True, "onboarding_step": 3},
+    )
+    captured_turn_ids = []
+
+    async def capture(deps, _text):
+        captured_turn_ids.append(deps.turn_id)
+        return "ok"
+
+    with (
+        patch("src.bot.handlers.BotHandlers._is_allowed", return_value=True),
+        patch("src.bot.turns.handle_message", side_effect=capture),
+    ):
+        await handlers.handle_message(123, "make a task", update_id=987654)
+
+    assert captured_turn_ids == ["987654"]

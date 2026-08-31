@@ -71,10 +71,14 @@ amigo/
 - **Agentic tool calling**: The LLM decides which tools to call based on
   function signatures and docstrings. No more manual classify → extract →
   resolve pipeline. See [ADR 0002](adr/0002-agentic-tool-calling-loop.md).
-- **Prototype deterministic time parsing**: `dateparser` currently reduces expressions to an
-  `HH:MM` value before UTC conversion. This handles explicit and relative times but does not yet
-  preserve the full local date/time/timezone decision or reliably clarify ambiguous/fuzzy input;
-  the approved lifecycle requires that replacement before beta.
+- **Claimed Telegram updates**: Every supported Telegram `update_id` is atomically claimed before
+  handler execution. Duplicate deliveries receive a safe acknowledgement, terminal failure codes
+  remain inspectable without message content, and Turns use the stable update ID for command
+  replay keys. A participant-scoped lock preserves Turn order within the single beta web process.
+- **Typed deterministic time resolution**: `src/time_resolution.py` resolves an expression into
+  its local date, wall time, IANA timezone, UTC instant, confidence, and clarification or
+  confirmation requirement. Bare hours, fuzzy periods, invalid DST wall times, and passed times
+  are blocked before persistence; repeated DST hours default to the earlier occurrence.
 
 ## Data Flow (message lifecycle)
 
@@ -157,10 +161,11 @@ graph TD
    which tools to call (create task, update status, schedule reminder)
    and produces a natural language reply.
 5. **Outbound**: Response sent via `MessageChannel.send_message()`.
-6. **Reminders**: Reminder tools use the current `dateparser`-based prototype resolver and
-   schedule APScheduler jobs. When a job fires, it sends a message with Done/Skip/Later buttons.
-   Callbacks are handled by `ReminderActions`. The canonical full-instant clarification and
-   immutable replacement-Reminder behavior remain implementation work.
+6. **Reminders**: Reminder tools resolve a typed full instant before invoking the shared durable
+   schedule command. Relative expressions can schedule directly; interpretations requiring
+   confirmation are persisted only when the participant returns the exact local date, wall time,
+   and timezone label. The outbox drives APScheduler. Fired reminders expose Done/Skip/Later
+   actions through `ReminderActions`; Later creates an immutable replacement Reminder.
 
 ## Key Abstractions
 

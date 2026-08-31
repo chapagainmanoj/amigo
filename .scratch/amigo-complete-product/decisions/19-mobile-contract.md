@@ -6,7 +6,7 @@ Label: `wayfinder:prototype`
 Type: HITL / prototype
 Severity: `severity:medium`
 Owner: unassigned
-Blocked by: [Choose the Channel Expansion Priority](16-channel-expansion-priority.md)
+Blocked by: [Choose the Channel Expansion Priority](16-channel-expansion-priority.md), [Collect Surface Expansion Demand Evidence](25-surface-expansion-demand-evidence.md)
 
 ## Question
 

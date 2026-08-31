@@ -5,7 +5,7 @@ Status: closed
 Label: `wayfinder:grilling`
 Type: HITL / grilling
 Severity: `severity:high`
-Owner: Codex
+Owner: unassigned
 Blocked by: [Choose the Invitation Cohort and Recruitment Protocol](11-cohort-and-recruitment.md)
 
 ## Question
