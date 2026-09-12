@@ -4,6 +4,7 @@ import logging
 import re
 
 from src.channels.base import MessageChannel
+from src.config import settings
 from src.memory.pairing import PAIRING_TOKEN_HEX_LENGTH
 from src.memory.store import MemoryStore
 
@@ -67,6 +68,7 @@ async def handle_start_pairing(
         chat_id=chat_id,
         text=(
             "🎉 Successfully paired! Telegram is connected to your Amigo dashboard. "
-            "Send another message to finish setup and create your first task."
+            "No account identifiers are shown here. Return to the dashboard to finish your "
+            f"profile and private test Reminder: {settings.dashboard_url}"
         ),
     )

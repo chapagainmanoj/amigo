@@ -6,8 +6,8 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from src.api.dependencies import get_activated_user
 from src.api.tasks import router
-from src.auth import get_authenticated_user_id
 from src.commands.base import CommandContext, IdempotencyConflictError
 from src.commands.tasks import CreateTaskCommand, CreateTaskInput
 from src.memory.memory_store import InMemoryStore
@@ -119,7 +119,7 @@ async def test_dashboard_adapter_resolves_actor_and_replays():
     app = FastAPI()
     app.state.store = store
     app.include_router(router)
-    app.dependency_overrides[get_authenticated_user_id] = lambda: "auth-user"
+    app.dependency_overrides[get_activated_user] = lambda: user
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),

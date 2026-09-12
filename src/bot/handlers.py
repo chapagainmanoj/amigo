@@ -2,7 +2,6 @@
 
 import logging
 
-from src.bot.onboarding import handle_onboarding
 from src.bot.reminder_actions import ReminderActions
 from src.bot.turns import TurnProcessor
 from src.channels.base import MessageChannel
@@ -52,23 +51,18 @@ class BotHandlers:
             await handle_start_pairing(chat_id, token, self.store, self.channel)
             return
 
-        # Get or create user
+        # Dashboard-first Activation owns account creation and onboarding.
         user = await self.store.get_user_by_chat_id(chat_id)
-
         if user is None:
-            # New user — create and start onboarding
-            user = await self.store.create_user(chat_id)
-            await handle_onboarding(user, text, self.channel, self.store, chat_id)
+            await self._send_activation_required(chat_id)
             return
-
-        if not user.get("onboarding_complete"):
-            # Still onboarding
-            still_onboarding = await handle_onboarding(
-                user, text, self.channel, self.store, chat_id
-            )
-            if still_onboarding:
-                return
-            # Onboarding just completed — consume this message, don't process it
+        auth_id = user.get("supabase_auth_id")
+        if not auth_id:
+            await self._send_activation_required(chat_id)
+            return
+        activation = await self.store.get_activation_state(auth_id)
+        if not activation.get("completed"):
+            await self._send_activation_required(chat_id, paired=True)
             return
 
         await self.turn_processor.handle(chat_id, user, text, update_id=update_id)
@@ -81,18 +75,25 @@ class BotHandlers:
             )
             return
 
-        # Check for onboarding callbacks
+        # Legacy onboarding controls must not bypass Dashboard-first Activation.
         if data.startswith("tz:") or data.startswith("onboard:"):
-            user = await self.store.get_user_by_chat_id(chat_id)
-            if user and not user.get("onboarding_complete"):
-                await handle_onboarding(
-                    user, "", self.channel, self.store, chat_id, callback_data=data
-                )
-                # Remove buttons after tap
-                await self.channel.edit_message_buttons(chat_id, message_id, buttons=None)
-                return
+            await self._send_activation_required(chat_id)
+            await self.channel.edit_message_buttons(chat_id, message_id, buttons=None)
+            return
 
         await self.reminder_actions.handle_callback(chat_id, message_id, data)
+
+    async def _send_activation_required(self, chat_id: int, *, paired: bool = False) -> None:
+        """Direct Telegram-only and incomplete accounts to the verified Dashboard journey."""
+        from src.config import settings
+
+        prefix = "Telegram is connected. " if paired else "Start from your verified dashboard. "
+        await self.channel.send_message(
+            chat_id,
+            prefix
+            + "Finish the beta limits, profile, and private test Reminder before using Amigo: "
+            + settings.dashboard_url,
+        )
 
     async def _cancel_reminders_for_task(self, task_id: str, user_id: str) -> None:
         """Acknowledge all pending reminders for a task and cancel APScheduler jobs."""

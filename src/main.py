@@ -1,33 +1,33 @@
 """FastAPI app — Telegram webhook endpoint + lifecycle management."""
 
+import asyncio
 import logging
-import secrets
 from contextlib import asynccontextmanager
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from telegram import Update
 
+from src.api.activation import router as activation_router
 from src.api.dashboard import router as dashboard_router
+from src.api.dependencies import get_activated_user
+from src.api.pairing import router as pairing_router
 from src.api.reminders import router as reminders_router
 from src.api.tasks import router as tasks_router
-from src.auth import get_authenticated_user_id
 from src.bot.handlers import BotHandlers
 from src.bot.update_claims import TelegramUpdateCoordinator
 from src.channels.telegram import TelegramChannel
 from src.config import settings
-from src.memory.pairing import (
-    PAIRING_TOKEN_HEX_LENGTH,
-    PAIRING_TOKEN_TTL,
-    PAIRING_TOKEN_WINDOW,
-    PairingTokenRateLimitError,
-)
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
+from src.observability import monitor_event_loop_delay
+from src.reliability import assess_readiness
 from src.runtime_config import is_production, validate_runtime_configuration
 from src.scheduler.outbox import SchedulerOutboxWorker
 from src.scheduler.reminders import ReminderScheduler
-from src.utils import utc_now
+from src.startup import initialize_runtime
 
 validate_runtime_configuration(settings)
 
@@ -59,10 +59,7 @@ async def lifespan(app: FastAPI):
     """Start/stop scheduler and set Telegram webhook on app lifecycle."""
     global bot_username
     # Startup
-    reminder_scheduler.start()
-    reminder_scheduler.start_outbox_worker(outbox_worker.drain_once)
-    await outbox_worker.drain_once()
-    await reminder_scheduler.reload_pending()
+    await initialize_runtime(store, reminder_scheduler, outbox_worker)
 
     # Set webhook
     try:
@@ -75,6 +72,7 @@ async def lifespan(app: FastAPI):
 
         bot_info = await channel.bot.get_me()
         bot_username = bot_info.username
+        app.state.bot_username = bot_username
         logger.info("Fetched bot username: %s", bot_username)
     except Exception as e:
         if is_production(settings):
@@ -82,19 +80,29 @@ async def lifespan(app: FastAPI):
             raise RuntimeError("Telegram webhook initialization failed") from None
         logger.warning("Failed to initialize Telegram webhook/bot info: %s", e)
 
-    yield
-
-    # Shutdown
-    reminder_scheduler.shutdown()
+    monitor_stop = asyncio.Event()
+    monitor_task = asyncio.create_task(
+        monitor_event_loop_delay(monitor_stop),
+        name="event-loop-delay-monitor",
+    )
     try:
-        await channel.bot.delete_webhook()
-    except Exception as e:
-        logger.warning("Failed to delete Telegram webhook: %s", e)
+        yield
+    finally:
+        monitor_stop.set()
+        await monitor_task
+        reminder_scheduler.shutdown()
+        try:
+            await channel.bot.delete_webhook()
+        except Exception as e:
+            logger.warning("Failed to delete Telegram webhook: %s", e)
 
 
 app = FastAPI(title="Amigo", lifespan=lifespan)
 app.state.store = store
+app.state.bot_username = bot_username
+app.include_router(activation_router)
 app.include_router(dashboard_router)
+app.include_router(pairing_router)
 app.include_router(tasks_router)
 app.include_router(reminders_router)
 
@@ -168,42 +176,18 @@ async def telegram_webhook(request: Request):
 
 @app.get("/health")
 async def health():
-    """Health check endpoint."""
+    """Process liveness check; intentionally independent of dependencies."""
     return {"status": "ok", "env": settings.app_env}
 
 
-@app.post("/api/pairing-token")
-async def get_pairing_token(auth_id: str = Depends(get_authenticated_user_id)):
-    """Generate a pairing token for Telegram account linking."""
-    if settings.access_mode == "closed":
-        raise HTTPException(status_code=503, detail="New Pairing links are temporarily disabled.")
-    if await store.get_user_by_auth_id(auth_id):
-        raise HTTPException(status_code=409, detail="Dashboard account is already linked.")
-
-    token = secrets.token_hex(PAIRING_TOKEN_HEX_LENGTH // 2)
-    expires_at = utc_now() + PAIRING_TOKEN_TTL
-    try:
-        await store.create_pairing_token(token, auth_id, expires_at)
-    except PairingTokenRateLimitError:
-        raise HTTPException(
-            status_code=429,
-            detail="Too many Pairing links requested. Try again later.",
-            headers={"Retry-After": str(int(PAIRING_TOKEN_WINDOW.total_seconds()))},
-        ) from None
-    bot_link = f"https://t.me/{bot_username}?start=pair_{token}"
-    return {
-        "token": token,
-        "bot_link": bot_link,
-        "expires_at": expires_at.isoformat(),
-    }
+@app.get("/ready")
+async def readiness(request: Request):
+    """Core Loop readiness based on database, scheduler, and outbox evidence."""
+    payload, status_code = await assess_readiness(request.app.state.store)
+    return JSONResponse(payload, status_code=status_code)
 
 
 @app.get("/api/me")
-async def get_me(auth_id: str = Depends(get_authenticated_user_id)):
+async def get_me(user: Annotated[dict, Depends(get_activated_user)]):
     """Return the user profile corresponding to the authenticated user."""
-    user = await store.get_user_by_auth_id(auth_id)
-    if not user:
-        raise HTTPException(
-            status_code=404, detail="User profile not paired with Telegram yet."
-        )
     return user

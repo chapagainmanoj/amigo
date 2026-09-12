@@ -35,6 +35,11 @@ deployment, security, privacy, documentation, analytics, legal readiness, and cu
   exact local date, wall time, timezone, and UTC instant while blocking ambiguous or invalid wall
   times. Observability, data-rights operations, Activation, end-to-end integration tests, and Gate
   A/B evidence remain open. Amigo is still in pre-beta development.
+- APScheduler is now a rebuildable projection of authoritative Reminder rows. Startup and
+  minute-level reconciliation repair missing or wrongly timed jobs, remove inverse drift, recover
+  interrupted sends, mark occurrences over 15 minutes late missed, and aggregate recent delayed
+  reminders. Immutable occurrence/attempt timing, scheduler/outbox metrics, and distinct
+  liveness/readiness checks are now implemented locally; staging evidence and alerting remain.
 
 ## Executive assessment
 
@@ -59,12 +64,13 @@ changes are reviewed, deployed, and verified across every public surface.
 ## What currently works
 
 - Natural-language task creation through a Pydantic AI agent.
-- Telegram onboarding, sessions, reminders, Done/Skip/Later actions, and `/feedback`.
+- Dashboard-first Activation, Telegram sessions and reminders, Done/Skip/Later actions, and
+  `/feedback`.
 - Restart recovery for pending reminders.
 - Supabase persistence and dashboard account pairing.
 - Dashboard task, reminder, and session views with realtime refresh.
 - Reasonable module separation and dependency injection.
-- All 177 backend tests and Ruff passed at the 2026-08-31 capability review.
+- All 252 backend tests and Ruff passed at the 2026-09-02 local verification.
 - The dashboard production build succeeds.
 
 The automated tests use fakes. They do not prove that Gemini, Telegram, Supabase Auth/RLS,
@@ -84,11 +90,11 @@ The same evidence exposes the following gaps that must be treated explicitly:
 
 | Gap | Why it matters | Severity | Recommended fix | Gate |
 |---|---|---:|---|---|
-| Dashboard task, progress, and reminder sets contradict one another | The deployed dashboard shows `0 of 0` and “No tasks pending” while displaying an active reminder. The current task query uses `created_date`, while pending reminders are fetched independently. A reminder can therefore exist without its task appearing in the task list or progress count. | **High** | Define canonical “today” semantics using due/scheduled date and lifecycle status rather than creation audit metadata. Return one server-derived dashboard snapshot with tested invariants across tasks, progress, and reminders. | Before external beta |
-| Dashboard and Telegram implement different snooze policies | The dashboard offers a direct 15-minute database update, while Telegram uses 60 minutes, then 30 minutes, then defer. A direct dashboard write also does not reliably reschedule the live job. The same reminder behaves differently depending on surface and can still fire at the old time. | **High** | Create one backend snooze policy/domain operation used by every channel; return the selected delay and resulting schedule, reschedule atomically or compensate, and test both surfaces. | Before external beta |
-| Session state and duration are not trustworthy | A conversation from 26 August remains “ongoing” on 29 August, ended sessions display durations such as `85881m`, and raw values such as `morning_planning` leak into the UI. This makes the dashboard look broken and casts doubt on all activity data. | **High** | Close or reconcile stale sessions, derive active state from last activity plus a documented timeout, humanize types, and format bounded durations in useful units. | Before showing customers |
+| Dashboard read populations required reconciliation | The dashboard now atomically replaces one authenticated, versioned server snapshot. Today and progress share the same due-date population; Inbox and Carried over are separate; Reminders join owned Tasks and include exact local timing/delivery state; Sessions are normalized. | **Resolved locally** | Verify the snapshot and realtime invalidation path in staging before closing the release gate. | Staging evidence before external beta |
+| Dashboard and Telegram required one Later policy | Both surfaces now call the same authenticated, versioned Later command, acknowledge the acted Reminder, create its policy-selected replacement, and queue durable scheduler effects atomically. | **Resolved locally** | Verify replacement timing and delivery in staging. | Staging evidence before external beta |
+| Session presentation required normalization | The snapshot derives active/inactive/ended state from last activity and the participant timeout, bounds duration at zero, and humanizes Session types. | **Resolved locally** | Verify stale-session presentation in staging. | Staging evidence before showing customers |
 | Telegram connection management is incomplete | The connected state exposes a raw Telegram chat ID but provides no disconnect, relink, linked-account identity, connection time, or recovery action. Raw internal identifiers add risk without helping the user. | **Medium** | Hide internal IDs. Add authenticated disconnect/relink with confirmation, ownership checks, token invalidation, audit logging, and a human-readable connection status. | Before broader beta |
-| Reminder time lacks sufficient context | A card such as `05:00 PM` does not show its date, timezone, or whether it is overdue. Around midnight, travel, or stale data, a user cannot tell what will actually happen. | **Medium** | Show localized date, time, timezone, and overdue/delivered state; keep the exact scheduled timestamp available in details. | Before broader beta |
+| Reminder cards lacked timing context | Snapshot-backed cards now show intended local date, wall time, IANA timezone, delivery state, and carried-over context. | **Resolved locally** | Verify rendering around midnight and overdue delivery in staging. | Staging evidence before broader beta |
 | First-chat copy still weakens trust | The deployed greeting lowercases the user's name, claims the bot is “doing great,” stacks two questions, and the reminder copy appears to contain a typo. These are small individually but visible in the first product interaction. | **Medium** | Preserve preferred-name casing, use transparent assistant language, ask one primary question per turn, and add reviewed deterministic copy plus snapshot/evaluation coverage. | Before showing customers |
 
 ## Product, positioning, and business gaps
@@ -113,7 +119,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | Adaptive coaching is only a stored default | `coaching_profile` exists but is not learned or applied dynamically; the agent uses a static persona. | **High** | Describe the current personality as fixed. Define signals, safe bounds, overrides, and evaluation before adaptation. | Before claiming adaptation |
 | Anti-nag fields are inert | The daily budget and coaching fields are not enforced; there is no cooldown, ignored-message tracking, or back-off. | **High** | Add a deterministic governor before any proactive-send path. | Before proactive check-ins |
 | No user-facing reminder preferences | Users cannot set quiet hours, wake/sleep times, categories, cadence, or notification limits. | **High** | Add minimal Preferences UI and Telegram controls for mute, quiet hours, timezone, and reminder intensity. | Before broader beta |
-| Dashboard snooze does not reschedule the live job | React updates the reminder row directly, but APScheduler is not notified; the old in-memory job may still fire. Its 15-minute policy also conflicts with Telegram's 60-minute, then 30-minute policy. | **High** | Route dashboard mutations through authenticated backend endpoints and one shared snooze policy used by Telegram and the dashboard. | Before external beta |
+| Dashboard snooze did not reschedule the live job | Dashboard Later now routes through the authenticated backend and the same durable replacement-Reminder transition used by Telegram. | **Resolved locally** | Verify the outbox projection and replacement delivery in staging. | Staging evidence before external beta |
 | “Deferred to tomorrow” is incomplete | A deferred task is not proactively carried over or scheduled for review; it is only seen when the user initiates another turn. | **High** | Define carry-over semantics and schedule a next-day check-in or create a correctly dated task. | Before claiming automatic follow-up |
 | Reminder time resolution required hardening | The earlier parser could resolve `at 8` incorrectly and did not preserve a complete local-time decision. The typed resolver now blocks bare/fuzzy/contradictory/passed inputs, handles DST gaps and folds, confirms quiet-hour requests, and stores the confirmed UTC instant. | **Resolved locally** | Verify the confirmation conversation and UTC anchoring in staging before closing the release gate. | Staging evidence before launch |
 | Dashboard exposes unavailable modes | Recommender, Coach, Reflect, and WhatsApp are prominent despite being unavailable. Unavailable mode chips are still clickable. | **Medium** | Hide unfinished modes from customer builds or place them on a clearly labeled roadmap. | Before customer demo |
@@ -122,9 +128,9 @@ The same evidence exposes the following gaps that must be treated explicitly:
 
 | Gap | Why it matters | Severity | Recommended fix | Gate |
 |---|---|---:|---|---|
-| Dashboard-first onboarding is not yet a complete guided journey | The founder decision is dashboard account first, superseding the earlier Telegram-first recommendation. The current screens support account pairing but do not visibly guide account → Telegram → profile/timezone → first reminder → return to dashboard as one resumable flow. | **High** | Make the dashboard the canonical entry and implement a progress-based, recoverable journey ending in a delivered five-minute test reminder and automatic dashboard unlock. | Before external beta |
-| Aha moment is too slow and uncertain | Onboarding collects identity data but does not guarantee a successful near-term reminder. | **High** | End onboarding with a guided five-minute test reminder and explicit confirmation. | Before beta |
-| Timezone onboarding assumes Nepal | Every user is initially told they are probably in `Asia/Kathmandu`. | **High** | Treat locale as a weak hint, offer common choices, and use browser timezone during dashboard onboarding. | Before general launch |
+| Dashboard-first onboarding required a complete guided journey | The dashboard now owns a resumable Account → Limits → Telegram → Profile → Test Reminder → Resolve → Dashboard journey and unlocks normal product surfaces only from canonical delivery and Telegram-resolution evidence. | **Resolved locally** | Exercise clean accounts on desktop and mobile in staging. | Staging evidence before external beta |
+| Aha moment was too slow and uncertain | Activation now proposes and explicitly confirms a private Reminder two minutes ahead, then requires actual delivery and Done, Skip, or Later before completion. | **Resolved locally** | Measure unassisted Activation time and completion in staging. | Staging evidence before beta |
+| Timezone onboarding assumed Nepal | New Telegram-only onboarding is blocked; the dashboard suggests the browser timezone and validates an explicit IANA timezone plus quiet hours. | **Resolved locally** | Verify representative timezones and mobile recovery in staging. | Staging evidence before general launch |
 | Auth lacks customer essentials | No forgot-password flow, password rules, resend-confirmation flow, legal consent, support link, or explanation of why an account is needed. | **High** | Add recovery and verification states, benefits, consent, and support contact. | Before launch |
 | Signed-in mobile layout is incomplete | The authenticated shell uses a persistent desktop sidebar without a mobile navigation replacement. | **High** | Add bottom navigation or a drawer and test all signed-in views at 320–430 px widths. | Before showing mobile users |
 | Accessibility is incomplete | Icon-only controls lack accessible names; labels are not explicitly bound to inputs; visually disabled mode controls remain actionable. | **Medium** | Add names, label associations, true disabled behavior, keyboard tests, status announcements, and automated accessibility checks. | Before public launch |
@@ -138,26 +144,26 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | No end-to-end integration suite | Passing fake-based tests do not validate the actual product path. | **High** | Add staging coverage for onboarding → task → reminder → callback → dashboard update. | Before launch |
 | Telegram replay required a durable claim | The webhook now atomically claims each `update_id`, acknowledges duplicates, retains content-free completion/failure state, and derives command replay keys from the stable update ID. | **Resolved locally** | Replay non-sensitive fixtures in staging and alert on stuck or failed claims. | Staging evidence before launch |
 | Turn ordering required participant serialization | A participant-scoped lock now serializes Turns in arrival order while different participants proceed concurrently in the single beta web process. | **Resolved locally** | Verify ordering under the representative staging burst before increasing process count. | Staging evidence before scale |
-| Synchronous Supabase calls run inside async methods | Slow database calls can block the event loop, delay turns, and make reminder delivery late. | **High** | Instrument event-loop delay, then adopt a supported async client or isolate synchronous calls behind a bounded worker-thread adapter with explicit limits and timeouts. | Before external beta |
+| Synchronous Supabase calls ran inside async methods | Store and Auth now use the SDK-native async client, every network operation is awaited, Store duration/outcome is logged without content, and a concurrent regression proves event-loop progress. | **Resolved locally** | Capture before/after database, Turn, Reminder, and event-loop measurements in the representative staging burst; the earlier production baseline remains explicitly unknown. | Staging evidence before external beta |
 | Repeated reads inflate latency and cost | Turn context fetches task data more than once and tools add further network calls. | **Medium** | Assemble one immutable Turn Context snapshot and reuse it. | After beta |
 | No explicit dependency timeouts | Slow model, database, auth, or Telegram calls can tie up the process. | **High** | Define bounded connect/read/total timeouts, retries, and user-safe fallbacks per dependency. | Before launch |
-| Health check proves only process liveness | `/health` can return healthy while the scheduler or dependencies are broken. | **High** | Separate liveness and readiness; add a scheduler heartbeat and synthetic checks. | Before launch |
-| Deployment strategy is contradictory | Render and Fly configurations point at different production URLs; whichever instance starts last can replace the Telegram webhook. | **High** | Select one production platform, one canonical URL, and one scheduler owner. Archive the alternative. | Before launch |
+| Health check proves only process liveness | `/health` remains a pure liveness endpoint. `/ready` now fails on database-check failure, stale scheduler heartbeat, or failed durable effects, backed by migration 011 metrics and distinct synthetic evidence classes. | **Resolved locally** | Verify readiness transitions and synthetic evidence in staging, then connect alerts. | Staging evidence before external beta |
+| Deployment strategy was contradictory | Render is canonical; Fly configuration and workflow files are archived outside executable locations, and regression guards reject a competing Fly path or second Render backend. | **Resolved locally** | Verify one live Render webhook/scheduler owner before and after restart. | Staging evidence before launch |
 | In-process scheduling imposes a strict topology | Timing is safe only while exactly one always-on scheduler owner exists. | **High** | Enforce and document single ownership now; use a durable queue/worker when scaling. | Before launch |
 | No representative burst or capacity testing | A burst of concurrent conversations or reminders can block the single event loop, exhaust provider/database connections, and make time-sensitive reminders late. Correct single-user tests do not establish safe beta capacity. | **High** for a representative beta burst; **Medium** for later capacity/soak depth | Define SLOs and run a beta-sized mixed workload of concurrent turns and due reminders while measuring event-loop delay, reminder lateness, latency, errors, connections, CPU, and memory. Add larger capacity and soak tests before broader scale. | Representative burst before external beta; capacity/soak before broader launch |
-| Deprecated UTC construction creates warning noise | Test fakes and session tests still call `datetime.utcnow()`, violating the repository clock rule and producing 100 warnings in the reviewed test run. Warning noise can hide new regressions and the naive timestamps weaken time-sensitive tests. | **Low** | Replace calls with the project UTC clock/helper or injected test clock, preserve timestamp semantics, and make the test run warning-clean. | After critical beta blockers; before enforcing warnings in CI |
+| Deprecated UTC construction created warning noise | Production and test paths now use the project UTC helper or injected clocks; the current suite is warning-clean. | **Resolved locally** | Preserve the clock boundary and reject regressions in review. | Complete locally |
 
 ## Security and privacy gaps
 
 | Gap | Why it matters | Severity | Recommended fix | Gate |
 |---|---|---:|---|---|
-| `pairing_tokens` lacks RLS or explicit grant revocation | The public-schema table may be readable through Supabase API roles under common grants, exposing valid tokens and auth IDs. | **Critical** | Verify production grants immediately; enable RLS, revoke client access, and keep pairing behind backend/service-role operations. Rotate outstanding tokens if exposure is possible. | Before dashboard use |
-| Profile update policy is too broad | Row-level security does not restrict columns; an authenticated client may update identity and internal profile fields. | **High** | Revoke broad update rights and expose only allowlisted fields through backend endpoints or safe RPCs. | Before launch |
-| Production can accidentally allow everyone | An empty `ALLOWED_TELEGRAM_CHAT_IDS` means open access, including in production. | **High** | Fail production startup unless an explicit enrollment/access mode is configured. | Before launch |
+| Pairing-token client exposure | Migration 003 forces RLS, revokes client grants, and exposes only backend/service-role token operations. | **Resolved locally** | Verify grants and single-use behavior against the exact staging schema. | Staging evidence before dashboard use |
+| Broad profile update rights | Migration 004 revokes direct profile mutation and the backend exposes allowlisted owned update paths. | **Resolved locally** | Re-run two-participant and column-level assertions against the exact staging schema. | Staging evidence before launch |
+| Accidental open production access | Runtime validation rejects production `open` mode and empty allowlists; unsafe configuration fails before serving traffic. | **Resolved locally** | Exercise the fail-closed matrix on the exact release deployment. | Staging evidence before launch |
 | No abuse, rate, or spend controls | An open bot can generate unbounded model calls and database writes. | **High** | Add per-user limits, quotas, spend alarms, usage logging, and an emergency disable control. | Before public access |
-| Task-status updates lack an ownership predicate | The store update is made by task ID before reminder cancellation applies the user ID. | **Medium** | Require `user_id` in the update predicate and fail closed on mismatch. | Before public beta |
+| Task-status updates lacked an ownership predicate | Store updates include `user_id`, and the canonical resolve command atomically enforces Task ownership with Reminder cancellation. | **Resolved locally** | Re-run cross-tenant command assertions against the exact staging schema. | Staging evidence before public beta |
 | Full conversations have no lifecycle policy | Intimate messages, tasks, sessions, and feedback are retained without consent, export, deletion, or retention controls. | **Critical** | Define retention; implement account deletion, export, selective deletion, and provider-processing disclosure. | Before public launch |
-| No security assurance workflow | CI lacks dependency audits, secret scanning, migration security checks, and multi-user RLS regression tests. | **Medium** | Add automated scans and tests in which two authenticated users attempt cross-tenant access. | Before launch |
+| Security assurance is incomplete | CI applies checked-in migrations and runs two-participant RLS regression assertions, but dependency audits and secret scanning are still absent and protected migration 014 is not yet in the chain. | **Partially resolved locally** | Add dependency and secret scans; after approval, add migration 014 and its security assertions to CI. | Before launch |
 
 ## Operations, analytics, and feedback gaps
 
@@ -168,15 +174,15 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | Feedback has no operating loop | `/feedback` stores text but has no triage, ownership, user follow-up, or review surface. | **Medium** | Create a weekly feedback queue with severity, contact consent, owner, and status. | Before broader beta |
 | No backup/restore evidence | Backup configuration, retention, and recovery have not been demonstrated. | **High** | Configure backups and perform a staging restore exercise. | Before public launch |
 | No incident or rollback runbook | There is no defined response to a bad deploy, duplicate reminders, provider outage, leaked key, or failed migration. | **High** | Write deployment, rollback, key rotation, webhook recovery, and incident procedures. | Before launch |
-| CI ignores the frontend | `npm run lint` currently fails because ESLint is not installed; frontend build and accessibility checks are absent from CI. | **High** | Fix the lint toolchain and add install, lint, test, build, and accessibility checks to CI. | Before launch |
-| Generated-dependency cleanup is prepared but not complete | The index currently removes the previously tracked `web/node_modules` tree and `.gitignore` has a local ignore change, but the cleanup is not complete until those changes are reviewed, committed, and verified from a clean install. The current `HEAD` still contains the generated dependencies. | **Medium** | Review and commit the existing cleanup, then verify a clean dependency install, lint, test, and production build without checking generated files back in. | Before open-source announcement |
+| Frontend CI was absent | CI now installs locked dashboard dependencies and runs ESLint plus the production build in a separate frontend job. Component and automated accessibility coverage remain limited. | **Partially resolved locally** | Add focused component/accessibility checks and verify the exact release CI run. | Before launch |
+| Generated frontend dependencies were tracked | `web/node_modules` is now absent from the Git index and ignored; the locked install, lint, and production build pass locally. | **Resolved locally** | Preserve the ignore rule and verify the clean locked install in release CI. | Complete locally; CI evidence before release |
 
 ## Documentation, legal, and customer-demo gaps
 
 | Gap | Why it matters | Severity | Recommended fix | Gate |
 |---|---|---:|---|---|
 | README uses `git clone <repo-url>` | The advertised quick start cannot be followed literally. | **Medium** | Insert the real URL and validate setup from a clean machine. | Before open-source announcement |
-| Setup omits migration 002 | Following the README does not install dashboard pairing and RLS. | **High** | Add an ordered migration process or migration runner with schema-version validation. | Before self-hosting launch |
+| Approved setup stops before required schema 14 | README includes migrations 001–013, including dashboard pairing/RLS, the canonical Planning Day move, and the Activation Journey, while the staged application requires protected migration 014 that is still awaiting approval. | **High** | Approve and add migration 014 with assertions, extend CI and README in order, and prove exact-version startup. | Before deploying this worktree |
 | Documentation contradicts itself | Gemini 2.5 vs 3.5, Railway vs Render vs Fly, implemented vs future features, and test counts differ. | **High** | Establish a capability matrix and release checklist as the documentation source of truth. | Before customer showing |
 | Blog links and images are unfinished | The bot link is `t.me/YoursAmigoBot`, and referenced screenshots are missing. | **High** | Add verified links and real screenshots or keep the article unpublished. | Before publication |
 | No user help or FAQ | Users have no guidance for corrections, timezone changes, missed reminders, muting, deletion, pairing, or support. | **Medium** | Add `/help`, FAQ, troubleshooting, and a support contact. | Before public beta |
@@ -207,8 +213,8 @@ The same evidence exposes the following gaps that must be treated explicitly:
 ## Should fix before showing customers
 
 1. Narrow the value proposition and first target user.
-2. Implement the decided dashboard-first onboarding path end to end.
-3. Guarantee a first reminder during onboarding.
+2. Validate the locally implemented dashboard-first Activation path end to end in staging.
+3. Prove delivery and resolution of the guided first Reminder in staging.
 4. Hide unfinished modes and WhatsApp.
 5. Add real bot/dashboard links and screenshots.
 6. Improve auth recovery, support, consent, and trust cues.

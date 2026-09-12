@@ -1,6 +1,6 @@
 # Amigo Capability Matrix
 
-**Last verified against the repository:** 2026-08-30
+**Last verified against the repository:** 2026-09-02
 **Release scope:** Invitation-only beta  
 **Canonical beta promise:** Tell Amigo what you need to do. It turns the conversation into a Task
 and sends a Telegram Reminder at the time you choose, with Done, Skip, or Later controls.
@@ -10,17 +10,21 @@ the current repository; it does not mean production reliability, security, or us
 have passed. A beta experiment must be presented as experimental. A roadmap item must never be
 described in the present tense.
 
+The current preflight worktree stages application code that requires protected migrations
+014. That migration is not yet checked in, so the Activation application code is not in the
+“shipped” column and this worktree must not be deployed until the schema chain is approved.
+
 | Shipped in the current prototype | Beta experiment or release-gated | Roadmap, not available |
 |---|---|---|
-| Dashboard email signup, confirmation, and sign-in through Supabase Auth | Dashboard-first Activation journey, including recovery and a guided test Reminder | Durable personal Memory and semantic/temporal retrieval |
-| One-time dashboard-to-Telegram account pairing | Cross-surface Task, Reminder, and Session consistency | Memory Inspector, export controls, and learning/use pauses |
+| Dashboard email signup, confirmation, and sign-in through Supabase Auth | Dashboard-first Activation application code awaiting migration 014, then clean-account staging/usability evidence | Durable personal Memory and semantic/temporal retrieval |
+| Expiring single-use dashboard-to-Telegram account Pairing | Cross-surface Task, Reminder, and Session staging evidence | Memory Inspector, export controls, and learning/use pauses |
 | Telegram text conversation | Natural-language task extraction accuracy and clarification behavior | Recommender, Coach, and Reflect Modes |
-| Name and timezone chat setup | First-message-of-day planning using recent Task context; Amigo does not initiate it | Adaptive Interaction Style or automatic Mode routing |
-| Natural-language Task creation and Task status updates | Later/snooze behavior while the canonical lifecycle is being implemented | Non-clinical reflection exercises and Mood Entries |
-| User-scheduled Telegram Reminders | Dashboard Task, Reminder, progress, and Session views while snapshot invariants are being fixed | Localized Crisis Referral beyond the separately gated wellbeing release |
-| Telegram Done, Skip, and Later buttons | Session-scoped conversation continuity and a recent-session summary | Scheduled general morning/evening check-ins and an anti-nag governor |
-| Pending Reminder reload after a process restart | Friendly, concise assistant tone under model evaluation | WhatsApp |
-| Basic dashboard Task creation and status controls | Render deployment, monitoring, backups, and reminder reliability evidence | Voice interaction |
+| Dashboard profile setup with validated name, IANA timezone, and quiet hours | First-message-of-day planning using recent Task context; Amigo does not initiate it | Adaptive Interaction Style or automatic Mode routing |
+| Natural-language Task creation and Task status updates | Task creation and lifecycle accuracy under the release model evaluation | Non-clinical reflection exercises and Mood Entries |
+| User-scheduled Telegram Reminders | Dashboard Task, Reminder, progress, and Session staging verification | Localized Crisis Referral beyond the separately gated wellbeing release |
+| Telegram Done, Skip, and canonical Later replacement controls | Session-scoped conversation continuity and a recent-session summary | Scheduled general morning/evening check-ins and an anti-nag governor |
+| Authoritative Reminder reconciliation, immutable attempt evidence, and readiness checks | Staging Reminder reliability evidence, synthetics, and alerts | WhatsApp |
+| Atomic dashboard snapshot and shared Task/Reminder/Later command controls | Render deployment, monitoring, and backup verification | Voice interaction |
 | Dashboard realtime refresh from Supabase | Free 30-day invitation-beta offer and founder-operated support | Native mobile apps; a PWA requires its own demand gate |
 | `/feedback` capture | Eight-person external beta and willingness-to-pay research | Multi-machine scheduling and paid billing |
 | Local CLI development mode | English output with code-mixed input comprehension | Automatic sentiment-based intervention or emotional profiling |
@@ -32,10 +36,10 @@ described in the present tense.
   Amigo to schedule. It does not mean autonomous companion check-ins.
 - Conversation history, recent summaries, profile fields, and Task context are not the approved
   durable personal Memory product.
-- Dashboard writes and Telegram actions do not yet share the final canonical command path. The
-  current dashboard snooze behavior must not be used as release evidence.
-- Automated tests use fakes. They do not prove Telegram, Gemini, Supabase Auth/RLS, migrations,
-  realtime delivery, and Render work together.
+- Dashboard and Telegram now share the canonical Task and Reminder command paths locally, but the
+  cross-surface flow still needs staging evidence before it can pass the release gate.
+- Python tests use fakes and CI exercises migrations/RLS on PostgreSQL. They do not prove Telegram,
+  Gemini, Supabase Auth, realtime delivery, and Render work together.
 - The current project is open source under AGPL-3.0, but supported self-hosting is not a shipped
   product or support promise.
 

@@ -20,9 +20,18 @@ class Clock:
         """Naive UTC now for Supabase timestamps and APScheduler."""
         return datetime.now(UTC).replace(tzinfo=None)
 
+    def _aware_utc_now(self) -> datetime:
+        """``utc_now()`` as an aware UTC datetime, accepting naive or aware clocks."""
+        now = self.utc_now()
+        return now.replace(tzinfo=UTC) if now.tzinfo is None else now.astimezone(UTC)
+
     def now_in_tz(self, timezone: str) -> datetime:
-        """Current time in user's timezone."""
-        return datetime.now(UTC).astimezone(ZoneInfo(timezone))
+        """Current time in user's timezone.
+
+        Derived from ``utc_now()`` so that a clock overriding only ``utc_now()``
+        also controls every date/time value below.
+        """
+        return self._aware_utc_now().astimezone(ZoneInfo(timezone))
 
     def today_in_tz(self, timezone: str) -> date:
         """Today's date in user's timezone."""
@@ -34,8 +43,7 @@ class Clock:
 
     def local_time_to_utc(self, hour: int, minute: int, timezone: str) -> datetime:
         """Convert a local HH:MM today to a naive UTC datetime."""
-        tz = ZoneInfo(timezone)
-        local_now = datetime.now(UTC).astimezone(tz)
+        local_now = self.now_in_tz(timezone)
         local_target = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
         return local_target.astimezone(UTC).replace(tzinfo=None)
 

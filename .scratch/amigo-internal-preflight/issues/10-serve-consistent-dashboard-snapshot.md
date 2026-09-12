@@ -1,10 +1,10 @@
 # Serve One Consistent Dashboard Snapshot
 
-Status: open
-Label: `in-progress`
+Status: closed
+Label: `done`
 Severity: `severity:high`
 Type: HITL
-Owner: Codex
+Owner: unassigned
 
 ## What to build
 
@@ -16,16 +16,16 @@ This slice requires review of any database view or transactional snapshot functi
 
 ## Acceptance criteria
 
-- [ ] One authenticated endpoint returns snapshot version, generation time, current IANA timezone,
+- [x] One authenticated endpoint returns snapshot version, generation time, current IANA timezone,
   local Planning Day, task populations, progress, Reminders, and customer-readable Sessions.
-- [ ] Today's Task list and progress use exactly the same due-date and lifecycle population; Inbox
+- [x] Today's Task list and progress use exactly the same due-date and lifecycle population; Inbox
   and Carried over Tasks are separate and excluded from today's denominator.
-- [ ] Every displayed Reminder resolves to an owned Task or explicitly explains its carried-over
+- [x] Every displayed Reminder resolves to an owned Task or explicitly explains its carried-over
   state, and “no tasks pending” cannot contradict a pending Reminder.
-- [ ] Reminder presentation includes date, localized time, timezone, and overdue/delivery state.
-- [ ] Mutations and realtime invalidations trigger a fresh snapshot; the browser never merges
+- [x] Reminder presentation includes date, localized time, timezone, and overdue/delivery state.
+- [x] Mutations and realtime invalidations trigger a fresh snapshot; the browser never merges
   direct table payloads or mixed snapshot versions.
-- [ ] Cross-midnight, legacy Task, stale Session, and previously contradictory `0 of 0` states have
+- [x] Cross-midnight, legacy Task, stale Session, and previously contradictory `0 of 0` states have
   integration coverage.
 
 ## Blocked by
@@ -51,3 +51,11 @@ This slice requires review of any database view or transactional snapshot functi
 Implementation started after issue 09 closed. The first pass will audit existing dashboard reads,
 API ownership boundaries, Task populations, Reminder presentation, and Session reconciliation
 before determining whether a protected snapshot function or view is required.
+
+### 2026-08-31 — Completed
+
+Migration 010 was reviewed and approved unchanged. The authenticated API now returns one
+transactional snapshot, all Store implementations share the contract, and the browser atomically
+replaces that document after mutations or realtime invalidations. PostgreSQL assertions cover
+tenant scope, cross-midnight Planning Day, canonical progress, carried-over Reminder context,
+stale Sessions, and service-role-only access. The exact migration 001–010 CI sequence passed.

@@ -72,21 +72,65 @@ class SmokeStore:
     def __init__(self):
         self.reminders = {
             "smoke-reminder": {
+                "user_id": "smoke-user",
                 "status": "pending",
                 "task_status": "pending",
                 "updates": [],
             }
         }
 
-    async def claim_reminder_for_send(self, reminder_id: str) -> dict | None:
+    async def claim_reminder_for_send(
+        self, reminder_id: str, user_id: str, idempotency_key: str
+    ) -> dict | None:
         reminder = self.reminders.get(reminder_id)
-        if not reminder or reminder["status"] != "pending":
+        if (
+            not reminder
+            or reminder["user_id"] != user_id
+            or reminder["status"] != "pending"
+        ):
             return None
         reminder["status"] = "sending"
-        return {"status": "sending", "tasks": {"status": reminder["task_status"]}}
+        return {
+            "claimed": True,
+            "task_status": reminder["task_status"],
+            "attempt": {"attempt_id": idempotency_key},
+        }
 
-    async def update_reminder(self, reminder_id: str, updates: dict) -> dict:
+    async def finish_reminder_delivery(
+        self,
+        *,
+        attempt_id: str,
+        reminder_id: str,
+        user_id: str,
+        result: str,
+        normalized_cause: str | None,
+        retry_decision: str,
+        telegram_message_id: int | None,
+    ) -> dict:
         reminder = self.reminders[reminder_id]
+        if reminder["user_id"] != user_id or attempt_id is None:
+            raise ValueError("Reminder delivery state conflict")
+        reminder.update(
+            status="sent" if result == "accepted" else (
+                "pending" if retry_decision == "retry" else "failed"
+            ),
+            telegram_message_id=telegram_message_id,
+        )
+        reminder["updates"].append(
+            {
+                "result": result,
+                "normalized_cause": normalized_cause,
+                "retry_decision": retry_decision,
+            }
+        )
+        return {"attempt": {"attempt_id": attempt_id, "result": result}}
+
+    async def update_reminder(
+        self, reminder_id: str, updates: dict, user_id: str
+    ) -> dict:
+        reminder = self.reminders[reminder_id]
+        if reminder["user_id"] != user_id:
+            raise ValueError("Reminder not found")
         reminder.update(updates)
         reminder["updates"].append(dict(updates))
         return reminder
@@ -123,7 +167,7 @@ async def smoke_scheduler() -> None:
         scheduler.schedule_reminder(
             user_id="smoke-user",
             reminder_id="smoke-reminder",
-            send_time=datetime.now() + timedelta(seconds=1),
+            send_time=datetime.now(UTC) + timedelta(seconds=1),
             chat_id=0,
             task_title="run scheduler smoke check",
         )

@@ -1,6 +1,6 @@
 """Tool execution tests."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -9,8 +9,16 @@ from src.memory.memory_store import InMemoryStore
 from src.scheduler.outbox import SchedulerOutboxWorker
 from src.tools.reminders import ScheduleReminderTool
 from src.tools.tasks import CreateTaskTool, UpdateTaskStatusTool
-from src.utils import now_in_tz
+from src.utils import Clock, now_in_tz
 from tests.fakes import FakeScheduler, FakeStore
+
+
+class _FixedClock(Clock):
+    def __init__(self, instant: datetime):
+        self.instant = instant
+
+    def utc_now(self) -> datetime:
+        return self.instant
 
 
 def _future_hhmm(timezone: str) -> str:
@@ -122,3 +130,45 @@ async def test_create_task_tool_persists_task():
     assert result["task"]["category"] == "health"
     assert result["task"]["due_date"] is None
     assert await store.get_today_tasks(user["user_id"], "Asia/Kathmandu") == []
+
+
+async def test_schedule_reminder_tool_uses_its_injected_clock():
+    """An injected clock must drive both the send time and the past-time guard.
+
+    Regression: the tool accepted a clock but computed `send_time` from the
+    module-level wall clock, so a caller's clock controlled persistence only.
+    """
+    store = FakeStore()
+    user = await store.create_user(123)
+    task = await store.create_task(user["user_id"], "call mom")
+    # 2026-05-07 19:15 UTC = 2026-05-08 01:00 NPT, so 02:00 local is still ahead.
+    clock = _FixedClock(datetime(2026, 5, 7, 19, 15))
+    tool = ScheduleReminderTool(store, FakeScheduler(), clock)
+
+    result = await tool.run(
+        context=CommandContext(user["user_id"], "telegram", "schedule-injected-clock"),
+        task=task,
+        resolved_time="02:00",
+        timezone="Asia/Kathmandu",
+    )
+
+    assert result["reminder"] is not None
+    assert store.reminders[0]["scheduled_time"].startswith("2026-05-07T20:15")
+
+
+async def test_schedule_reminder_tool_skips_past_times_by_injected_clock():
+    store = FakeStore()
+    user = await store.create_user(123)
+    task = await store.create_task(user["user_id"], "call mom")
+    clock = _FixedClock(datetime(2026, 5, 7, 19, 15))
+    tool = ScheduleReminderTool(store, FakeScheduler(), clock)
+
+    result = await tool.run(
+        context=CommandContext(user["user_id"], "telegram", "schedule-past-clock"),
+        task=task,
+        resolved_time="00:30",
+        timezone="Asia/Kathmandu",
+    )
+
+    assert result["reminder"] is None
+    assert store.reminders == []

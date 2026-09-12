@@ -6,8 +6,8 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from src.api.dependencies import get_activated_user
 from src.api.reminders import router
-from src.auth import get_authenticated_user_id
 from src.commands.base import CommandContext, IdempotencyConflictError
 from src.commands.reminders import (
     CancelReminderCommand,
@@ -140,6 +140,11 @@ class _FailOnceScheduler(FakeScheduler):
         return super().schedule_reminder(user_id, reminder_id, send_time, chat_id, task_title)
 
 
+class _AlwaysFailScheduler(FakeScheduler):
+    def schedule_reminder(self, user_id, reminder_id, send_time, chat_id, task_title):
+        raise RuntimeError("scheduler unavailable")
+
+
 async def test_scheduler_failure_keeps_effect_for_safe_replay():
     store = FakeStore()
     user = await store.create_user(123)
@@ -160,6 +165,27 @@ async def test_scheduler_failure_keeps_effect_for_safe_replay():
     assert len(scheduler.scheduled) == 1
 
 
+async def test_scheduler_effect_becomes_visible_poison_after_bounded_retries():
+    store = FakeStore()
+    user = await store.create_user(123)
+    task = await store.create_task(user["user_id"], "Prepare report")
+    result = await ScheduleReminderCommand(store).run(
+        CommandContext(user["user_id"], "telegram", "schedule-poison"),
+        task_id=task["task_id"],
+        schedule=SCHEDULE,
+    )
+    worker = SchedulerOutboxWorker(store, _AlwaysFailScheduler())
+
+    for _ in range(5):
+        assert await worker.drain_once() == 0
+
+    effect = _outbox(store)[f"schedule:{result['reminder']['reminder_id']}"]
+    assert effect["attempts"] == 5
+    assert effect["status"] == "failed"
+    assert effect["error_type"] == "RuntimeError"
+    assert await worker.drain_once() == 0
+
+
 async def test_dashboard_reminder_adapters_return_202_and_derive_actor():
     store = FakeStore()
     user = await store.create_user(123)
@@ -168,7 +194,7 @@ async def test_dashboard_reminder_adapters_return_202_and_derive_actor():
     app = FastAPI()
     app.state.store = store
     app.include_router(router)
-    app.dependency_overrides[get_authenticated_user_id] = lambda: "auth-user"
+    app.dependency_overrides[get_activated_user] = lambda: user
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),

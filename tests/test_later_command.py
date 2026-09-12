@@ -1,16 +1,17 @@
 """Canonical Later policy and cross-surface command tests."""
 
-from datetime import datetime
+from datetime import date, datetime
 
 import httpx
 import pytest
 from fastapi import FastAPI
 
+from src.api.dependencies import get_activated_user
 from src.api.reminders import router
-from src.auth import get_authenticated_user_id
 from src.bot.reminder_actions import ReminderActions
 from src.commands.base import CommandContext, StaleVersionError
 from src.commands.later import ApplyLaterCommand, LaterPolicy
+from src.commands.tasks import CreateTaskCommand, CreateTaskInput
 from src.memory.memory_store import InMemoryStore
 from src.scheduler.outbox import SchedulerOutboxWorker
 from src.utils import Clock
@@ -39,7 +40,12 @@ async def _seed(store, *, timezone="UTC", wake="07:30", sleep="23:00"):
         user["user_id"],
         {"timezone": timezone, "wake_time": wake, "sleep_time": sleep},
     )
-    task = await store.create_task(user["user_id"], "Finish report", timezone=timezone)
+    task = (
+        await CreateTaskCommand(store).run(
+            CommandContext(user["user_id"], "test", "later-seed-task"),
+            CreateTaskInput(title="Finish report", planning_day=date(2026, 8, 31)),
+        )
+    )["task"]
     reminder = await store.create_reminder(
         task["task_id"],
         user["user_id"],
@@ -197,7 +203,7 @@ async def test_dashboard_and_telegram_adapters_apply_shared_later_command():
     app = FastAPI()
     app.state.store = store
     app.include_router(router)
-    app.dependency_overrides[get_authenticated_user_id] = lambda: "auth-user"
+    app.dependency_overrides[get_activated_user] = lambda: user
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",

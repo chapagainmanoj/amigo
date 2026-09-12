@@ -55,15 +55,61 @@ jobs:
             -f migrations/007_consistent_task_reminder_resolution.sql \
             -f migrations/008_atomic_later_command.sql \
             -f migrations/009_telegram_update_claims.sql \
+            -f migrations/010_consistent_dashboard_snapshot.sql \
             -f tests/sql/tenant_isolation.sql \
             -f tests/sql/create_task_command.sql \
             -f tests/sql/reminder_outbox.sql \
             -f tests/sql/resolve_task_command.sql \
             -f tests/sql/apply_later_command.sql \
-            -f tests/sql/telegram_update_claims.sql
+            -f tests/sql/telegram_update_claims.sql \
+            -f tests/sql/dashboard_snapshot.sql \
+            -f tests/sql/seed_legacy_reliability.sql \
+            -f migrations/011_reminder_reliability_instrumentation.sql \
+            -f tests/sql/reminder_reliability.sql \
+            -f migrations/012_canonical_planning_day_move.sql \
+            -f tests/sql/move_task_planning_day_command.sql \
+            -f migrations/013_dashboard_first_activation.sql \
+            -f tests/sql/activation_journey.sql
+
+      - name: Prove the Activation functions cannot deadlock
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGDATABASE: amigo_test
+          PGPASSWORD: postgres
+          PGOPTIONS: "-c role=service_role"
+        run: python scripts/check_activation_lock_order.py
 
       - name: Lint
-        run: ruff check src tests
+        run: ruff check src tests scripts
+
+      - name: Validate Gate A evaluation contract
+        run: python scripts/run_gate_a_eval.py --validate-only
 
       - name: Test
         run: python -m pytest tests/ -v
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build

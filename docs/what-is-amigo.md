@@ -32,12 +32,12 @@ outcome, and willingness-to-pay evidence.
 ## Current Loop
 
 1. Create and confirm a dashboard account.
-2. Pair the account with Telegram using a short-lived link.
-3. Complete name and timezone chat setup.
-4. Tell Amigo a Task and, optionally, when to send a Reminder.
-5. Receive the Reminder in Telegram.
-6. Choose Done, Skip, or Later, or update the Task conversationally.
-7. Review the resulting prototype state on the dashboard.
+2. Acknowledge the beta limits and pair Telegram using a short-lived, single-use link.
+3. Set a preferred name, IANA timezone, and quiet hours on the dashboard.
+4. Schedule the guided private test Reminder for two minutes later.
+5. Receive and resolve it in Telegram with Done, Skip, or Later to complete Activation.
+6. Tell Amigo a real Task and, optionally, when to send a Reminder.
+7. Review and manage the resulting prototype state on the dashboard.
 
 Amigo currently reaches out first only when delivering a participant-requested Reminder. It does
 not autonomously initiate general morning greetings, evening reviews, meal check-ins, or companion
@@ -45,7 +45,8 @@ conversations.
 
 ## Shipped Foundation
 
-- Telegram text conversation and resumable chat setup.
+- Dashboard account creation and secure, single-use Telegram Pairing.
+- Telegram text conversation.
 - Natural-language Task creation and status updates using the configured Gemini model and
   Pydantic AI (`gemini-3.5-flash` by default).
 - User-scheduled Telegram Reminders with Done, Skip, and Later buttons.
@@ -53,9 +54,12 @@ conversations.
 - Session-scoped context, recent Task context, and a recent-session summary.
 - Local CLI development mode, automated tests, linting, and basic scheduler/channel smoke checks.
 
-Some shipped prototype behavior is not beta-ready. In particular, cross-surface lifecycle
-consistency, pairing security, reminder reliability, production observability, data rights, and
-the complete Activation journey remain release gates.
+Some implemented prototype behavior is not beta-ready. In particular, the locally implemented
+Activation, cross-surface lifecycle, pairing security, reminder reliability, production
+observability, and data-rights behavior still require the applicable staging and release evidence.
+The staged Activation application code also requires protected migration 014, which remains
+outside the repository pending explicit human approval; the current worktree is not deployable
+until that schema chain is complete.
 
 ## What Memory Means Today
 
@@ -95,7 +99,7 @@ roadmap.
 | Backend | Python 3.12, FastAPI, Pydantic AI |
 | Model | Gemini 3.5 Flash by default |
 | Persistence and auth | Supabase PostgreSQL and Supabase Auth |
-| Scheduling | APScheduler in one application process, with pending Reminder reload |
+| Scheduling | APScheduler as a rebuildable single-process projection with a durable outbox, authoritative reconciliation, and delivery evidence |
 | Dashboard | React and Vite with Supabase realtime subscriptions |
 | Canonical beta hosting | Render, subject to the always-on beta runtime gate |
 

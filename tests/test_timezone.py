@@ -3,13 +3,13 @@
 Tests #6 and #8 from the grill list.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import pytest
 
-from src.utils import local_time_to_utc, today_in_tz, yesterday_in_tz
+from src.utils import Clock, local_time_to_utc, today_in_tz, yesterday_in_tz
 
 
 class TestTodayYesterdayBoundary:
@@ -93,3 +93,40 @@ class TestCreatedDateTimezone:
         # created_date should match today in Kathmandu, not UTC
         expected = today_in_tz("Asia/Kathmandu").isoformat()
         assert task["created_date"] == expected
+
+
+class TestInjectedClockDrivesEveryDerivedValue:
+    """A clock overriding only `utc_now()` must control every derived date/time.
+
+    Regression: `now_in_tz`/`local_time_to_utc` read the wall clock directly, so
+    `today_in_tz()` ignored an injected clock and planning-day validation compared
+    against the real server date.
+    """
+
+    class FixedClock(Clock):
+        def __init__(self, instant: datetime):
+            self.instant = instant
+
+        def utc_now(self) -> datetime:
+            return self.instant
+
+    def test_now_and_today_derive_from_utc_now(self):
+        # 2026-05-07 19:15 UTC = 2026-05-08 01:00 NPT
+        clock = self.FixedClock(datetime(2026, 5, 7, 19, 15))
+
+        assert clock.now_in_tz("Asia/Kathmandu") == datetime(
+            2026, 5, 8, 1, 0, tzinfo=ZoneInfo("Asia/Kathmandu")
+        )
+        assert clock.today_in_tz("Asia/Kathmandu") == date(2026, 5, 8)
+        assert clock.yesterday_in_tz("Asia/Kathmandu") == date(2026, 5, 7)
+        assert clock.today_in_tz("UTC") == date(2026, 5, 7)
+
+    def test_local_time_to_utc_derives_from_utc_now(self):
+        clock = self.FixedClock(datetime(2026, 5, 7, 19, 15))
+
+        assert clock.local_time_to_utc(14, 0, "Asia/Kathmandu") == datetime(2026, 5, 8, 8, 15)
+
+    def test_aware_utc_now_is_accepted(self):
+        clock = self.FixedClock(datetime(2026, 5, 7, 19, 15, tzinfo=ZoneInfo("UTC")))
+
+        assert clock.today_in_tz("Asia/Kathmandu") == date(2026, 5, 8)

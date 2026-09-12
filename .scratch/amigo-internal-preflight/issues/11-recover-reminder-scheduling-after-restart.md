@@ -1,7 +1,7 @@
 # Recover Reminder Scheduling After Restart
 
-Status: open
-Label: `ready-for-agent`
+Status: closed
+Label: `done`
 Severity: `severity:high`
 Type: AFK
 Owner: unassigned
@@ -14,16 +14,16 @@ that no longer correspond to an active owned Reminder.
 
 ## Acceptance criteria
 
-- [ ] Startup reconstructs exactly one stable scheduler job for every canonical Reminder that
+- [x] Startup reconstructs exactly one stable scheduler job for every canonical Reminder that
   requires future delivery.
-- [ ] Reconciliation repairs missing or wrongly timed jobs and cancels jobs for missing, terminal,
+- [x] Reconciliation repairs missing or wrongly timed jobs and cancels jobs for missing, terminal,
   or wrong-owner Reminders.
-- [ ] Outbox effects use atomic claims, bounded retries, stable identities, and a visible poison
+- [x] Outbox effects use atomic claims, bounded retries, stable identities, and a visible poison
   state rather than disappearing after repeated failure.
-- [ ] A Reminder no more than 15 minutes late is delivered at most once with delayed timing;
+- [x] A Reminder no more than 15 minutes late is delivered at most once with delayed timing;
   anything older becomes missed while its Task remains pending.
-- [ ] Recovery emits at most one summary rather than a burst of stale Reminder messages.
-- [ ] Restart, interrupted outbox processing, scheduler outage, duplicate effect, and inverse-drift
+- [x] Recovery emits at most one summary rather than a burst of stale Reminder messages.
+- [x] Restart, interrupted outbox processing, scheduler outage, duplicate effect, and inverse-drift
   cases converge under automated failure injection.
 
 ## Blocked by
@@ -39,3 +39,18 @@ that no longer correspond to an active owned Reminder.
 
 ## Comments
 
+### 2026-08-31 — Claimed
+
+Implementation started after issue 10 closed. The first pass will compare authoritative Reminder
+rows, scheduler jobs, and outbox claim/retry behavior before adding reconciliation and late-delivery
+failure injection.
+
+### 2026-08-31 — Completed
+
+Startup and the minute-level reconciliation job now rebuild APScheduler from authoritative owned
+Reminder rows, repair wrong times, remove inverse drift, reset interrupted sends, and enforce the
+15-minute missed policy while leaving Tasks pending. Recently delayed occurrences are atomically
+claimed and grouped into one participant summary. Existing outbox claims were verified through
+five bounded failures into a visible poison state. The protected smoke harness was reviewed and
+updated for the owned Store signature and UTC scheduling boundary. Two smoke reproductions, 189
+Python tests, Ruff, dashboard lint/build, and diff checks passed.

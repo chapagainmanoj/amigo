@@ -1,10 +1,10 @@
 # Run the Gate A Model Evaluation
 
 Status: open
-Label: `ready-for-agent`
+Label: `ready-for-human`
 Severity: `severity:high`
 Type: AFK
-Owner: unassigned
+Owner: Codex
 
 ## What to build
 
@@ -44,3 +44,46 @@ clarification, resulting state, factual behavior, and response properties rather
 
 ## Comments
 
+### 2026-08-31 — Claimed
+
+Implementation started after the declared dependencies closed. The work uses the approved
+60-case composition and three-repetition contract without introducing production or participant
+data into the evaluator.
+
+### 2026-09-01 — Contract implemented; declared run blocked by provider quota
+
+The versioned suite now contains the exact 20 Task-creation, 20 lifecycle, 10 non-mutating, and
+10 hard-invariant cases. Every turn declares Tool ranges, prohibited Tools, clarification,
+response properties, resulting state, and metrics. The isolated runner records the exact release
+inputs, traces, state, latency, tokens, list-price cost, environment, and independently scored
+thresholds; provider quota errors abort rather than retrying an unchanged candidate.
+
+CI validates the suite and deterministic scorer on every pull request. Local verification passes
+with 213 backend tests, Ruff, scheduler smoke, dashboard lint/build, and the 60-case/3-repetition
+schema check. Development probes exposed and led to fixes for combined Task/Reminder confirmation,
+canonical Later, rescheduling, and planning-day moves.
+
+The complete 180-execution declared run is not yet available. The configured Gemini key is on the
+free tier and exhausted its 20-request daily quota during probes, which cannot support this run.
+Finishing the evidence requires an authorized billing-enabled or higher-quota key. The planning-day
+case also requires human approval of proposed migration 012 before its implementation can become
+the release candidate. No acceptance criterion is marked complete until those blockers are
+resolved and the resulting evidence is independently reviewed.
+
+### 2026-09-11 — Migration 012 approved and added; planning-day blocker cleared
+
+The project owner approved migration 012. `migrations/012_canonical_planning_day_move.sql` and
+`tests/sql/move_task_planning_day_command.sql` are checked in, appended to the CI psql chain in
+numeric order, and documented in the README migration list. The proposal was reconstructed from
+current code (the earlier `/tmp` bytes were lost), independently reviewed before approval, and
+independently reviewed again after adoption; both reviews passed. See
+`.scratch/amigo-internal-preflight/reviews/012-canonical-planning-day-move.md`.
+
+This clears the schema half of the planning-day blocker: the Supabase-backed
+`move_task_planning_day_command` path now exists. A separate injected-clock defect found on the
+same day is also fixed — `Clock.now_in_tz` and `Clock.local_time_to_utc` read the wall clock
+instead of deriving from `utc_now()`, so `today_in_tz()` ignored the injected clock and the
+planning-day guard compared against the real server date.
+
+The declared 180-execution Gate A run remains blocked on an authorized billing-enabled or
+higher-quota release-model credential. No acceptance criterion is marked complete.

@@ -8,6 +8,11 @@
 **Target outcome:** A secure, honest, observable, invitation-only beta that reliably completes
 the task → reminder → resolution loop across Telegram and the dashboard.
 
+**Implementation status (2026-09-02):** The dashboard-first Activation journey in Milestone 4.1
+is implemented locally, including canonical server-side gating and actual Telegram delivery plus
+Done/Skip/Later resolution. Its staging, usability, accessibility, and release evidence remain
+open; unchecked acceptance criteria below are requirements, not claims of deployed readiness.
+
 ## Product decision for this plan
 
 This plan treats the Phase 1 product as:
@@ -368,24 +373,24 @@ and serializes active Turns per participant within the single beta web process.
 
 1. Document exactly one scheduler owner for beta.
 2. Add a scheduler heartbeat and reminder-lateness measurement.
-3. Ensure startup reload, live reschedule, dashboard Later, and Telegram Later all share the same
+3. [x] Ensure startup reload, live reschedule, dashboard Later, and Telegram Later all share the same
    code path.
-4. Deliver a Reminder at most once when it is no more than 15 minutes late and record delayed
+4. [x] Deliver a Reminder at most once when it is no more than 15 minutes late and record delayed
    timing; mark older Reminders missed, keep their Tasks pending, and emit at most one recovery
    summary rather than stale-message bursts.
-5. Add a reconciliation job that detects pending database reminders without scheduled jobs.
-6. Reconcile the inverse case as well: scheduled jobs whose reminder is missing, terminal, or
+5. [x] Add a reconciliation job that detects pending database reminders without scheduled jobs.
+6. [x] Reconcile the inverse case as well: scheduled jobs whose reminder is missing, terminal, or
    owned by a different task/user must be cancelled and reported.
-7. Add an idempotent outbox worker with atomic claims, stable effect/job IDs, bounded retry and
+7. [x] Add an idempotent outbox worker with atomic claims, stable effect/job IDs, bounded retry and
    visible poison-effect state. Measure outbox lag, oldest pending effect, failed effects, and
    reconciliation drift.
 
 ### Workstream 2.5: Consistent dashboard read model
 
-1. Replace independent browser queries with `GET /api/dashboard`, one authenticated,
+1. [x] Replace independent browser queries with `GET /api/dashboard/snapshot`, one authenticated,
    tenant-scoped, versioned snapshot for tasks, progress, reminders, and recent sessions. Assemble
    it from one consistent database view/transaction.
-2. Define and enforce these invariants:
+2. [x] Define and enforce these invariants:
    - Every displayed pending reminder resolves to an owned task that is visible or explicitly
      identified as carried over from another day.
    - The progress numerator, denominator, and task list use the same task population.
@@ -393,13 +398,13 @@ and serializes active Turns per participant within the single beta web process.
      an explanation.
    - Dates are calculated in the user's current timezone and remain deterministic across
      midnight.
-3. Show reminder date, localized time, timezone, and overdue/delivery state rather than a bare
+3. [x] Show reminder date, localized time, timezone, and overdue/delivery state rather than a bare
    clock time.
-4. Version or atomically assemble the snapshot so realtime updates cannot produce a temporary
+4. [x] Version or atomically assemble the snapshot so realtime updates cannot produce a temporary
    mixed state from different queries.
-5. Show unscheduled commitments in Inbox and past-due pending Tasks in a separate Carried over
+5. [x] Show unscheduled commitments in Inbox and past-due pending Tasks in a separate Carried over
    section. Neither population contributes to today's completion denominator.
-6. Make realtime, if retained, an invalidation hint only. After mutations or invalidation, fetch
+6. [x] Make realtime, if retained, an invalidation hint only. After mutations or invalidation, fetch
    and atomically replace the snapshot; never merge direct table payloads into dashboard state.
 
 ### Workstream 2.6: Model-behavior evaluation
@@ -473,6 +478,14 @@ The authoritative measurement contract is
 8. Report counts, exclusions, percentage, p50/p95/max, causes, retries, and provider incidents for
    current day, trailing seven days, and cumulative gate window. Use nearest-rank percentiles and
    label fewer than 20 successes Insufficient Evidence rather than claiming p95.
+
+**Local status (2026-08-31):** Migration 011 and the scheduler now record immutable occurrence and
+attempt timing, normalized outcomes, retry decisions, evidence class, reconciliation heartbeat and
+drift, outbox health, and content-free latency samples. `/health` is liveness-only and `/ready`
+fails conservatively for database, heartbeat, or poison-outbox failure. Ambiguous provider and
+interrupted-delivery outcomes are retained and not automatically retried. Staging/production
+synthetic execution, retention automation, percentile windows, incident exclusions, and alerts
+remain deployment work.
 
 ### Tests
 
@@ -597,6 +610,14 @@ alone makes the current topology ineligible for the Reminder beta.
 7. Add a larger capacity and soak test before expanding beyond the invitation cohort; this later
    test is not required to invite the first small cohort if the representative beta burst passes.
 
+**Local status (2026-08-31):** Store and Auth now use Supabase's native async client with a
+single lock-protected lazy client. All SDK network operations are explicitly awaited, Store
+operation outcome/duration is logged without participant content, and a 20-operation concurrent
+regression proves database work overlaps while the event loop continues to advance. No worker
+fallback is used. The historical staging baseline is still unknown; the exact before/after mixed
+burst, resource measurements, concurrency lanes, queue limits, and safe cohort limit remain
+staging work and must not be inferred from the local regression.
+
 ### Acceptance criteria
 
 - A synthetic staging user completes the core loop after every deployment.
@@ -685,9 +706,9 @@ single-purpose setup journey.
     - The open dashboard detects the completed pairing and transitions automatically without a
       manual refresh.
     - The dashboard shows a short success state before revealing the first useful view.
-16. If pairing creates a Telegram profile that has not completed bot onboarding, continue
-    directly into name/timezone setup instead of sending a success message and waiting for an
-    unrelated next message to restart onboarding.
+16. If pairing creates a Telegram profile without completed Activation, direct it back to the
+    dashboard journey rather than entering the retired Telegram name/timezone setup or waiting
+    for an unrelated next message.
 
 ### Workstream 4.3: Responsive and accessible UX
 
@@ -727,8 +748,8 @@ single-purpose setup journey.
   founder assistance.
 - Successful pairing unlocks the already-open dashboard automatically within the documented
   polling/realtime window and provides a clear return path from Telegram.
-- A newly created Telegram profile proceeds from pairing into onboarding without a dead-end or
-  contradictory “success, but not set up” state.
+- A newly created Telegram profile proceeds from pairing into dashboard Activation without a
+  dead-end or contradictory “success, but not set up” state.
 - The first ordinary bot reply uses the preferred display name and asks no more than one primary
   action-oriented question.
 - The unpaired screen has one clear primary action and no disabled or unavailable product areas.
@@ -1260,7 +1281,7 @@ Recommended first vertical slices:
 4. Replace independent dashboard reads with a consistent task/progress/reminder snapshot.
 5. Add Telegram update idempotency.
 6. Implement the dashboard-first account → Telegram → bot setup happy path.
-7. Add the guided five-minute reminder and corresponding activation event.
+7. Add the approved guided two-minute Reminder and corresponding Activation evidence.
 8. Reconcile stale sessions and replace internal session/connection values with user-facing state.
 9. Remove blocking Supabase calls from the event loop and pass the representative beta burst.
 10. Add operational alerting for a deliberately failed reminder.
@@ -1314,7 +1335,7 @@ support process. Gate C requires tested self-service export and account deletion
 
 - [ ] Dashboard and Telegram use the same mutation paths.
 - [ ] Dashboard and Telegram use the same Later policy and replacement-Reminder transition.
-- [ ] Task list, daily progress, and reminders use one tested population/read model.
+- [x] Task list, daily progress, and reminders use one tested population/read model.
 - [ ] Stale sessions are reconciled and session labels/durations are customer-readable.
 - [x] Telegram update replay is idempotent.
 - [x] Ambiguous time causes clarification.

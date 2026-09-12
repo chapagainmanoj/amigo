@@ -65,7 +65,7 @@ not drop-in product changes.
 | Product shape | Hosted accountability companion using Telegram plus a paired dashboard | Privacy-first desktop platform aggregating messaging and local capabilities |
 | Runtime | Python 3.12, FastAPI, Pydantic AI | Rust core with a desktop shell |
 | Persistence | Cloud-hosted Supabase/PostgreSQL | Primarily local storage |
-| Scheduling | In-process APScheduler with database reload; durable outbox still planned | Broader cron/event infrastructure |
+| Scheduling | In-process APScheduler as a rebuildable projection with a durable outbox, atomic delivery claims, and reconciliation | Broader cron/event infrastructure |
 | Memory | Messages, Tasks, Sessions, and summaries; not the approved durable Memory product | Structured local memory concepts |
 | Extensibility | Narrow protocols and injected Tools | Broader skills/plugin architecture |
 | Release state | Pre-beta; Gate A and Gate B evidence incomplete | External project state not revalidated in this document |
@@ -77,7 +77,7 @@ not drop-in product changes.
    consistent dashboard snapshot.
 3. Close pairing/RLS, production configuration, privacy/data-rights, observability, capacity, and
    model-evaluation gates.
-4. Implement and validate the Dashboard-first Activation Journey.
+4. Validate the implemented Dashboard-first Activation Journey on dedicated staging.
 5. Collect beta evidence before opening Memory, Modes, wellbeing, WhatsApp, voice, PWA, or native
    mobile work. **No Expansion Yet** remains the current portfolio decision.
 

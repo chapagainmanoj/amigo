@@ -24,7 +24,7 @@ class _TaskQuery:
         self.filters.append((column, value))
         return self
 
-    def execute(self):
+    async def execute(self):
         return _Result([])
 
 
@@ -59,10 +59,25 @@ class _ReminderQuery(_TaskQuery):
 class _ReminderDatabase:
     def __init__(self):
         self.query = _ReminderQuery()
+        self.rpc_name = None
+        self.rpc_params = None
 
     def table(self, table_name):
         assert table_name == "reminders"
         return self.query
+
+    def rpc(self, name, params):
+        self.rpc_name = name
+        self.rpc_params = params
+        return _RpcQuery({"claimed": False})
+
+
+class _RpcQuery:
+    def __init__(self, data):
+        self.data = data
+
+    async def execute(self):
+        return _Result(self.data)
 
 
 async def test_supabase_reminder_update_filters_by_user_id():
@@ -80,9 +95,16 @@ async def test_supabase_reminder_claim_filters_by_user_id():
     store = MemoryStore.__new__(MemoryStore)
     store.db = _ReminderDatabase()
 
-    assert await store.claim_reminder_for_send("reminder-1", "intruder-1") is None
-    assert ("reminder_id", "reminder-1") in store.db.query.filters
-    assert ("user_id", "intruder-1") in store.db.query.filters
+    assert (
+        await store.claim_reminder_for_send("reminder-1", "intruder-1", "attempt-1")
+        is None
+    )
+    assert store.db.rpc_name == "claim_reminder_delivery"
+    assert store.db.rpc_params == {
+        "p_reminder_id": "reminder-1",
+        "p_user_id": "intruder-1",
+        "p_idempotency_key": "attempt-1",
+    }
 
 
 async def test_supabase_reminder_read_filters_by_user_id():
@@ -165,7 +187,9 @@ async def test_cross_user_reminder_read_and_claim_are_invisible(store_factory):
         is None
     )
     assert (
-        await store.claim_reminder_for_send(reminder["reminder_id"], intruder["user_id"])
+        await store.claim_reminder_for_send(
+            reminder["reminder_id"], intruder["user_id"], "attempt-2"
+        )
         is None
     )
     assert reminder["status"] == "pending"

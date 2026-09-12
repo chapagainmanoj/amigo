@@ -58,6 +58,44 @@ class CreateTaskCommand:
         )
 
 
+class MoveTaskPlanningDayCommand:
+    """Move one owned pending Task to an explicit planning day."""
+
+    def __init__(self, store):
+        self.store = store
+
+    async def run(
+        self,
+        context: CommandContext,
+        *,
+        task_id: str,
+        planning_day: date,
+        expected_version: int | None = None,
+    ) -> dict:
+        if expected_version is not None and expected_version < 1:
+            raise ValueError("Invalid Task version")
+        if not context.idempotency_key.strip() or len(context.idempotency_key) > 200:
+            raise ValueError("Invalid idempotency key")
+        payload = {
+            "command": "move_task_planning_day",
+            "surface": context.surface,
+            "task_id": task_id,
+            "planning_day": planning_day.isoformat(),
+            "expected_version": expected_version,
+        }
+        payload_hash = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        return await self.store.move_task_planning_day_command(
+            user_id=context.actor_user_id,
+            idempotency_key=context.idempotency_key,
+            payload_hash=payload_hash,
+            task_id=task_id,
+            due_date=planning_day.isoformat(),
+            expected_version=expected_version,
+        )
+
+
 TaskOutcome = Literal["completed", "skipped", "cancelled"]
 
 

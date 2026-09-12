@@ -11,8 +11,10 @@ amigo/
 │   ├── __main__.py         # python -m src.cli module entrypoint
 │   ├── agent/              # Pydantic AI agent with tool-calling loop
 │   │                       #   (ADR 0002: single turn, native tools)
-│   ├── bot/                # Telegram adapter: handlers, onboarding,
-│   │                       #   turns, reminder callbacks, keyboards
+│   ├── activation.py       # Durable dashboard-first Activation read-model rules
+│   ├── startup.py          # Schema gate before scheduler/webhook side effects
+│   ├── bot/                # Telegram adapter: pairing gate, turns,
+│   │                       #   reminder callbacks, keyboards
 │   ├── channels/           # MessageChannel protocol + implementations
 │   │                       #   (Telegram, CLI)
 │   ├── memory/             # Supabase store, in-memory store, sessions,
@@ -42,16 +44,23 @@ amigo/
   message, decides which tools to call, observes results, and produces
   a reply. Tools execute side effects through injected services.
   `AgentDeps` carries per-request context (store, scheduler, user).
-- `src/bot/` — Telegram-specific glue. `BotHandlers` routes messages
-  through allowlist → onboarding → turn processing.
+- `src/bot/` — Telegram-specific glue. `BotHandlers` routes Pairing deep links first, permits
+  Reminder callbacks needed by the Activation test, and requires canonical Activation completion
+  before ordinary text reaches Turn processing. Legacy Telegram-only onboarding is unreachable.
 - `src/channels/` — `MessageChannel` Protocol with `TelegramChannel` and
   `CLIChannel` implementations. All bot code depends on the protocol, never
   on a concrete channel.
 - `src/memory/` — `MemoryStore` (Supabase CRUD), `InMemoryStore`
-  (dict-backed dev replacement), `SessionManager`, `ContextBuilder`.
-- `src/scheduler/` — `ReminderScheduler` wraps APScheduler with stable
-  job IDs and restart-safe pending-Reminder reload from the database. The current callback path
-  also implements a prototype Later delay flow that does not yet satisfy the canonical lifecycle.
+  (dict-backed dev replacement), `SessionManager`, `ContextBuilder`. Production Store and Auth
+  paths use Supabase's native asynchronous client; each Store operation emits content-free
+  outcome and duration evidence for staging/load analysis. A runtime monitor separately samples
+  event-loop scheduling delay.
+- `src/scheduler/` — `ReminderScheduler` treats database Reminders as authority and APScheduler as
+  a rebuildable projection. Stable jobs, durable outbox effects, startup/periodic reconciliation,
+  bounded poison retries, inverse-drift removal, and the 15-minute late policy converge after
+  restart or scheduler failure. Each delivery uses an atomic claim and immutable attempt outcome;
+  reconciliation records a scheduler heartbeat and content-free drift counts. Later uses the
+  shared immutable replacement command.
 - `src/tools/` — Side-effect service classes. Called by agent tools and
   `ReminderActions` callback handlers. `CreateTaskTool`,
   `UpdateTaskStatusTool`, `ScheduleReminderTool`, `CancelRemindersTool`.
@@ -63,11 +72,17 @@ amigo/
 - **Dependency injection**: Per-request state flows through `AgentDeps`
   dataclass. Major classes accept dependencies in `__init__`.
 - **Async everywhere**: All store, channel, and agent methods are
-  `async def`, even when the underlying call is synchronous (Supabase
-  client is sync but wrapped for interface consistency).
-- **UTC internally, user-tz at boundaries**: All timestamps stored as
-  naive UTC. Conversion to user timezone happens only at display/logic
-  boundaries via `src/utils/`.
+  `async def`. Supabase network operations use its native `AsyncClient` and are explicitly
+  awaited, so concurrent Turns and due Reminders yield to the event loop.
+- **Fail-closed startup**: The Supabase Store must report the exact application schema version
+  before the scheduler, durable-outbox drain, Reminder reload, or Telegram webhook starts.
+- **Canonical Activation**: Normal dashboard APIs and Telegram Turns remain locked until durable
+  acknowledgement, Pairing, validated profile, actual test-Reminder delivery, and Telegram
+  Done/Skip/Later evidence produce a completed Activation state. The dashboard snapshot embeds
+  that same state.
+- **UTC internally, user-tz at boundaries**: Database instants use timezone-aware PostgreSQL
+  `TIMESTAMPTZ` values normalized to UTC. Conversion to a participant's timezone happens only at
+  display and planning boundaries via `src/utils/`.
 - **Agentic tool calling**: The LLM decides which tools to call based on
   function signatures and docstrings. No more manual classify → extract →
   resolve pipeline. See [ADR 0002](adr/0002-agentic-tool-calling-loop.md).
@@ -75,6 +90,14 @@ amigo/
   handler execution. Duplicate deliveries receive a safe acknowledgement, terminal failure codes
   remain inspectable without message content, and Turns use the stable update ID for command
   replay keys. A participant-scoped lock preserves Turn order within the single beta web process.
+- **Atomic dashboard read model**: `GET /api/dashboard/snapshot` resolves the authenticated
+  participant and returns one service-role-only transactional snapshot. Today, Inbox, Carried
+  over, progress, joined Reminders, and normalized Sessions share one version and Planning Day;
+  realtime events are invalidation hints that replace the complete browser snapshot.
+- **Reliability evidence**: migration 011 records immutable Reminder occurrences and provider
+  attempts without message content. `/health` proves process liveness; `/ready` separately checks
+  database access, the scheduler heartbeat, and failed durable effects. Participant, staging
+  synthetic, and production synthetic observations remain distinct.
 - **Typed deterministic time resolution**: `src/time_resolution.py` resolves an expression into
   its local date, wall time, IANA timezone, UTC instant, confidence, and clarification or
   confirmation requirement. Bare hours, fuzzy periods, invalid DST wall times, and passed times
@@ -96,7 +119,7 @@ graph TD
 
     subgraph Core
         BH["BotHandlers"]
-        OB["Onboarding"]
+        AG["Activation Gate"]
         TP["TurnProcessor"]
         RA["ReminderActions"]
     end
@@ -124,7 +147,7 @@ graph TD
     TG --> TC
     CLI --> CC
 
-    BH --> OB
+    BH --> AG
     BH --> TP
     BH --> RA
 
@@ -152,8 +175,9 @@ graph TD
 ```
 
 1. **Inbound**: Telegram webhook (or CLI input) delivers text + chat_id.
-2. **Routing**: `BotHandlers` checks allowlist → onboarding status →
-   delegates to `TurnProcessor`.
+2. **Routing**: `BotHandlers` checks allowlist → linked identity → canonical Activation
+   completion before delegating ordinary text to `TurnProcessor`. Pairing and Reminder callbacks
+   retain their dedicated pre-Activation paths.
 3. **Turn processing**: `TurnProcessor` builds `AgentDeps` with per-request
    context (user, session, timezone) and calls `handle_message`.
 4. **Agent**: `handle_message` stores the user message, builds context
@@ -220,8 +244,10 @@ applicable model-evaluation gate before release.
 | `test_allowlist.py` | Chat ID allowlist enforcement |
 | `test_channels.py` | CLI and Telegram channel adapter behavior |
 | `test_onboarding.py` | Multi-step onboarding state machine |
-| `test_reminders.py` | Current prototype Later behavior and duplicate-send claiming |
-| `test_scheduler.py` | Scheduler job registration, cancel, reload, send |
+| `test_reminders.py` | Canonical Later replacement behavior and duplicate-send claiming |
+| `test_scheduler.py` | Scheduler jobs, drift, delayed summary, immutable delivery outcomes |
+| `test_reliability.py` | Scheduler heartbeat, outbox, dependency, and readiness behavior |
+| `test_async_database.py` | Async singleton, awaited SDK calls, overlap, event-loop progress |
 | `test_session_boundaries.py` | Close signals, session type classification |
 | `test_session_rollover.py` | Midnight boundary, inactivity timeout |
 | `test_timezone.py` | UTC↔local conversion, date boundaries |
@@ -249,6 +275,8 @@ No Supabase writes. Safe for CI/CD.
   loop replacing the classify→extract→resolve pipeline.
 - [pre-launch implementation plan](pre-launch-implementation-plan.md) — Current release roadmap
   and implementation sequence.
+- [staging performance evidence](staging-performance-evidence.md) — Controlled before/after
+  database, event-loop, Turn, and due-Reminder workload procedure.
 - [complete-product decision map](../.scratch/amigo-complete-product/MAP.md) — Authoritative closed
   and open product decisions.
 - [what-is-amigo.md](what-is-amigo.md) — Product vision and positioning.

@@ -1,10 +1,10 @@
 # Expose Reminder Delivery, Lateness, and Readiness
 
-Status: open
-Label: `ready-for-human`
+Status: closed
+Label: `done`
 Severity: `severity:high`
 Type: HITL
-Owner: unassigned
+Owner: Codex
 
 ## What to build
 
@@ -16,18 +16,18 @@ This slice requires review of the reliability-instrumentation migration.
 
 ## Acceptance criteria
 
-- [ ] Eligible Reminder occurrences record confirmation, scheduled, first-claim,
+- [x] Eligible Reminder occurrences record confirmation, scheduled, first-claim,
   provider-acceptance, terminal, acknowledgement, and cancellation timestamps without rewriting
   history.
-- [ ] An immutable attempt ledger records timing, normalized result/cause, idempotency key, and
+- [x] An immutable attempt ledger records timing, normalized result/cause, idempotency key, and
   retry decision; uninstrumented historical rows are marked unmeasurable.
-- [ ] Reminder Lateness, Scheduler Lag, Provider Latency, outbox lag, oldest effect, failed effects,
+- [x] Reminder Lateness, Scheduler Lag, Provider Latency, outbox lag, oldest effect, failed effects,
   and reconciliation drift are observable without message content.
-- [ ] Liveness and readiness are distinct, and readiness fails for an unavailable required
+- [x] Liveness and readiness are distinct, and readiness fails for an unavailable required
   dependency or missing scheduler heartbeat.
-- [ ] An intentionally injected Reminder failure is visible to the operator with its occurrence
+- [x] An intentionally injected Reminder failure is visible to the operator with its occurrence
   and attempt outcome.
-- [ ] Staging and production synthetic results remain distinguishable from participant Reminder
+- [x] Staging and production synthetic results remain distinguishable from participant Reminder
   evidence.
 
 ## Blocked by
@@ -45,3 +45,34 @@ This slice requires review of the reliability-instrumentation migration.
 
 ## Comments
 
+### 2026-08-31 — Claimed
+
+Implementation started after issue 11 closed. The first pass will map Reminder occurrence and
+attempt timestamps, scheduler/outbox health sources, dependency checks, and the current liveness
+endpoint before proposing the protected reliability-instrumentation migration.
+
+### 2026-08-31 — Migration 011 proposed for review
+
+The proposed migration adds immutable Reminder occurrence and delivery-attempt evidence,
+participant/staging-synthetic/production-synthetic classification, scheduler heartbeat and
+reconciliation drift state, atomic delivery claim/finalization functions, and content-free
+reliability health metrics. Historical Reminders are explicitly backfilled as
+`pre_instrumentation` and unmeasurable.
+
+The complete 001–011 sequence passed on a clean PostgreSQL 15 database, including assertions for
+legacy backfill, accepted delivery, injected provider failure, synthetic separation, occurrence
+and attempt immutability, heartbeat/readiness inputs, timing metrics, and denial of authenticated
+client access. The protected migration file will not be created until human approval.
+
+### 2026-08-31 — Closed
+
+Human-approved migration 011 was added exactly as reviewed. Reminder sends now atomically create
+and finish immutable attempts, reconciliation records heartbeat and drift, and ambiguous provider
+or interrupted-delivery outcomes remain terminal rather than being retried into a duplicate.
+`/health` remains liveness-only while `/ready` fails on database-check failure, stale scheduler
+heartbeat, or failed durable effects.
+
+Verification passed: the exact PostgreSQL 15 CI sequence through migration 011 (including legacy
+backfill, accepted and injected-failure evidence, synthetic separation, immutability, and client
+permission denial), 194 backend tests, Ruff, scheduler smoke, dashboard lint/build, and
+`git diff --check`.

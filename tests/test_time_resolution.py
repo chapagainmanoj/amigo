@@ -174,6 +174,7 @@ async def test_confirmation_boundary_prevents_mutation_and_saved_utc_stays_ancho
         chat_id=123,
         timezone="Asia/Kathmandu",
         turn_id="confirm-time",
+        clock=FixedClock(datetime(2026, 8, 31, 12, 0)),
     )
 
     prompt = _resolution_block_message(resolution, confirmed_interpretation=None)

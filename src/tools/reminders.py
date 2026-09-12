@@ -7,7 +7,7 @@ from src.commands.base import CommandContext
 from src.commands.reminders import ReminderScheduleInput, ScheduleReminderCommand
 from src.memory.store import MemoryStore
 from src.scheduler.reminders import ReminderScheduler
-from src.utils import local_time_to_utc, utc_now
+from src.utils import Clock, default_clock
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +33,15 @@ class ScheduleReminderTool:
 
     name = "schedule_reminder"
 
-    def __init__(self, store: MemoryStore, scheduler: ReminderScheduler):
-        self.command = ScheduleReminderCommand(store)
+    def __init__(
+        self,
+        store: MemoryStore,
+        scheduler: ReminderScheduler,
+        clock: Clock = default_clock,
+    ):
+        self.scheduler = scheduler
+        self.clock = clock
+        self.command = ScheduleReminderCommand(store, clock)
 
     async def run(
         self,
@@ -45,9 +52,9 @@ class ScheduleReminderTool:
         timezone: str,
     ) -> dict:
         hour, minute = map(int, resolved_time.split(":"))
-        send_time = local_time_to_utc(hour, minute, timezone)
+        send_time = self.clock.local_time_to_utc(hour, minute, timezone)
 
-        if send_time <= utc_now():
+        if send_time <= self.clock.utc_now():
             logger.info("Skipping reminder for %s — time already passed", task["title"])
             return {"reminder": None, "scheduled_time": send_time}
 

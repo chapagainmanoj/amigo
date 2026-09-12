@@ -24,11 +24,13 @@ async def test_onboarded_user_gets_agent_response():
             "timezone": "Asia/Kathmandu",
             "onboarding_complete": True,
             "onboarding_step": 3,
+            "supabase_auth_id": "auth-turn-response",
         },
     )
 
     with (
         patch("src.bot.handlers.BotHandlers._is_allowed", return_value=True),
+        patch.object(store, "get_activation_state", return_value={"completed": True}),
         amigo_agent.override(model=TestModel()),
     ):
         await handlers.handle_message(123, "hello amigo")
@@ -52,10 +54,14 @@ async def test_close_signal_closes_session():
             "timezone": "Asia/Kathmandu",
             "onboarding_complete": True,
             "onboarding_step": 3,
+            "supabase_auth_id": "auth-close-signal",
         },
     )
 
-    with patch("src.bot.handlers.BotHandlers._is_allowed", return_value=True):
+    with (
+        patch("src.bot.handlers.BotHandlers._is_allowed", return_value=True),
+        patch.object(store, "get_activation_state", return_value={"completed": True}),
+    ):
         await handlers.handle_message(123, "goodnight")
 
     assert "night" in channel.last_text.lower() or "🌙" in channel.last_text
@@ -68,7 +74,12 @@ async def test_telegram_update_id_becomes_stable_turn_id():
     user = await store.create_user(123)
     await store.update_user(
         user["user_id"],
-        {"timezone": "UTC", "onboarding_complete": True, "onboarding_step": 3},
+        {
+            "timezone": "UTC",
+            "onboarding_complete": True,
+            "onboarding_step": 3,
+            "supabase_auth_id": "auth-stable-turn",
+        },
     )
     captured_turn_ids = []
 
@@ -78,6 +89,7 @@ async def test_telegram_update_id_becomes_stable_turn_id():
 
     with (
         patch("src.bot.handlers.BotHandlers._is_allowed", return_value=True),
+        patch.object(store, "get_activation_state", return_value={"completed": True}),
         patch("src.bot.turns.handle_message", side_effect=capture),
     ):
         await handlers.handle_message(123, "make a task", update_id=987654)

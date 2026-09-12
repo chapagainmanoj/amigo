@@ -7,8 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.api.tasks import get_store
-from src.auth import get_authenticated_user_id
+from src.api.dependencies import get_activated_user, get_store
 from src.commands.base import CommandContext, IdempotencyConflictError
 from src.commands.later import ApplyLaterCommand
 from src.commands.reminders import (
@@ -42,13 +41,6 @@ class ApplyLaterRequest(BaseModel):
     expected_task_version: int = Field(ge=1)
 
 
-async def _resolve_actor(store, auth_id: str) -> str:
-    user = await store.get_user_by_auth_id(auth_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User profile not paired with Telegram yet.")
-    return user["user_id"]
-
-
 def _accepted(result: dict) -> JSONResponse:
     return JSONResponse(status_code=202, content=result)
 
@@ -64,10 +56,10 @@ async def schedule_reminder(
     task_id: str,
     reminder_request: ReminderScheduleRequest,
     idempotency_key: IdempotencyHeader,
-    auth_id: Annotated[str, Depends(get_authenticated_user_id)],
+    user: Annotated[dict, Depends(get_activated_user)],
     store: Annotated[object, Depends(get_store)],
 ):
-    actor_user_id = await _resolve_actor(store, auth_id)
+    actor_user_id = user["user_id"]
     try:
         result = await ScheduleReminderCommand(store).run(
             CommandContext(actor_user_id, "dashboard", idempotency_key),
@@ -89,10 +81,10 @@ async def reschedule_reminder(
     reminder_id: str,
     reminder_request: ReminderScheduleRequest,
     idempotency_key: IdempotencyHeader,
-    auth_id: Annotated[str, Depends(get_authenticated_user_id)],
+    user: Annotated[dict, Depends(get_activated_user)],
     store: Annotated[object, Depends(get_store)],
 ):
-    actor_user_id = await _resolve_actor(store, auth_id)
+    actor_user_id = user["user_id"]
     try:
         result = await RescheduleReminderCommand(store).run(
             CommandContext(actor_user_id, "dashboard", idempotency_key),
@@ -113,10 +105,10 @@ async def reschedule_reminder(
 async def cancel_reminder(
     reminder_id: str,
     idempotency_key: IdempotencyHeader,
-    auth_id: Annotated[str, Depends(get_authenticated_user_id)],
+    user: Annotated[dict, Depends(get_activated_user)],
     store: Annotated[object, Depends(get_store)],
 ):
-    actor_user_id = await _resolve_actor(store, auth_id)
+    actor_user_id = user["user_id"]
     try:
         result = await CancelReminderCommand(store).run(
             CommandContext(actor_user_id, "dashboard", idempotency_key),
@@ -134,10 +126,10 @@ async def apply_later(
     reminder_id: str,
     later_request: ApplyLaterRequest,
     idempotency_key: IdempotencyHeader,
-    auth_id: Annotated[str, Depends(get_authenticated_user_id)],
+    user: Annotated[dict, Depends(get_activated_user)],
     store: Annotated[object, Depends(get_store)],
 ):
-    actor_user_id = await _resolve_actor(store, auth_id)
+    actor_user_id = user["user_id"]
     try:
         result = await ApplyLaterCommand(store).run(
             CommandContext(actor_user_id, "dashboard", idempotency_key),

@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from src.commands.base import CommandContext
-from src.utils import utc_now
+from src.utils import Clock, default_clock
 
 
 @dataclass(frozen=True)
@@ -21,8 +21,9 @@ class ReminderScheduleInput:
 class ScheduleReminderCommand:
     """Schedule an owned Task Reminder and durable projection effect atomically."""
 
-    def __init__(self, store):
+    def __init__(self, store, clock: Clock = default_clock):
         self.store = store
+        self.clock = clock
 
     async def run(
         self,
@@ -31,7 +32,7 @@ class ScheduleReminderCommand:
         task_id: str,
         schedule: ReminderScheduleInput,
     ) -> dict:
-        timing = _normalize_timing(schedule)
+        timing = _normalize_timing(schedule, self.clock.utc_now())
         payload_hash = _payload_hash(
             context,
             "schedule_reminder",
@@ -50,8 +51,9 @@ class ScheduleReminderCommand:
 class RescheduleReminderCommand:
     """Replace an owned active Reminder with a newly scheduled Reminder."""
 
-    def __init__(self, store):
+    def __init__(self, store, clock: Clock = default_clock):
         self.store = store
+        self.clock = clock
 
     async def run(
         self,
@@ -60,7 +62,7 @@ class RescheduleReminderCommand:
         reminder_id: str,
         schedule: ReminderScheduleInput,
     ) -> dict:
-        timing = _normalize_timing(schedule)
+        timing = _normalize_timing(schedule, self.clock.utc_now())
         payload_hash = _payload_hash(
             context,
             "reschedule_reminder",
@@ -101,11 +103,12 @@ class CancelReminderCommand:
         )
 
 
-def _normalize_timing(schedule: ReminderScheduleInput) -> dict[str, str]:
+def _normalize_timing(schedule: ReminderScheduleInput, now: datetime) -> dict[str, str]:
     scheduled_at = schedule.scheduled_at
     if scheduled_at.tzinfo is None or scheduled_at.utcoffset() is None:
         raise ValueError("Reminder time must include a timezone offset")
-    if scheduled_at.astimezone(UTC) <= utc_now().replace(tzinfo=UTC):
+    now_utc = now.replace(tzinfo=UTC) if now.tzinfo is None else now.astimezone(UTC)
+    if scheduled_at.astimezone(UTC) <= now_utc:
         raise ValueError("Reminder time must be in the future")
     try:
         timezone = ZoneInfo(schedule.timezone)

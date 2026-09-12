@@ -4,8 +4,8 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from src.api.dependencies import get_activated_user
 from src.api.tasks import router
-from src.auth import get_authenticated_user_id
 from src.bot.reminder_actions import ReminderActions
 from src.commands.base import (
     CommandContext,
@@ -166,7 +166,7 @@ async def test_dashboard_and_telegram_use_the_same_resolution_contract():
     app = FastAPI()
     app.state.store = store
     app.include_router(router)
-    app.dependency_overrides[get_authenticated_user_id] = lambda: "auth-user"
+    app.dependency_overrides[get_activated_user] = lambda: user
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",

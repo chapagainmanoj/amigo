@@ -97,9 +97,41 @@ async def test_send_reminder_sends_buttons_and_marks_sent():
     assert channel.sent[0]["buttons"] is not None
     assert reminder["status"] == "sent"
     assert reminder["telegram_message_id"] == channel.sent[0]["message_id"]
+    occurrence = store.reminder_occurrences[reminder["reminder_id"]]
+    attempt = next(iter(store.reminder_delivery_attempts.values()))
+    assert occurrence["confirmed_at"] is not None
+    assert occurrence["first_claimed_at"] is not None
+    assert occurrence["provider_accepted_at"] is not None
+    assert attempt["result"] == "accepted"
+    assert attempt["retry_decision"] == "do_not_retry"
+    assert attempt["provider_latency_ms"] is not None
 
 
-async def test_send_reminder_skips_done_or_skipped_tasks():
+async def test_ambiguous_send_failure_is_terminal_without_false_acceptance():
+    class FailingChannel(FakeChannel):
+        async def send_message(self, chat_id, text, *, buttons=None):
+            raise TimeoutError("injected provider failure")
+
+    store = FakeStore()
+    _, _, reminder = await _create_user_task_reminder(store)
+    scheduler = ReminderScheduler(channel=FailingChannel(), store=store)
+
+    await scheduler._send_reminder(
+        reminder["user_id"], 123, reminder["reminder_id"], "finish slides"
+    )
+
+    occurrence = store.reminder_occurrences[reminder["reminder_id"]]
+    attempt = next(iter(store.reminder_delivery_attempts.values()))
+    assert reminder["status"] == "failed"
+    assert occurrence["first_claimed_at"] is not None
+    assert occurrence["provider_accepted_at"] is None
+    assert occurrence["terminal_at"] is not None
+    assert attempt["result"] == "timeout"
+    assert attempt["normalized_cause"] == "TimeoutError"
+    assert attempt["retry_decision"] == "do_not_retry"
+
+
+async def test_send_reminder_cannot_claim_resolved_tasks():
     for status in ("completed", "skipped", "cancelled"):
         store = FakeStore()
         channel = FakeChannel()
@@ -112,7 +144,7 @@ async def test_send_reminder_skips_done_or_skipped_tasks():
         )
 
         assert channel.sent == []
-        assert reminder["status"] == "acknowledged"
+        assert reminder["status"] == "pending"
 
 
 async def test_reload_pending_schedules_future_and_recently_missed_reminders():
@@ -138,5 +170,91 @@ async def test_reload_pending_schedules_future_and_recently_missed_reminders():
     await scheduler.reload_pending()
 
     assert scheduler.scheduler.get_job(f"{user['user_id']}:{future['reminder_id']}") is not None
-    assert scheduler.scheduler.get_job(f"{missed['user_id']}:{missed['reminder_id']}") is not None
+    assert scheduler.scheduler.get_job(f"recovery:{missed['user_id']}") is not None
     assert scheduler.scheduler.get_job(f"{old['user_id']}:{old['reminder_id']}") is None
+    assert old["status"] == "missed"
+
+
+async def test_reconciliation_repairs_time_and_removes_inverse_drift():
+    now = datetime(2026, 6, 14, 10, 0)
+    store = FakeStore()
+    user, task, reminder = await _create_user_task_reminder(
+        store, scheduled_time=now + timedelta(hours=1)
+    )
+    scheduler = ReminderScheduler(FakeChannel(), store, FixedClock(now))
+    scheduler.schedule_reminder(
+        user["user_id"], reminder["reminder_id"], now + timedelta(hours=5), 123, "wrong"
+    )
+    scheduler.schedule_reminder(
+        "ghost-user", "ghost-reminder", now + timedelta(hours=2), 999, "ghost"
+    )
+
+    report = await scheduler.reconcile()
+
+    repaired = scheduler.scheduler.get_job(f"{user['user_id']}:{reminder['reminder_id']}")
+    assert repaired.trigger.run_date.replace(tzinfo=None) == now + timedelta(hours=1)
+    assert scheduler.scheduler.get_job("ghost-user:ghost-reminder") is None
+    assert report == {
+        "scheduled": 1,
+        "recovered": 0,
+        "missed": 0,
+        "failed": 0,
+        "cancelled": 1,
+        "missing_jobs": 0,
+        "wrong_time_jobs": 1,
+    }
+    assert store.scheduler_runtime["wrong_time_jobs"] == 1
+    assert store.scheduler_runtime["inverse_drift_jobs"] == 1
+
+    task["user_id"] = "wrong-owner"
+    await scheduler.reconcile()
+    assert scheduler.scheduler.get_job(f"{user['user_id']}:{reminder['reminder_id']}") is None
+
+
+async def test_interrupted_send_recovers_and_delayed_reminders_emit_one_summary():
+    now = datetime(2026, 6, 14, 10, 0)
+    store = FakeStore()
+    channel = FakeChannel()
+    user, task, first = await _create_user_task_reminder(
+        store, scheduled_time=now - timedelta(minutes=2)
+    )
+    second = await store.create_reminder(
+        task["task_id"], user["user_id"], (now - timedelta(minutes=1)).isoformat()
+    )
+    first["status"] = "sending"
+    scheduler = ReminderScheduler(channel, store, FixedClock(now))
+
+    report = await scheduler.reconcile()
+    job = scheduler.scheduler.get_job(f"recovery:{user['user_id']}")
+    assert report["recovered"] == 1
+    assert job is not None
+
+    await scheduler._send_recovery_summary(**job.kwargs)
+    await scheduler._send_recovery_summary(**job.kwargs)
+
+    assert len(channel.sent) == 1
+    assert first["status"] == "sent"
+    assert second["status"] == "sent"
+    assert task["status"] == "pending"
+
+
+async def test_reconciliation_does_not_retry_an_unfinished_delivery_attempt():
+    now = datetime(2026, 6, 14, 10, 0)
+    store = FakeStore()
+    user, _, reminder = await _create_user_task_reminder(
+        store, scheduled_time=now - timedelta(minutes=2)
+    )
+    claimed = await store.claim_reminder_for_send(
+        reminder["reminder_id"], user["user_id"], "interrupted-attempt"
+    )
+    scheduler = ReminderScheduler(FakeChannel(), store, FixedClock(now))
+
+    report = await scheduler.reconcile()
+
+    attempt = store.reminder_delivery_attempts[claimed["attempt"]["attempt_id"]]
+    assert report["failed"] == 1
+    assert reminder["status"] == "failed"
+    assert attempt["result"] == "error"
+    assert attempt["normalized_cause"] == "interrupted_delivery_unknown"
+    assert attempt["retry_decision"] == "do_not_retry"
+    assert scheduler.scheduler.get_job(f"recovery:{user['user_id']}") is None

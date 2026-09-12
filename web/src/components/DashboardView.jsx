@@ -5,109 +5,27 @@ import { timeOfDayGreeting } from '../mockData'
 import Toast from './Toast'
 import ModeChips from './ModeChips'
 
-export default function DashboardView({ pairedUser }) {
-  const [tasks, setTasks] = useState([])
-  const [inboxTasks, setInboxTasks] = useState([])
-  const [reminders, setReminders] = useState([])
-  const [sessions, setSessions] = useState([])
+export default function DashboardView() {
+  const [snapshot, setSnapshot] = useState({
+    tasks: { today: [], inbox: [], carried_over: [] },
+    progress: { completed: 0, total: 0 },
+    reminders: [],
+    sessions: [],
+  })
   const [toastMsg, setToastMsg] = useState(null)
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [greeting, setGreeting] = useState(timeOfDayGreeting())
 
-  const tz = pairedUser?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
-
-  const getLocalDateString = useCallback(() => {
-    try {
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: tz,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      })
-      const parts = formatter.formatToParts(new Date())
-      const month = parts.find((p) => p.type === 'month').value
-      const day = parts.find((p) => p.type === 'day').value
-      const year = parts.find((p) => p.type === 'year').value
-      return `${year}-${month}-${day}`
-    } catch {
-      return new Date().toISOString().split('T')[0]
-    }
-  }, [tz])
-
-  const fetchTasks = useCallback(async () => {
-    const todayStr = getLocalDateString()
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('due_date', todayStr)
-      .order('created_at', { ascending: false })
-    if (!error && data) {
-      setTasks(data)
-    }
-  }, [getLocalDateString])
-
-  const fetchInboxTasks = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .is('due_date', null)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-    if (!error && data) {
-      setInboxTasks(data)
-    }
+  const fetchSnapshot = useCallback(async () => {
+    const nextSnapshot = await apiRequest('/api/dashboard/snapshot')
+    setSnapshot(nextSnapshot)
   }, [])
 
-  const fetchReminders = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('reminders')
-      .select('*, tasks(title, category, version)')
-      .eq('status', 'pending')
-      .order('scheduled_time', { ascending: true })
-    if (!error && data) {
-      const mapped = data.map((r) => {
-        const timeVal = new Date(r.scheduled_time)
-        const timeStr = timeVal.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        return {
-          id: r.reminder_id,
-          label: r.tasks?.title || 'Reminder',
-          time: timeStr,
-          scheduled_time: r.scheduled_time,
-          task_version: r.tasks?.version,
-        }
-      })
-      setReminders(mapped)
-    }
-  }, [])
-
-  const fetchSessions = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('sessions')
-      .select('*')
-      .order('started_at', { ascending: false })
-      .limit(5)
-    if (!error && data) {
-      const mapped = data.map((s) => {
-        const durationStr = s.ended_at
-          ? `${Math.round((new Date(s.ended_at) - new Date(s.started_at)) / 60000)}m`
-          : 'ongoing'
-        const start = new Date(s.started_at)
-        const diffHrs = (new Date() - start) / 3600000
-        const relativeTime =
-          diffHrs < 24 ? `${Math.round(diffHrs)} hours ago` : start.toLocaleDateString()
-        return {
-          id: s.session_id,
-          summary:
-            s.context_summary ||
-            (s.ended_at ? 'Ended session' : 'Current active conversation'),
-          timestamp: relativeTime,
-          duration: durationStr,
-          mood: s.session_type || 'Casual',
-        }
-      })
-      setSessions(mapped)
-    }
-  }, [])
+  const tasks = snapshot.tasks.today
+  const inboxTasks = snapshot.tasks.inbox
+  const carriedTasks = snapshot.tasks.carried_over
+  const reminders = snapshot.reminders
+  const sessions = snapshot.sessions
 
   useEffect(() => {
     // Update greeting if they keep it open across day boundaries
@@ -116,31 +34,27 @@ export default function DashboardView({ pairedUser }) {
   }, [])
 
   useEffect(() => {
-    fetchTasks()
-    fetchInboxTasks()
-    fetchReminders()
-    fetchSessions()
+    fetchSnapshot()
 
     // Realtime channel subscriptions
     const tasksChannel = supabase
       .channel('tasks-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
-        fetchTasks()
-        fetchInboxTasks()
+        fetchSnapshot()
       })
       .subscribe()
 
     const remindersChannel = supabase
       .channel('reminders-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reminders' }, () => {
-        fetchReminders()
+        fetchSnapshot()
       })
       .subscribe()
 
     const sessionsChannel = supabase
       .channel('sessions-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => {
-        fetchSessions()
+        fetchSnapshot()
       })
       .subscribe()
 
@@ -149,7 +63,7 @@ export default function DashboardView({ pairedUser }) {
       supabase.removeChannel(remindersChannel)
       supabase.removeChannel(sessionsChannel)
     }
-  }, [fetchInboxTasks, fetchReminders, fetchSessions, fetchTasks])
+  }, [fetchSnapshot])
 
   const handleResolveTask = async (task, outcome) => {
     if (task.status !== 'pending') return
@@ -167,7 +81,7 @@ export default function DashboardView({ pairedUser }) {
             ? 'Task skipped'
             : 'Task cancelled',
       )
-      await Promise.all([fetchTasks(), fetchInboxTasks(), fetchReminders()])
+      await fetchSnapshot()
     } catch {
       setToastMsg('Task changed elsewhere — refresh and try again')
     }
@@ -185,7 +99,7 @@ export default function DashboardView({ pairedUser }) {
       })
       setNewTaskTitle('')
       setToastMsg('Task added to Inbox')
-      await fetchInboxTasks()
+      await fetchSnapshot()
     } catch {
       setToastMsg('Failed to add task')
     }
@@ -193,22 +107,22 @@ export default function DashboardView({ pairedUser }) {
 
   const handleSnooze = async (reminder) => {
     try {
-      const result = await apiRequest(`/api/reminders/${reminder.id}/later`, {
+      const result = await apiRequest(`/api/reminders/${reminder.reminder_id}/later`, {
         method: 'POST',
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify({ expected_task_version: reminder.task_version }),
+        body: JSON.stringify({ expected_task_version: reminder.task.version }),
       })
       setToastMsg(
         `Next: ${result.intended_local_date} ${result.intended_local_time.slice(0, 5)} ${result.intended_timezone}`,
       )
-      await fetchReminders()
+      await fetchSnapshot()
     } catch {
       setToastMsg('Failed to snooze reminder')
     }
   }
 
-  const doneCount = tasks.filter((task) => task.status === 'completed').length
-  const totalCount = tasks.length
+  const doneCount = snapshot.progress.completed
+  const totalCount = snapshot.progress.total
 
   return (
     <div className="animate-slide-in">
@@ -363,6 +277,22 @@ export default function DashboardView({ pairedUser }) {
               </div>
             )}
           </div>
+
+          <h2 className="display-text" style={{ fontSize: '1.25rem', margin: '24px 0 12px' }}>
+            Carried over
+          </h2>
+          <div className="flat-card" style={{ padding: '16px' }}>
+            {carriedTasks.map((task) => (
+              <div key={task.task_id} style={{ padding: '12px' }}>
+                {task.title} <span style={{ color: 'var(--mist)' }}>· from {task.due_date}</span>
+              </div>
+            ))}
+            {carriedTasks.length === 0 && (
+              <div style={{ color: 'var(--mist)', textAlign: 'center', padding: '12px 0' }}>
+                Nothing carried over.
+              </div>
+            )}
+          </div>
         </section>
 
         {/* Sidebar Column: Reminders & Sessions */}
@@ -377,7 +307,7 @@ export default function DashboardView({ pairedUser }) {
             >
               {reminders.map((rem) => (
                 <div
-                  key={rem.id}
+                  key={rem.reminder_id}
                   style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px' }}
                 >
                   <div
@@ -385,11 +315,13 @@ export default function DashboardView({ pairedUser }) {
                   >
                     <Clock size={14} color="var(--gold)" />
                     <span style={{ fontSize: '0.85rem', color: 'var(--gold)' }}>
-                      {rem.time}
+                      {rem.intended_local_date} {rem.intended_local_time.slice(0, 5)}{' '}
+                      {rem.intended_timezone} · {rem.delivery_state}
                     </span>
                   </div>
                   <div style={{ fontSize: '0.95rem', marginBottom: '12px' }}>
-                    {rem.label}
+                    {rem.task.title}
+                    {rem.task.population === 'carried_over' && ' · carried over'}
                   </div>
                   <button
                     onClick={() => handleSnooze(rem)}
@@ -418,7 +350,7 @@ export default function DashboardView({ pairedUser }) {
             >
               {sessions.map((sess) => (
                 <div
-                  key={sess.id}
+                  key={sess.session_id}
                   style={{
                     display: 'flex',
                     gap: '12px',
@@ -430,7 +362,7 @@ export default function DashboardView({ pairedUser }) {
                   <MessageSquare size={16} color="var(--mist)" style={{ marginTop: '4px' }} />
                   <div>
                     <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
-                      {sess.summary}
+                      {sess.label}
                     </div>
                     <div
                       style={{
@@ -440,11 +372,11 @@ export default function DashboardView({ pairedUser }) {
                         color: 'var(--mist)',
                       }}
                     >
-                      <span>{sess.timestamp}</span>
+                      <span>{new Date(sess.started_at).toLocaleString()}</span>
                       <span>•</span>
-                      <span>{sess.duration}</span>
+                      <span>{sess.duration_minutes}m</span>
                       <span>•</span>
-                      <span style={{ color: 'var(--ember)' }}>{sess.mood}</span>
+                      <span style={{ color: 'var(--ember)' }}>{sess.session_type_label}</span>
                     </div>
                   </div>
                 </div>

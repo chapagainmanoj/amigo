@@ -1,0 +1,14 @@
+# Historical manual Fly.io deployment workflow. Deliberately outside `.github/workflows` and
+# disabled for the Amigo beta. Render is the sole beta deployment path.
+
+name: Deploy to Fly (disabled)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  disabled:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Fly deployment is archived; use the reviewed Render staging path."

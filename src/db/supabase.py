@@ -1,15 +1,24 @@
-"""Supabase client singleton."""
+"""Asynchronous Supabase client singleton."""
 
-from supabase import Client, create_client
+import asyncio
+
+from supabase import AsyncClient, acreate_client
 
 from src.config import settings
 
-_client: Client | None = None
+_client: AsyncClient | None = None
+_client_lock = asyncio.Lock()
 
 
-def get_supabase() -> Client:
-    """Return a reusable Supabase client instance."""
+async def get_supabase() -> AsyncClient:
+    """Return one reusable non-blocking Supabase client instance."""
     global _client
-    if _client is None:
-        _client = create_client(settings.supabase_url, settings.supabase_service_key)
+    if _client is not None:
+        return _client
+    async with _client_lock:
+        if _client is None:
+            _client = await acreate_client(
+                settings.supabase_url,
+                settings.supabase_service_key,
+            )
     return _client

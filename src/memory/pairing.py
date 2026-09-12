@@ -11,3 +11,6 @@ PAIRING_TOKEN_WINDOW = timedelta(minutes=15)
 class PairingTokenRateLimitError(RuntimeError):
     """Raised when a Dashboard Account exceeds the Pairing-token issuance limit."""
 
+
+class ActivationTermsRequiredError(RuntimeError):
+    """Raised when Pairing is attempted before the beta acknowledgement."""

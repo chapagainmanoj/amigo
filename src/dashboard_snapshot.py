@@ -21,6 +21,7 @@ def build_dashboard_snapshot(
     reminders: list[dict],
     sessions: list[dict],
     *,
+    activation: dict | None = None,
     generated_at: datetime | None = None,
 ) -> dict:
     """Build one tenant-scoped read model from a single Store observation."""
@@ -30,11 +31,13 @@ def build_dashboard_snapshot(
     owned_tasks = {task["task_id"]: dict(task) for task in tasks}
     today = [task for task in owned_tasks.values() if task.get("due_date") == planning_day]
     inbox = [
-        task for task in owned_tasks.values()
+        task
+        for task in owned_tasks.values()
         if task.get("due_date") is None and task["status"] == "pending"
     ]
     carried = [
-        task for task in owned_tasks.values()
+        task
+        for task in owned_tasks.values()
         if task.get("due_date") is not None
         and task["due_date"] < planning_day
         and task["status"] == "pending"
@@ -50,9 +53,13 @@ def build_dashboard_snapshot(
         scheduled = _datetime(reminder["scheduled_time"])
         due_date = task.get("due_date")
         population = (
-            "today" if due_date == planning_day else
-            "inbox" if due_date is None else
-            "carried_over" if due_date < planning_day else "future"
+            "today"
+            if due_date == planning_day
+            else "inbox"
+            if due_date is None
+            else "carried_over"
+            if due_date < planning_day
+            else "future"
         )
         row = dict(reminder)
         row.update(
@@ -64,9 +71,12 @@ def build_dashboard_snapshot(
                 "population": population,
             },
             delivery_state=(
-                "overdue" if reminder["status"] == "pending" and scheduled < now
-                else "scheduled" if reminder["status"] == "pending"
-                else "delivering" if reminder["status"] == "sending"
+                "overdue"
+                if reminder["status"] == "pending" and scheduled < now
+                else "scheduled"
+                if reminder["status"] == "pending"
+                else "delivering"
+                if reminder["status"] == "sending"
                 else "delivered"
             ),
         )
@@ -84,7 +94,8 @@ def build_dashboard_snapshot(
         row = dict(session)
         row.update(
             state=state,
-            label=session.get("context_summary") or {
+            label=session.get("context_summary")
+            or {
                 "active": "Current conversation",
                 "inactive": "Inactive conversation",
                 "ended": "Conversation",
@@ -106,4 +117,5 @@ def build_dashboard_snapshot(
         },
         "reminders": reminder_rows,
         "sessions": session_rows,
+        "activation": activation,
     }

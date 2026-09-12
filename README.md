@@ -41,7 +41,7 @@ When a reminder fires, you'll see three buttons:
 |--------|-------------|
 | **Done ✅** | Marks the task complete |
 | **Skip ⏭️** | Skips the task for today |
-| **Later ⏰** | Uses the current prototype delay flow; the canonical +60 min → +30 min → next local planning day replacement lifecycle is still release-gated |
+| **Later ⏰** | Uses the canonical +60 min → +30 min → next local planning day replacement lifecycle; staging evidence is still release-gated |
 
 ### Commands
 
@@ -80,7 +80,7 @@ This gives you an interactive terminal chat with:
 - In-memory data store (no database needed, data resets on exit)
 - Inline buttons rendered as numbered choices (`[1] Done  [2] Skip`)
 - Live reminder scheduler — reminders fire in the terminal
-- Dev user pre-seeded (skips onboarding)
+- Dev user pre-seeded (skips the CLI-only setup flow)
 
 CLI-only commands:
 
@@ -90,7 +90,7 @@ CLI-only commands:
 | `/tasks` | Dump today's tasks and statuses |
 | `/debug` | Toggle debug logging on/off |
 
-To test the full onboarding flow:
+To test the legacy CLI-only setup flow (the beta Activation journey is dashboard-first):
 
 ```bash
 APP_CHANNEL=cli GOOGLE_API_KEY=your-key python -m src.cli --onboard
@@ -140,6 +140,12 @@ Where to get these:
 
 #### 2. Set up the database
 
+> **Preflight worktree limitation:** application changes currently staged in this worktree require
+> exact schema version 14, but protected migration 014 is still awaiting explicit human
+> approval and is not checked in. The 001–013 instructions below describe the latest approved
+> schema, not a bootable schema for these uncommitted application changes. Do not deploy this
+> worktree until that remaining migration and its assertions are approved and added in order.
+
 1. Create a Supabase project.
 2. Open the SQL editor in the Supabase dashboard.
 3. Run [`migrations/001_initial_schema.sql`](migrations/001_initial_schema.sql).
@@ -151,6 +157,10 @@ Where to get these:
 9. Run [`migrations/007_consistent_task_reminder_resolution.sql`](migrations/007_consistent_task_reminder_resolution.sql).
 10. Run [`migrations/008_atomic_later_command.sql`](migrations/008_atomic_later_command.sql).
 11. Run [`migrations/009_telegram_update_claims.sql`](migrations/009_telegram_update_claims.sql).
+12. Run [`migrations/010_consistent_dashboard_snapshot.sql`](migrations/010_consistent_dashboard_snapshot.sql).
+13. Run [`migrations/011_reminder_reliability_instrumentation.sql`](migrations/011_reminder_reliability_instrumentation.sql).
+14. Run [`migrations/012_canonical_planning_day_move.sql`](migrations/012_canonical_planning_day_move.sql).
+15. Run [`migrations/013_dashboard_first_activation.sql`](migrations/013_dashboard_first_activation.sql).
 
 Apply migrations in numeric order. Migrations 003 and 004 make Pairing backend-only and enforce
 the reviewed cross-tenant grants and row-level policies. Migration 005 adds canonical Task states
@@ -158,7 +168,14 @@ and the backend-only, idempotent Create Task command boundary. Migration 006 add
 Reminder states and the durable, backend-only scheduling outbox. Migration 007 makes Task
 resolution and its Reminder cancellation effects one backend-only transaction. Migration 008
 adds the shared atomic Later replacement command. Migration 009 atomically claims Telegram updates
-and retains their content-free completion or failure status for safe replay inspection.
+and retains their content-free completion or failure status for safe replay inspection. Migration
+010 provides the backend-only, transactionally consistent dashboard snapshot. Migration 011 adds
+immutable Reminder occurrence and delivery-attempt evidence, synthetic classification, scheduler
+heartbeat/drift state, and content-free reliability metrics. Migration 012 adds the backend-only,
+idempotent command that moves one owned pending Task to an explicit Planning Day under ownership
+and version checks. Migration 013 adds the durable Activation Journey: the backend-only
+acknowledgement, paired profile, private test Reminder, and canonical Activation read model, and
+makes Pairing require an acknowledged Journey.
 
 #### 3. Run
 
@@ -180,17 +197,30 @@ On startup, Amigo registers its Telegram webhook at
 
 Health check: `curl http://localhost:8000/health`
 
+Readiness check: `curl http://localhost:8000/ready` — returns 503 when the database cannot be
+checked, the scheduler heartbeat is stale, or durable scheduler effects have failed.
+
 ### Test & Lint
 
 ```bash
-python -m pytest tests/ -v         # 184 tests at the latest capability review
+python -m pytest tests/ -v         # 257 tests at the 2026-09-11 local verification
 ruff check src tests scripts       # lint
+python scripts/run_gate_a_eval.py --validate-only
 ```
 
 Python tests use in-memory fakes and make no Supabase, Telegram, or Gemini calls. CI additionally
-applies every migration to PostgreSQL 15 and runs legacy backfill, two-participant isolation, and
-durable command/outbox regressions. See
+applies every checked-in migration (currently 001–013) to PostgreSQL 15 and runs legacy backfill,
+two-participant isolation, durable command/outbox, Activation, and lock-order regressions. Until
+protected migration 014 is approved and added, this CI database does not satisfy the staged
+application's schema-14 startup gate. See
 [`tests/fakes.py`](tests/fakes.py) for the shared test doubles.
+
+The controlled before/after runtime procedure is documented in
+[`docs/staging-performance-evidence.md`](docs/staging-performance-evidence.md); local concurrency
+tests are not a substitute for its dedicated staging workload.
+
+The versioned Gate A model suite, declared-run procedure, evidence contract, and current quota
+blocker are documented in [`docs/model-evaluation.md`](docs/model-evaluation.md).
 
 ### Smoke Checks
 
@@ -231,8 +261,8 @@ python scripts/smoke_check.py --all
 
 Render is the canonical beta deployment target, described by [`render.yaml`](render.yaml). The
 invitation beta must use one always-on service and one scheduler owner; a sleeping free instance
-is suitable only for development. `fly.toml` and the Fly workflow are retained as inactive future
-deployment material and are not a second production path.
+is suitable only for development. The former Fly configuration and workflow are preserved only as
+disabled files under `deploy/archive/` and `.github/archive/`; neither can be deployed by default.
 
 The repository does not yet provide a supported self-hosting product. Before a real deployment,
 follow the security, staging, monitoring, backup, and end-to-end gates in the
@@ -244,15 +274,19 @@ See [`docs/architecture.md`](docs/architecture.md) for the full picture:
 repository structure, design patterns, data flow diagram, key
 abstractions, extensibility hooks, and testing strategy.
 
-### What Works in the Current Prototype
+### What Is Implemented in the Current Worktree
 
-- Three-step Telegram onboarding: name, timezone, first planning prompt
+- Dashboard-first Activation application code through verified account, beta-limit
+  acknowledgement, secure Telegram Pairing, profile/quiet hours, and a delivered and resolved
+  private test Reminder; it requires the still-unapproved migration 014 before deployment
 - Local CLI mode for development (no external services needed)
 - Natural-language task extraction with Gemini Flash
 - Structured agent planning with tool-based side effects (ADR 0001)
 - Reminder scheduling with Done/Skip/Later buttons
+- Server-gated dashboard and Telegram access until canonical Activation completion
 - Text status updates ("done with slides", "skip gym")
-- Pending reminder reload after app restart
+- Authoritative Reminder reconciliation after restart, including drift repair and late recovery
+- Immutable Reminder occurrence/attempt timing evidence and separate liveness/readiness checks
 - User-timezone-aware task dates, session rollover, and reminder times
 - `/feedback` capture into Supabase
 - Allowlisted access for private dogfooding

@@ -3,17 +3,25 @@ import { LayoutDashboard, Link2, LogOut } from 'lucide-react'
 import { supabase, apiRequest } from '../supabase'
 import DashboardView from './DashboardView'
 import ConnectView from './ConnectView'
+import ActivationJourney from './ActivationJourney'
 
 export default function AppShell({ session }) {
   const [activeView, setActiveView] = useState('dashboard')
   const [pairedUser, setPairedUser] = useState(null)
   const [checkingPairing, setCheckingPairing] = useState(true)
+  const [activation, setActivation] = useState(null)
+  const activationResultKey = `amigo-activation-result:${session.user.id}`
+  const [activationResultSeen, setActivationResultSeen] = useState(
+    () => localStorage.getItem(activationResultKey) === 'seen',
+  )
 
   const checkPairing = useCallback(async () => {
     try {
-      const user = await apiRequest('/api/me')
-      setPairedUser(user)
+      const nextActivation = await apiRequest('/api/activation')
+      setActivation(nextActivation)
+      setPairedUser(nextActivation.completed ? nextActivation.profile : null)
     } catch {
+      setActivation(null)
       setPairedUser(null)
     } finally {
       setCheckingPairing(false)
@@ -30,6 +38,24 @@ export default function AppShell({ session }) {
 
   if (checkingPairing) {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--mist)' }}>Checking pairing status...</div>
+  }
+
+  if (!activation) {
+    return <div className="activation-shell"><div className="activation-error" role="alert">Setup status is unavailable. Check your connection and refresh this page.</div></div>
+  }
+
+  if (!activation.completed || !activationResultSeen) {
+    return (
+      <ActivationJourney
+        session={session}
+        state={activation}
+        refresh={checkPairing}
+        onFinish={() => {
+          localStorage.setItem(activationResultKey, 'seen')
+          setActivationResultSeen(true)
+        }}
+      />
+    )
   }
 
   const effectiveView = pairedUser ? activeView : 'connect'

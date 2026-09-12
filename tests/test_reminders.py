@@ -44,7 +44,7 @@ async def test_duplicate_send_attempts_claim_reminder_once():
     assert reminder["status"] == "sent"
 
 
-async def test_send_failure_releases_reminder_for_retry():
+async def test_send_failure_is_retained_without_ambiguous_retry():
     store = FakeStore()
     reminder = await _create_due_reminder(store)
     scheduler = ReminderScheduler(channel=FailingChannel(), store=store)
@@ -53,7 +53,10 @@ async def test_send_failure_releases_reminder_for_retry():
         reminder["user_id"], 123, reminder["reminder_id"], "finish slides"
     )
 
-    assert reminder["status"] == "pending"
+    assert reminder["status"] == "failed"
+    attempt = next(iter(store.reminder_delivery_attempts.values()))
+    assert attempt["result"] == "error"
+    assert attempt["retry_decision"] == "do_not_retry"
 
 
 class TestSnoozeLogic:

@@ -15,14 +15,22 @@ from src.commands.base import (
     InvalidTransitionError,
     StaleVersionError,
 )
+from src.memory.activation import (
+    acknowledge_terms,
+    activation_state,
+    create_test,
+    update_profile,
+)
 from src.memory.later import apply_later_transition
 from src.memory.pairing import (
     PAIRING_TOKEN_LIMIT,
     PAIRING_TOKEN_WINDOW,
+    ActivationTermsRequiredError,
     PairingTokenRateLimitError,
 )
 from src.memory.reminders import validate_reminder_updates
 from src.memory.tasks import validate_task_status
+from src.schema import EXPECTED_SCHEMA_VERSION, require_schema_version
 from src.utils import local_day_utc_range, today_in_tz, utc_now, yesterday_in_tz
 
 logger = logging.getLogger(__name__)
@@ -30,6 +38,16 @@ logger = logging.getLogger(__name__)
 
 def _new_id() -> str:
     return str(uuid.uuid4())
+
+
+def _elapsed_ms(later: str, earlier: str) -> int:
+    later_time = datetime.fromisoformat(later)
+    earlier_time = datetime.fromisoformat(earlier)
+    if later_time.tzinfo is not None:
+        later_time = later_time.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+    if earlier_time.tzinfo is not None:
+        earlier_time = earlier_time.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+    return max(0, round((later_time - earlier_time).total_seconds() * 1000))
 
 
 class InMemoryStore:
@@ -47,6 +65,19 @@ class InMemoryStore:
         self._command_receipts: dict[tuple[str, str], dict] = {}
         self._scheduler_outbox: dict[str, dict] = {}
         self._telegram_updates: dict[int, dict] = {}
+        self._reminder_occurrences: dict[str, dict] = {}
+        self._reminder_delivery_attempts: dict[str, dict] = {}
+        self._scheduler_runtime: dict | None = None
+        self._activation_journeys: dict[str, dict] = {}
+        self._schema_version = EXPECTED_SCHEMA_VERSION
+
+    async def connect(self) -> None:
+        """Match MemoryStore startup; the local store has no external client."""
+        return None
+
+    async def verify_schema_version(self, expected: int) -> int:
+        """Mirror the production Store's exact schema gate."""
+        return require_schema_version(self._schema_version, expected)
 
     # ── User Profiles ──
 
@@ -253,6 +284,38 @@ class InMemoryStore:
             "version": 1,
         }
         self._tasks[task_id] = task
+        result = {"task": copy.deepcopy(task)}
+        self._command_receipts[receipt_key] = {
+            "payload_hash": payload_hash,
+            "result": copy.deepcopy(result),
+        }
+        return result
+
+    async def move_task_planning_day_command(
+        self,
+        *,
+        user_id: str,
+        idempotency_key: str,
+        payload_hash: str,
+        task_id: str,
+        due_date: str,
+        expected_version: int | None,
+    ) -> dict:
+        receipt_key = (user_id, idempotency_key)
+        receipt = self._command_receipts.get(receipt_key)
+        if receipt:
+            if receipt["payload_hash"] != payload_hash:
+                raise IdempotencyConflictError("Idempotency key was reused with different input")
+            return copy.deepcopy(receipt["result"])
+        if user_id not in self._users:
+            raise ValueError("User not found")
+        task = self._tasks.get(task_id)
+        if not task or task["user_id"] != user_id or task["status"] != "pending":
+            raise ValueError("Task not found")
+        if expected_version is not None and task.get("version", 1) != expected_version:
+            raise StaleVersionError("Task version is stale")
+        task["due_date"] = due_date
+        task["version"] = task.get("version", 1) + 1
         result = {"task": copy.deepcopy(task)}
         self._command_receipts[receipt_key] = {
             "payload_hash": payload_hash,
@@ -505,6 +568,7 @@ class InMemoryStore:
             "snooze_count": 0,
             "telegram_message_id": None,
             "follow_up_sent": False,
+            "evidence_class": "participant",
             "version": 1,
             "created_at": utc_now().isoformat(),
         }
@@ -803,15 +867,199 @@ class InMemoryStore:
         }
         return copy.deepcopy(result)
 
-    async def claim_reminder_for_send(self, reminder_id: str, user_id: str) -> dict | None:
+    async def claim_reminder_for_send(
+        self,
+        reminder_id: str,
+        user_id: str,
+        idempotency_key: str,
+    ) -> dict | None:
+        existing = next(
+            (
+                attempt
+                for attempt in self._reminder_delivery_attempts.values()
+                if attempt["idempotency_key"] == idempotency_key
+            ),
+            None,
+        )
+        if existing:
+            return None
         r = self._reminders.get(reminder_id)
         if not r or r["user_id"] != user_id or r["status"] != "pending":
             return None
-        r["status"] = "sending"
         task = self._tasks.get(r["task_id"], {})
+        if task.get("status") != "pending":
+            return None
+        now = utc_now().isoformat()
+        occurrence = self._reminder_occurrences.setdefault(
+            reminder_id,
+            {
+                "occurrence_id": _new_id(),
+                "reminder_id": reminder_id,
+                "user_id": user_id,
+                "task_id": r["task_id"],
+                "evidence_class": r.get("evidence_class", "participant"),
+                "measurable": True,
+                "confirmed_at": r.get("created_at", now),
+                "scheduled_for": r["scheduled_time"],
+                "first_claimed_at": None,
+                "provider_accepted_at": None,
+                "terminal_at": None,
+                "acknowledged_at": None,
+                "cancelled_at": None,
+            },
+        )
+        attempt_id = _new_id()
+        attempt = {
+            "attempt_id": attempt_id,
+            "occurrence_id": occurrence["occurrence_id"],
+            "user_id": user_id,
+            "attempt_number": 1
+            + sum(
+                item["occurrence_id"] == occurrence["occurrence_id"]
+                for item in self._reminder_delivery_attempts.values()
+            ),
+            "idempotency_key": idempotency_key,
+            "started_at": now,
+            "provider_accepted_at": None,
+            "finished_at": None,
+            "result": None,
+            "normalized_cause": None,
+            "retry_decision": "unknown",
+            "provider_latency_ms": None,
+        }
+        self._reminder_delivery_attempts[attempt_id] = attempt
+        r["status"] = "sending"
+        occurrence["first_claimed_at"] = occurrence["first_claimed_at"] or now
         return {
-            "status": r["status"],
-            "tasks": {"status": task.get("status", "pending")},
+            "claimed": True,
+            "reminder": copy.deepcopy(r),
+            "task_status": task["status"],
+            "occurrence_id": occurrence["occurrence_id"],
+            "attempt": copy.deepcopy(attempt),
+        }
+
+    async def finish_reminder_delivery(
+        self,
+        *,
+        attempt_id: str,
+        reminder_id: str,
+        user_id: str,
+        result: str,
+        normalized_cause: str | None,
+        retry_decision: str,
+        telegram_message_id: int | None,
+    ) -> dict:
+        attempt = self._reminder_delivery_attempts[attempt_id]
+        reminder = self._reminders[reminder_id]
+        if attempt["user_id"] != user_id or reminder["status"] != "sending":
+            raise ValueError("Reminder delivery state conflict")
+        finished = utc_now()
+        started = datetime.fromisoformat(attempt["started_at"])
+        accepted = result == "accepted"
+        attempt.update(
+            provider_accepted_at=finished.isoformat() if accepted else None,
+            finished_at=finished.isoformat(),
+            result=result,
+            normalized_cause=normalized_cause,
+            retry_decision=retry_decision,
+            provider_latency_ms=max(0, round((finished - started).total_seconds() * 1000)),
+        )
+        reminder["status"] = "sent" if accepted else (
+            "pending" if retry_decision == "retry" else "failed"
+        )
+        if accepted:
+            reminder["telegram_message_id"] = telegram_message_id
+        occurrence = self._reminder_occurrences[reminder_id]
+        if accepted:
+            occurrence["provider_accepted_at"] = (
+                occurrence["provider_accepted_at"] or finished.isoformat()
+            )
+        elif reminder["status"] == "failed":
+            occurrence["terminal_at"] = occurrence["terminal_at"] or finished.isoformat()
+        return {"attempt": copy.deepcopy(attempt)}
+
+    async def record_scheduler_heartbeat(
+        self,
+        *,
+        owner_key: str,
+        worker_id: str,
+        missing_jobs: int,
+        wrong_time_jobs: int,
+        inverse_drift_jobs: int,
+    ) -> None:
+        now = utc_now().isoformat()
+        self._scheduler_runtime = {
+            "owner_key": owner_key,
+            "worker_id": worker_id,
+            "heartbeat_at": now,
+            "reconciled_at": now,
+            "missing_jobs": missing_jobs,
+            "wrong_time_jobs": wrong_time_jobs,
+            "inverse_drift_jobs": inverse_drift_jobs,
+        }
+
+    async def get_reminder_reliability_health(self) -> dict:
+        runtime = self._scheduler_runtime or {}
+        pending = [
+            effect for effect in self._scheduler_outbox.values() if effect["status"] == "pending"
+        ]
+        failed = [
+            effect for effect in self._scheduler_outbox.values() if effect["status"] == "failed"
+        ]
+        occurrences = list(self._reminder_occurrences.values())
+        attempts = list(self._reminder_delivery_attempts.values())
+        oldest_pending_at = min((effect["created_at"] for effect in pending), default=None)
+        return {
+            "database_checked_at": utc_now().isoformat(),
+            "scheduler_heartbeat_at": runtime.get("heartbeat_at"),
+            "scheduler_ready": bool(runtime) and (
+                utc_now() - datetime.fromisoformat(runtime["heartbeat_at"])
+                <= timedelta(minutes=2)
+            ),
+            "reconciliation_drift": sum(
+                runtime.get(key, 0)
+                for key in ("missing_jobs", "wrong_time_jobs", "inverse_drift_jobs")
+            ),
+            "outbox_pending": len(pending),
+            "outbox_oldest_pending_at": oldest_pending_at,
+            "outbox_oldest_pending_age_ms": (
+                _elapsed_ms(utc_now().isoformat(), oldest_pending_at)
+                if oldest_pending_at
+                else 0
+            ),
+            "outbox_failed": len(failed),
+            "eligible_occurrences": sum(item["measurable"] for item in occurrences),
+            "accepted_occurrences": sum(
+                item["measurable"] and item["provider_accepted_at"] is not None
+                for item in occurrences
+            ),
+            "reminder_lateness_ms": [
+                _elapsed_ms(item["provider_accepted_at"], item["scheduled_for"])
+                for item in occurrences
+                if item["measurable"] and item["provider_accepted_at"] is not None
+            ],
+            "scheduler_lag_ms": [
+                _elapsed_ms(item["first_claimed_at"], item["scheduled_for"])
+                for item in occurrences
+                if item["measurable"] and item["first_claimed_at"] is not None
+            ],
+            "provider_latency_ms": [
+                item["provider_latency_ms"]
+                for item in attempts
+                if item["provider_latency_ms"] is not None
+            ],
+            "attempt_failures": sum(
+                item["result"] in {"rejected", "timeout", "error"} for item in attempts
+            ),
+            "participant_occurrences": sum(
+                item["evidence_class"] == "participant" for item in occurrences
+            ),
+            "staging_synthetic_occurrences": sum(
+                item["evidence_class"] == "staging_synthetic" for item in occurrences
+            ),
+            "production_synthetic_occurrences": sum(
+                item["evidence_class"] == "production_synthetic" for item in occurrences
+            ),
         }
 
     async def get_pending_reminders_for_reload(self, cutoff: datetime) -> list[dict]:
@@ -830,6 +1078,42 @@ class InMemoryStore:
                 entry["tasks"] = {"title": task.get("title", "")}
                 entry["user_profiles"] = {"telegram_chat_id": user.get("telegram_chat_id")}
                 results.append(entry)
+        return results
+
+    async def get_reminders_for_reconciliation(self) -> list[dict]:
+        results = []
+        for reminder in self._reminders.values():
+            if reminder["status"] not in {"pending", "sending", "sent"}:
+                continue
+            task = self._tasks.get(reminder["task_id"])
+            user = self._users.get(reminder["user_id"])
+            entry = dict(reminder)
+            entry["tasks"] = (
+                {
+                    "title": task["title"],
+                    "status": task["status"],
+                    "user_id": task["user_id"],
+                }
+                if task
+                else None
+            )
+            entry["user_profiles"] = {
+                "telegram_chat_id": user.get("telegram_chat_id") if user else None
+            }
+            occurrence = self._reminder_occurrences.get(reminder["reminder_id"])
+            entry["reminder_occurrences"] = (
+                {
+                    "occurrence_id": occurrence["occurrence_id"],
+                    "reminder_delivery_attempts": [
+                        copy.deepcopy(attempt)
+                        for attempt in self._reminder_delivery_attempts.values()
+                        if attempt["occurrence_id"] == occurrence["occurrence_id"]
+                    ],
+                }
+                if occurrence
+                else None
+            )
+            results.append(entry)
         return results
 
     async def acknowledge_reminders_for_task(self, task_id: str, user_id: str) -> list[str]:
@@ -884,15 +1168,24 @@ class InMemoryStore:
         user = self._users.get(user_id)
         if not user:
             raise ValueError("User not found")
+        activation = (
+            await self.get_activation_state(user["supabase_auth_id"])
+            if user.get("supabase_auth_id")
+            else None
+        )
         return build_dashboard_snapshot(
             user,
             [item for item in self._tasks.values() if item["user_id"] == user_id],
             [item for item in self._reminders.values() if item["user_id"] == user_id],
             [item for item in self._sessions.values() if item["user_id"] == user_id],
+            activation=activation,
         )
 
     async def create_pairing_token(self, token: str, auth_id: str, expires_at: datetime) -> dict:
         """Create a new pairing token linked to a Supabase auth.uid()."""
+        journey = self._activation_journeys.get(auth_id)
+        if not journey or not journey.get("acknowledged_at"):
+            raise ActivationTermsRequiredError
         now = utc_now()
         window_start = now - PAIRING_TOKEN_WINDOW
         recent_count = sum(
@@ -946,3 +1239,78 @@ class InMemoryStore:
         await self.update_user(user["user_id"], {"supabase_auth_id": auth_id})
         row["consumed"] = True
         return {"status": "paired"}
+
+    # ── Dashboard-first Activation Journey ──
+
+    async def get_activation_state(self, auth_id: str) -> dict:
+        return activation_state(
+            journeys=self._activation_journeys,
+            users=self._users,
+            pairing_tokens=self._pairing_tokens,
+            tasks=self._tasks,
+            reminders=self._reminders,
+            occurrences=self._reminder_occurrences,
+            auth_id=auth_id,
+            now=utc_now(),
+        )
+
+    async def acknowledge_activation_terms(self, auth_id: str, policy_version: str) -> dict:
+        return acknowledge_terms(
+            self._activation_journeys,
+            auth_id=auth_id,
+            policy_version=policy_version,
+            now=utc_now(),
+        )
+
+    async def update_activation_profile(
+        self,
+        auth_id: str,
+        *,
+        name: str,
+        timezone: str,
+        wake_time: str,
+        sleep_time: str,
+    ) -> dict:
+        return update_profile(
+            self._activation_journeys,
+            self._users,
+            auth_id=auth_id,
+            name=name,
+            timezone=timezone,
+            wake_time=wake_time,
+            sleep_time=sleep_time,
+            now=utc_now(),
+        )
+
+    async def create_activation_test_command(
+        self,
+        *,
+        user_id: str,
+        idempotency_key: str,
+        payload_hash: str,
+        title: str,
+        retry: bool,
+        scheduled_time: str,
+        intended_local_date: str,
+        intended_local_time: str,
+        intended_timezone: str,
+    ) -> dict:
+        return create_test(
+            journeys=self._activation_journeys,
+            users=self._users,
+            tasks=self._tasks,
+            reminders=self._reminders,
+            occurrences=self._reminder_occurrences,
+            receipts=self._command_receipts,
+            outbox=self._scheduler_outbox,
+            user_id=user_id,
+            idempotency_key=idempotency_key,
+            payload_hash=payload_hash,
+            title=title,
+            retry=retry,
+            scheduled_time=scheduled_time,
+            intended_local_date=intended_local_date,
+            intended_local_time=intended_local_time,
+            intended_timezone=intended_timezone,
+            now=utc_now(),
+        )

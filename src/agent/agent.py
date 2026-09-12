@@ -10,19 +10,24 @@ See ADR 0002 for rationale.
 import hashlib
 import logging
 from dataclasses import dataclass
+from datetime import date
+from typing import Any
 
 from pydantic_ai import Agent, RunContext
 
 from src.agent.prompts import build_system_prompt
 from src.channels.base import MessageChannel
-from src.commands.base import CommandContext
+from src.commands.base import CommandContext, StaleVersionError
+from src.commands.later import ApplyLaterCommand, LaterPolicy
+from src.commands.reminders import ReminderScheduleInput, RescheduleReminderCommand
+from src.commands.tasks import MoveTaskPlanningDayCommand
 from src.memory.context import ContextBuilder
 from src.memory.store import MemoryStore
 from src.scheduler.reminders import ReminderScheduler
 from src.time_resolution import TimeResolution, resolve_reminder_time
 from src.tools.reminders import CancelRemindersTool, ScheduleReminderTool
 from src.tools.tasks import CreateTaskTool, UpdateTaskStatusTool
-from src.utils import now_in_tz
+from src.utils import Clock, default_clock
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +44,7 @@ class AgentDeps:
     chat_id: int
     timezone: str
     turn_id: str
+    clock: Clock = default_clock
 
 
 def _get_model_name() -> str:
@@ -69,7 +75,7 @@ async def _build_system_prompt(ctx: RunContext[AgentDeps]) -> str:
     user = deps.user
     name = user.get("name") or "friend"
     tz = user.get("timezone") or "UTC"
-    local_time = now_in_tz(tz).strftime("%Y-%m-%d %H:%M %A")
+    local_time = deps.clock.now_in_tz(tz).strftime("%Y-%m-%d %H:%M %A")
 
     base_prompt = build_system_prompt(name, current_time=local_time)
 
@@ -79,8 +85,15 @@ async def _build_system_prompt(ctx: RunContext[AgentDeps]) -> str:
     yesterday_summary = await context_builder._get_yesterday_summary(user["user_id"], tz)
 
     # Pending tasks with IDs for status update tool
-    pending = await deps.store.get_today_tasks(user["user_id"], tz)
-    pending_tasks = [task for task in pending if task["status"] == "pending"]
+    today_tasks = await deps.store.get_today_tasks(user["user_id"], tz)
+    inbox_tasks = await deps.store.get_inbox_tasks(user["user_id"])
+    carried_tasks = await deps.store.get_yesterday_pending(user["user_id"], tz)
+    pending_tasks = {
+        task["task_id"]: task
+        for task in [*today_tasks, *inbox_tasks, *carried_tasks]
+        if task["status"] == "pending"
+    }
+    pending_reminders = await deps.store.get_pending_reminders(user["user_id"])
 
     sections = [base_prompt]
 
@@ -92,14 +105,32 @@ async def _build_system_prompt(ctx: RunContext[AgentDeps]) -> str:
 
     if pending_tasks:
         task_lines = "\n".join(
-            f"- task_id={t['task_id']}: {t['title']} (status: {t['status']})"
-            for t in pending_tasks
+            (
+                f"- task_id={t['task_id']}: {t['title']} "
+                f"(status: {t['status']}, version: {t.get('version', 1)})"
+            )
+            for t in pending_tasks.values()
         )
         sections.append(
             f"\n<pending_task_ids>\n"
             f"Use these task_id values when calling update_task_status:\n"
             f"{task_lines}\n"
             f"</pending_task_ids>"
+        )
+
+    if pending_reminders:
+        reminder_lines = "\n".join(
+            (
+                f"- reminder_id={r['reminder_id']}: task_id={r['task_id']}, "
+                f"{r['tasks']['title']} at {r['scheduled_time']}"
+            )
+            for r in pending_reminders
+        )
+        sections.append(
+            "\n<active_reminder_ids>\n"
+            "Use these owned reminder_id values for Reminder lifecycle actions:\n"
+            f"{reminder_lines}\n"
+            "</active_reminder_ids>"
         )
 
     return "\n".join(sections)
@@ -127,15 +158,21 @@ async def create_task(
         reminder_time: Optional natural language time like "3pm", "in 10 minutes",
             "after lunch". Pass this to create the task and set the reminder in one step.
         confirmed_reminder_time: The exact confirmation label returned by a previous tool
-            result, supplied only after the user explicitly confirms it.
+            result, supplied only after the user explicitly confirms it. Always repeat the
+            original reminder_time in the same call; confirmation alone is invalid.
     """
     deps = ctx.deps
     resolution = None
+    if confirmed_reminder_time and not reminder_time:
+        return (
+            "The confirmed label must be supplied with the original reminder_time. "
+            "No Task or Reminder was created."
+        )
     if reminder_time:
         resolution = _resolve_time(deps, reminder_time)
         blocked = _resolution_block_message(resolution, confirmed_reminder_time)
         if blocked:
-            return blocked
+            return f"{blocked} No Task has been created."
 
     tool = CreateTaskTool(deps.store)
     input_fingerprint = hashlib.sha256(
@@ -210,7 +247,10 @@ async def schedule_reminder(
     task = None
     today_tasks = await deps.store.get_today_tasks(deps.user["user_id"], deps.timezone)
     inbox_tasks = await deps.store.get_inbox_tasks(deps.user["user_id"])
-    for t in [*today_tasks, *inbox_tasks]:
+    carried_tasks = await deps.store.get_yesterday_pending(
+        deps.user["user_id"], deps.timezone
+    )
+    for t in [*today_tasks, *inbox_tasks, *carried_tasks]:
         if t["task_id"] == task_id:
             task = t
             break
@@ -224,6 +264,69 @@ async def schedule_reminder(
         return blocked
     exact = await _schedule_resolved_reminder(deps, task, resolution)
     return f"Reminder scheduled for '{task['title']}' on {exact}."
+
+
+@amigo_agent.tool
+async def apply_later(
+    ctx: RunContext[AgentDeps],
+    reminder_id: str,
+) -> str:
+    """Apply the canonical Later policy to one active owned Reminder.
+
+    Args:
+        reminder_id: The reminder_id from the active Reminders list in context.
+    """
+    deps = ctx.deps
+    result = await ApplyLaterCommand(
+        deps.store,
+        LaterPolicy(deps.clock),
+    ).run(
+        CommandContext(
+            actor_user_id=deps.user["user_id"],
+            surface="telegram",
+            idempotency_key=f"telegram:{deps.turn_id}:later:{reminder_id}",
+        ),
+        reminder_id=reminder_id,
+    )
+    local_time = result["intended_local_time"][:5]
+    adjustment = " after quiet hours" if result["quiet_hours_adjusted"] else ""
+    return (
+        f"Next reminder: {result['intended_local_date']} at {local_time} "
+        f"{result['intended_timezone']}{adjustment}."
+    )
+
+
+@amigo_agent.tool
+async def move_task_planning_day(
+    ctx: RunContext[AgentDeps],
+    task_id: str,
+    planning_day: date,
+    expected_version: int,
+) -> str:
+    """Move one pending owned Task to an explicit planning date.
+
+    Args:
+        task_id: The task_id from the pending Tasks list in context.
+        planning_day: Exact YYYY-MM-DD date explicitly requested by the participant.
+        expected_version: The Task version shown with that task_id in context.
+    """
+    deps = ctx.deps
+    if planning_day < deps.clock.today_in_tz(deps.timezone):
+        return "Choose today or a future planning date. The Task was not changed."
+    try:
+        result = await MoveTaskPlanningDayCommand(deps.store).run(
+            CommandContext(
+                actor_user_id=deps.user["user_id"],
+                surface="telegram",
+                idempotency_key=f"telegram:{deps.turn_id}:move-task:{task_id}:{planning_day}",
+            ),
+            task_id=task_id,
+            planning_day=planning_day,
+            expected_version=expected_version,
+        )
+    except (ValueError, StaleVersionError):
+        return "The Task could not be moved. Nothing was changed."
+    return f"Moved '{result['task']['title']}' to {planning_day.isoformat()}."
 
 
 @amigo_agent.tool
@@ -257,6 +360,7 @@ def _resolve_time(deps: AgentDeps, expression: str) -> TimeResolution:
         deps.timezone,
         wake_time=deps.user.get("wake_time", "07:30"),
         sleep_time=deps.user.get("sleep_time", "23:00"),
+        clock=deps.clock,
     )
 
 
@@ -285,39 +389,59 @@ async def _schedule_resolved_reminder(
 ) -> str:
     if resolution.utc_instant is None or resolution.exact_label is None:
         raise ValueError("Reminder time is not resolved")
-    tool = ScheduleReminderTool(deps.store, deps.scheduler)
     input_fingerprint = hashlib.sha256(
         (
             f"{task['task_id']}\0{resolution.utc_instant.isoformat()}\0"
             f"{resolution.timezone}"
         ).encode()
     ).hexdigest()[:16]
-    await tool.run_exact(
-        context=CommandContext(
-            actor_user_id=deps.user["user_id"],
-            surface="telegram",
-            idempotency_key=(
-                f"telegram:{deps.turn_id}:schedule-reminder:{input_fingerprint}"
-            ),
-        ),
-        task=task,
-        scheduled_at=resolution.utc_instant,
-        timezone=resolution.timezone,
+    context = CommandContext(
+        actor_user_id=deps.user["user_id"],
+        surface="telegram",
+        idempotency_key=f"telegram:{deps.turn_id}:schedule-reminder:{input_fingerprint}",
     )
+    active = [
+        reminder
+        for reminder in await deps.store.get_pending_reminders(deps.user["user_id"])
+        if reminder["task_id"] == task["task_id"]
+    ]
+    if len(active) > 1:
+        raise ValueError("Task has multiple active Reminders; choose one before rescheduling")
+    if active:
+        await RescheduleReminderCommand(deps.store, deps.clock).run(
+            context,
+            reminder_id=active[0]["reminder_id"],
+            schedule=ReminderScheduleInput(
+                scheduled_at=resolution.utc_instant,
+                timezone=resolution.timezone,
+            ),
+        )
+    else:
+        await ScheduleReminderTool(deps.store, deps.scheduler, deps.clock).run_exact(
+            context=context,
+            task=task,
+            scheduled_at=resolution.utc_instant,
+            timezone=resolution.timezone,
+        )
     return resolution.exact_label
 
 
 # ── Entry point ──
 
 
-async def handle_message(deps: AgentDeps, user_message: str) -> str:
-    """Handle one user message through the agentic loop.
+async def run_agent_turn(
+    deps: AgentDeps,
+    user_message: str,
+    *,
+    model: Any | None = None,
+):
+    """Run and persist one successful agent turn, returning its trace-bearing result.
 
     1. Store user message
     2. Build message history from session
     3. Run agent (model decides tools + reply)
     4. Store assistant response
-    5. Return response text
+    5. Return the Pydantic AI result
     """
     user_id = deps.user["user_id"]
 
@@ -347,20 +471,32 @@ async def handle_message(deps: AgentDeps, user_message: str) -> str:
                 ModelResponse(parts=[TextPart(content=msg["content"])])
             )
 
-    # Run the agent
+    result = await amigo_agent.run(
+        user_message,
+        model=model or _get_model_name(),
+        deps=deps,
+        message_history=message_history if message_history else None,
+    )
+
+    # Store assistant response
+    await deps.store.add_message(deps.session_id, user_id, "assistant", result.output)
+
+    return result
+
+
+async def handle_message(deps: AgentDeps, user_message: str) -> str:
+    """Handle one user message and preserve the friendly production failure response."""
     try:
-        result = await amigo_agent.run(
-            user_message,
-            model=_get_model_name(),
-            deps=deps,
-            message_history=message_history if message_history else None,
-        )
-        response = result.output
+        result = await run_agent_turn(deps, user_message)
+        return result.output
     except Exception:
         logger.exception("Agent run failed")
         response = "Sorry, having trouble thinking right now. Try again in a minute? 🙏"
-
-    # Store assistant response
-    await deps.store.add_message(deps.session_id, user_id, "assistant", response)
+        await deps.store.add_message(
+            deps.session_id,
+            deps.user["user_id"],
+            "assistant",
+            response,
+        )
 
     return response

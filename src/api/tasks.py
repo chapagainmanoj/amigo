@@ -3,11 +3,11 @@
 from datetime import date
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.auth import get_authenticated_user_id
+from src.api.dependencies import get_activated_user, get_store
 from src.commands.base import (
     CommandContext,
     IdempotencyConflictError,
@@ -38,11 +38,6 @@ class ResolveTaskRequest(BaseModel):
     expected_version: int = Field(ge=1)
 
 
-async def get_store(request: Request):
-    """Resolve the application Store wired during app construction."""
-    return request.app.state.store
-
-
 @router.post("/api/tasks")
 async def create_task(
     task_request: CreateTaskRequest,
@@ -50,14 +45,10 @@ async def create_task(
         str,
         Header(alias="Idempotency-Key", min_length=1, max_length=200),
     ],
-    auth_id: Annotated[str, Depends(get_authenticated_user_id)],
+    user: Annotated[dict, Depends(get_activated_user)],
     store: Annotated[object, Depends(get_store)],
 ):
     """Create one Task through the canonical authenticated application command."""
-    user = await store.get_user_by_auth_id(auth_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User profile not paired with Telegram yet.")
-
     command = CreateTaskCommand(store)
     try:
         return await command.run(
@@ -87,14 +78,10 @@ async def resolve_task(
         str,
         Header(alias="Idempotency-Key", min_length=1, max_length=200),
     ],
-    auth_id: Annotated[str, Depends(get_authenticated_user_id)],
+    user: Annotated[dict, Depends(get_activated_user)],
     store: Annotated[object, Depends(get_store)],
 ):
     """Apply one tenant-owned terminal Task/Reminder transition."""
-    user = await store.get_user_by_auth_id(auth_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User profile not paired with Telegram yet.")
-
     try:
         result = await ResolveTaskCommand(store).run(
             CommandContext(

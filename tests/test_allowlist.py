@@ -45,8 +45,9 @@ class TestAllowlist:
         with patch("src.bot.handlers.BotHandlers._is_allowed", return_value=True):
             await handlers.handle_message(12345, "hello")
 
-        # Should have created user and started onboarding
-        assert 12345 in store.users
+        # Dashboard-first Activation never creates a Telegram-only account.
+        assert 12345 not in store.users
+        assert "dashboard" in channel.last_text.lower()
 
     @pytest.mark.asyncio
     async def test_empty_allowlist_allows_all(self, setup):
