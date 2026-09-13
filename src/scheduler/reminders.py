@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # Reminders missed by less than this window still fire on restart
 MISSED_FIRE_WINDOW = timedelta(minutes=15)
 RECONCILIATION_INTERVAL_SECONDS = 60
+POLLING_INTERVEL_SECONDS = 10
 _SYSTEM_JOB_IDS = {"scheduler-outbox-worker", "scheduler-reconciliation"}
 SCHEDULER_OWNER_KEY = "beta-scheduler"
 
@@ -164,7 +165,7 @@ class ReminderScheduler:
         self.scheduler.add_job(
             callback,
             trigger="interval",
-            seconds=2,
+            seconds=POLLING_INTERVEL_SECONDS,
             id="scheduler-outbox-worker",
             replace_existing=True,
             max_instances=1,
