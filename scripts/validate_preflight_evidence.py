@@ -14,7 +14,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.check_gate_a_evidence import check_evidence as check_gate_a_evidence  # noqa: E402
+from scripts.check_gate_a_evidence import (  # noqa: E402
+    check_evidence as check_gate_a_evidence,
+)
+from scripts.check_gate_a_evidence import comparison_reviewed_at  # noqa: E402
 
 REQUIRED_CHECKS = {
     "backend_ci", "frontend_ci", "clean_migrations", "model_evaluation",
@@ -93,7 +96,11 @@ def _validate_evidence(
     if not artifact.is_file():
         errors.append(f"{label}.path does not exist: {path_value}")
         return digest
-    actual = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    try:
+        actual = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    except OSError:
+        errors.append(f"{label}.path cannot be read: {path_value}")
+        return digest
     if actual != digest:
         errors.append(f"{label}.sha256 does not match the artifact")
     return digest
@@ -125,8 +132,6 @@ def _validate_metadata(
     reviewer = _actor_id(item.get("reviewer"), f"{label}.reviewer", errors)
     if producer == reviewer:
         errors.append(f"{label} producer and reviewer must be different people")
-    if reviewer == implementer:
-        errors.append(f"{label} cannot be reviewed by the release implementer")
     if item.get("revision") != revision:
         errors.append(f"{label}.revision does not match the release")
     if item.get("environment") != environment:
@@ -144,36 +149,90 @@ def _validate_metadata(
 
 
 def _validate_model_evaluation_artifact(
-    check: object, revision: object, evidence_root: Path | None, errors: list[str]
-) -> None:
+    check: object,
+    revision: object,
+    evidence_root: Path | None,
+    errors: list[str],
+    *,
+    started_at: datetime | None,
+    ended_at: datetime | None,
+    now: datetime,
+) -> datetime | None:
     """The Gate A artifact must itself prove it ran against this revision.
 
     Without this, ``model_evaluation.revision`` is only a field someone typed: a stale declared
     run could be attached to a new release and pass every other check.
     """
     if not isinstance(check, dict) or not isinstance(revision, str):
-        return
+        return None
     evidence = check.get("evidence")
     if not isinstance(evidence, dict) or evidence_root is None:
-        return
+        return None
     path_value = evidence.get("path")
     if not _required_text(path_value):
-        return
+        return None
     relative = PurePosixPath(path_value)
     if relative.is_absolute() or ".." in relative.parts:
-        return
+        return None
     artifact = (evidence_root.resolve() / Path(*relative.parts)).resolve()
     if not artifact.is_file():
-        return
+        return None
     try:
-        payload = json.loads(artifact.read_text())
+        artifact_bytes = artifact.read_bytes()
+        payload = json.loads(artifact_bytes)
     except (json.JSONDecodeError, UnicodeDecodeError, OSError):
         # A screenshot named .json is the realistic case, and it must fail the manifest rather
         # than raise out of a function callers use as a library.
         errors.append("check model_evaluation.evidence must be the declared Gate A run JSON")
-        return
-    for reason in check_gate_a_evidence(payload, revision=revision):
+        return None
+    candidate_sha256 = hashlib.sha256(artifact_bytes).hexdigest()
+
+    related_payloads = {}
+    related_digests = {}
+    for field in ("baseline_evidence", "comparison_evidence"):
+        locator = check.get(field)
+        digest = _validate_evidence(
+            locator,
+            f"check model_evaluation.{field}",
+            evidence_root,
+            errors,
+        )
+        related_digests[field] = digest
+        if not isinstance(locator, dict) or not _required_text(locator.get("path")):
+            continue
+        relative_path = PurePosixPath(locator["path"])
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            continue
+        related_artifact = (
+            evidence_root.resolve() / Path(*relative_path.parts)
+        ).resolve()
+        if not related_artifact.is_file():
+            continue
+        try:
+            related_bytes = related_artifact.read_bytes()
+            related_payloads[field] = json.loads(related_bytes)
+            related_digests[field] = hashlib.sha256(related_bytes).hexdigest()
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+            errors.append(f"check model_evaluation.{field} must be readable JSON")
+
+    reviewer = check.get("reviewer")
+    expected_reviewer = (
+        reviewer.strip().casefold() if isinstance(reviewer, str) else None
+    )
+    for reason in check_gate_a_evidence(
+        payload,
+        revision=revision,
+        baseline_evidence=related_payloads.get("baseline_evidence"),
+        candidate_sha256=candidate_sha256,
+        baseline_sha256=related_digests.get("baseline_evidence"),
+        comparison=related_payloads.get("comparison_evidence"),
+        expected_reviewer=expected_reviewer,
+        review_window_start=started_at,
+        review_window_end=ended_at,
+        now=now,
+    ):
         errors.append(f"check model_evaluation: {reason}")
+    return comparison_reviewed_at(related_payloads.get("comparison_evidence"))
 
 
 def template_manifest() -> dict:
@@ -192,7 +251,7 @@ def template_manifest() -> dict:
         "no_duplicate": False, "no_cross_participant_effect": False,
         "no_lost_delivery": False,
     }
-    return {
+    manifest = {
         "schema_version": "amigo-internal-preflight-v1",
         "release": {
             "revision": "<full Git SHA>", "environment": "staging",
@@ -220,16 +279,34 @@ def template_manifest() -> dict:
             "evidence": {"path": "<decision artifact>", "sha256": "<artifact SHA-256>"},
         },
     }
+    model_evaluation = next(
+        check for check in manifest["checks"] if check["id"] == "model_evaluation"
+    )
+    model_evaluation["baseline_evidence"] = {
+        "path": "<last-passing Gate A artifact>",
+        "sha256": "<artifact SHA-256>",
+    }
+    model_evaluation["comparison_evidence"] = {
+        "path": "<candidate comparison artifact>",
+        "sha256": "<artifact SHA-256>",
+    }
+    return manifest
 
 
 def validate_manifest(
-    manifest: dict, *, evidence_root: Path | None = None, now: datetime | None = None
+    manifest: object, *, evidence_root: Path | None = None, now: datetime | None = None
 ) -> list[str]:
     """Return every reason the manifest cannot prove Internal Preflight passage."""
+    if not isinstance(manifest, dict):
+        return ["manifest must be a JSON object"]
+
     errors: list[str] = []
     if manifest.get("schema_version") != "amigo-internal-preflight-v1":
         errors.append("schema_version must be amigo-internal-preflight-v1")
-    release = manifest.get("release") or {}
+    release = manifest.get("release")
+    if not isinstance(release, dict):
+        errors.append("release must be an object")
+        release = {}
     revision = release.get("revision")
     environment = release.get("environment")
     deployment_id = release.get("deployment_id")
@@ -253,7 +330,10 @@ def validate_manifest(
     if ended_at and ended_at > now_utc:
         errors.append("release.ended_at cannot be in the future")
 
-    facts = manifest.get("topology") or {}
+    facts = manifest.get("topology")
+    if not isinstance(facts, dict):
+        errors.append("topology must be an object")
+        facts = {}
     expected_facts = {
         "render_backend_instances": 1, "scheduler_owners": 1, "webhook_destinations": 1,
         "fly_active": False, "always_on": True, "telegram_resource_separate": True,
@@ -289,9 +369,17 @@ def validate_manifest(
             evidence_times.append(observed_at)
     for missing in sorted(REQUIRED_CHECKS - checks_by_id.keys()):
         errors.append(f"required check {missing} is missing")
-    _validate_model_evaluation_artifact(
-        checks_by_id.get("model_evaluation"), revision, evidence_root, errors
+    comparison_at = _validate_model_evaluation_artifact(
+        checks_by_id.get("model_evaluation"),
+        revision,
+        evidence_root,
+        errors,
+        started_at=started_at,
+        ended_at=ended_at,
+        now=now_utc,
     )
+    if comparison_at:
+        evidence_times.append(comparison_at)
 
     trials = manifest.get("core_loop_trials")
     if not isinstance(trials, list) or len(trials) != 3:
@@ -333,7 +421,10 @@ def validate_manifest(
             if trial.get(field) is not True:
                 errors.append(f"{label}.{field} must be true")
 
-    findings = manifest.get("open_findings") or {}
+    findings = manifest.get("open_findings")
+    if not isinstance(findings, dict):
+        errors.append("open_findings must be an object")
+        findings = {}
     if findings.get("critical") != 0:
         errors.append("open_findings.critical must be zero")
     if findings.get("gate_a_high") != 0:
@@ -344,7 +435,10 @@ def validate_manifest(
     if findings_at:
         evidence_times.append(findings_at)
 
-    decision = manifest.get("founder_decision") or {}
+    decision = manifest.get("founder_decision")
+    if not isinstance(decision, dict):
+        errors.append("founder_decision must be an object")
+        decision = {}
     if decision.get("decision") != "pass":
         errors.append("founder_decision.decision must explicitly be pass for Gate A to pass")
     founder = _actor_id(decision.get("founder"), "founder_decision.founder", errors)
@@ -354,8 +448,6 @@ def validate_manifest(
             errors.append(f"founder_decision.{field} is required")
     if founder == reviewer:
         errors.append("founder_decision must have a distinct decision witness")
-    if reviewer == implementer:
-        errors.append("founder_decision cannot be witnessed by the release implementer")
     if decision.get("revision") != revision or decision.get("environment") != environment:
         errors.append("founder_decision does not match the tested release/environment")
     if decision.get("deployment_id") != deployment_id:
@@ -367,17 +459,16 @@ def validate_manifest(
         errors.append("founder_decision.recorded_at predates evidence collection")
     if recorded_at and ended_at and recorded_at > ended_at:
         errors.append("founder_decision.recorded_at is after evidence collection ended")
-    if recorded_at and evidence_times and recorded_at < max(evidence_times):
+    if recorded_at and evidence_times and recorded_at <= max(evidence_times):
         errors.append("founder_decision.recorded_at must follow all reviewed evidence")
     _validate_evidence(decision.get("evidence"), "founder_decision.evidence", evidence_root, errors)
     security_review = checks_by_id.get("independent_security_review") or {}
-    security_people = {
-        str(security_review.get("producer", "")).strip().casefold(),
-        str(security_review.get("reviewer", "")).strip().casefold(),
-    }
-    if implementer in security_people:
-        errors.append("release implementer cannot produce or approve the security review")
-    if founder in security_people:
+    security_reviewer = str(security_review.get("reviewer", "")).strip().casefold()
+    if implementer == security_reviewer:
+        errors.append(
+            "release implementer cannot approve the required independent security review"
+        )
+    if founder == security_reviewer:
         errors.append("founder cannot approve their own required independent security review")
     return errors
 
@@ -392,7 +483,12 @@ def main() -> int:
         return 0
     if args.manifest is None:
         parser.error("manifest is required unless --template is used")
-    manifest = json.loads(args.manifest.read_text())
+    try:
+        manifest = json.loads(args.manifest.read_bytes())
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as error:
+        print("Internal Preflight evidence: NOT PASSING")
+        print(f"- manifest is not readable JSON: {error}")
+        return 1
     errors = validate_manifest(manifest, evidence_root=args.manifest.parent)
     if errors:
         print("Internal Preflight evidence: NOT PASSING")

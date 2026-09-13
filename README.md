@@ -200,7 +200,7 @@ checked, the scheduler heartbeat is stale, or durable scheduler effects have fai
 ### Test & Lint
 
 ```bash
-python -m pytest tests/ -v         # 385 tests at the 2026-09-13 local verification
+python -m pytest tests/ -v         # 466 tests at the 2026-09-13 local verification
 ruff check src tests scripts       # lint
 python scripts/run_gate_a_eval.py --validate-only
 ```
@@ -219,8 +219,10 @@ The versioned Gate A model suite, declared-run procedure, evidence contract, and
 blocker are documented in [`docs/model-evaluation.md`](docs/model-evaluation.md). A declared run
 is only evidence for the revision it executed against:
 [`scripts/check_gate_a_evidence.py`](scripts/check_gate_a_evidence.py) recomputes every recorded
-fingerprint and the category scores themselves, and refuses a stale, partial, foreign, or
-self-declared-passing run.
+fingerprint and rescored category result from retained per-turn trace/response/state evidence,
+including Tool call/result IDs, canonical state hashes, chained turns, usage, and cost totals;
+verifies the archived last-passing baseline and the SHA-bound candidate/baseline comparison; and
+refuses a stale, partial, foreign, baseline-free, human-review-free, or self-declared-passing run.
 
 ### Smoke Checks
 

@@ -1,6 +1,7 @@
 """Dashboard-first Activation Journey contract and cross-store regressions."""
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import httpx
 import pytest
@@ -625,3 +626,76 @@ async def test_the_real_app_exposes_the_retryable_header_across_origins():
         )
 
     assert response.status_code == 200, response.text
+
+
+async def test_pairing_refuses_to_guess_a_bot_handle_when_telegram_is_unknown(monkeypatch):
+    """A deployment that never authenticated must not name some other environment's bot."""
+    store = FakeStore()
+    identity = AuthenticatedIdentity("auth-no-bot", True, "person@example.test")
+    app = FastAPI()
+    app.state.store = store
+    app.state.bot_username = None
+    app.include_router(pairing_router)
+
+    async def authenticated_identity():
+        return identity
+
+    async def configured_store():
+        return store
+
+    app.dependency_overrides[get_authenticated_identity] = authenticated_identity
+    app.dependency_overrides[get_store] = configured_store
+    monkeypatch.setattr("src.api.pairing.settings.access_mode", "open")
+    await store.acknowledge_activation_terms(identity.auth_id, ACTIVATION_POLICY_VERSION)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/pairing-token")
+    assert response.status_code == 503
+    assert "t.me" not in response.text
+
+
+async def test_the_shipped_app_starts_with_no_assumed_bot_identity():
+    """The module-level default is what a failed getMe in staging falls back to."""
+    import src.main
+
+    assert src.main.app.state.bot_username is None
+
+
+async def test_activation_state_carries_the_deployments_own_telegram_url():
+    store = FakeStore()
+    auth_id = "auth-telegram-url"
+    identity = AuthenticatedIdentity(auth_id, True, "person@example.test")
+    app = FastAPI()
+    app.state.store = store
+    app.state.bot_username = "staging_amigo_bot"
+    app.include_router(activation_router)
+
+    async def authenticated_identity():
+        return identity
+
+    async def configured_store():
+        return store
+
+    app.dependency_overrides[get_authenticated_identity] = authenticated_identity
+    app.dependency_overrides[get_store] = configured_store
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        state = (await client.get("/api/activation")).json()
+    assert state["telegram_url"] == "https://t.me/staging_amigo_bot"
+
+    app.state.bot_username = None
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        state = (await client.get("/api/activation")).json()
+    assert state["telegram_url"] is None
+
+
+async def test_no_dashboard_source_hardcodes_a_telegram_bot_handle():
+    """The dashboard must deep-link only to what the server it talked to reported."""
+    web_src = Path(__file__).parents[1] / "web" / "src"
+    offenders = [
+        f"{path.relative_to(web_src)}:{number}"
+        for path in sorted(web_src.rglob("*.jsx")) + sorted(web_src.rglob("*.js"))
+        for number, line in enumerate(path.read_text().splitlines(), start=1)
+        if "t.me/" in line
+    ]
+    assert offenders == []

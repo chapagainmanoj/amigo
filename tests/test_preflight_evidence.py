@@ -2,17 +2,27 @@
 
 import hashlib
 import json
+import sys
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
+
+import pytest
 
 from scripts.validate_preflight_evidence import (
     REQUIRED_CHECKS,
     template_manifest,
     validate_manifest,
 )
-from src.evaluation.gate_a import THRESHOLDS, summarize_scores
-from tests.gate_a_fixtures import passing_gate_a_evidence
+from src.evaluation.gate_a import (
+    THRESHOLDS,
+    build_baseline_comparison,
+    execution_metric_results,
+    load_suite,
+    score_turn,
+    summarize_scores,
+)
+from tests.gate_a_fixtures import passing_gate_a_bundle, passing_gate_a_evidence
 
 REVISION = "a" * 40
 DEPLOYMENT_ID = "render-deploy-123"
@@ -52,10 +62,22 @@ def passing_manifest(root: Path) -> dict:
     # The Gate A artifact is cross-checked against the release revision, so it must be the real
     # declared-run JSON rather than an opaque placeholder.
     evaluation = next(check for check in checks if check["id"] == "model_evaluation")
+    candidate, baseline, baseline_sha256, comparison = passing_gate_a_bundle(REVISION)
     evaluation["evidence"] = _artifact(
         root,
         "checks/model_evaluation.json",
-        json.dumps(passing_gate_a_evidence(REVISION)),
+        json.dumps(candidate),
+    )
+    evaluation["baseline_evidence"] = _artifact(
+        root,
+        "checks/model_evaluation-baseline.json",
+        json.dumps(baseline),
+    )
+    assert evaluation["baseline_evidence"]["sha256"] == baseline_sha256
+    evaluation["comparison_evidence"] = _artifact(
+        root,
+        "checks/model_evaluation-comparison.json",
+        json.dumps(comparison),
     )
 
     trials = []
@@ -144,6 +166,61 @@ def test_complete_independently_reviewed_manifest_passes(tmp_path):
     assert _validate(passing_manifest(tmp_path), tmp_path) == []
 
 
+def test_manifest_top_level_and_release_must_be_objects(tmp_path):
+    assert validate_manifest([], evidence_root=tmp_path, now=NOW) == [
+        "manifest must be a JSON object"
+    ]
+
+    errors = validate_manifest({"release": ["bad"]}, evidence_root=tmp_path, now=NOW)
+
+    assert "release must be an object" in errors
+
+
+def test_adjacent_manifest_sections_must_be_objects(tmp_path):
+    manifest = passing_manifest(tmp_path)
+    manifest["topology"] = ["bad"]
+    manifest["open_findings"] = ["bad"]
+    manifest["founder_decision"] = ["bad"]
+
+    errors = _validate(manifest, tmp_path)
+
+    assert "topology must be an object" in errors
+    assert "open_findings must be an object" in errors
+    assert "founder_decision must be an object" in errors
+
+
+@pytest.mark.parametrize("content", [b"{not json", b"\xff\xfe"])
+def test_manifest_cli_reports_malformed_or_non_utf8_json_without_traceback(
+    tmp_path, capsys, content
+):
+    from scripts.validate_preflight_evidence import main
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_bytes(content)
+    original = sys.argv
+    sys.argv = ["validate", str(manifest_path)]
+    try:
+        assert main() == 1
+    finally:
+        sys.argv = original
+
+    assert "manifest is not readable JSON" in capsys.readouterr().out
+
+
+def test_manifest_cli_reports_io_errors_without_traceback(tmp_path, capsys):
+    from scripts.validate_preflight_evidence import main
+
+    missing = tmp_path / "missing.json"
+    original = sys.argv
+    sys.argv = ["validate", str(missing)]
+    try:
+        assert main() == 1
+    finally:
+        sys.argv = original
+
+    assert "manifest is not readable JSON" in capsys.readouterr().out
+
+
 def test_generated_capture_template_is_complete_shape_but_cannot_pass(tmp_path):
     template = template_manifest()
     assert {check["id"] for check in template["checks"]} == REQUIRED_CHECKS
@@ -205,21 +282,57 @@ def test_revision_deployment_and_independent_review_binding_fail_closed(tmp_path
     manifest = passing_manifest(tmp_path)
     manifest["checks"][0]["revision"] = "b" * 40
     manifest["checks"][1]["deployment_id"] = "different-deploy"
+    manifest["checks"][2]["producer"] = "implementer"
     manifest["checks"][2]["reviewer"] = "implementer"
     security = next(
         check for check in manifest["checks"] if check["id"] == "independent_security_review"
     )
     security["producer"] = "implementer"
+    security["reviewer"] = "implementer"
     manifest["founder_decision"]["founder"] = security["reviewer"]
-    manifest["founder_decision"]["reviewer"] = "implementer"
 
     errors = _validate(manifest, tmp_path)
     assert any("revision does not match" in error for error in errors)
     assert any("deployment_id does not match" in error for error in errors)
-    assert any("cannot be reviewed by the release implementer" in error for error in errors)
-    assert "release implementer cannot produce or approve the security review" in errors
+    assert any("producer and reviewer must be different" in error for error in errors)
     assert "founder cannot approve their own required independent security review" in errors
-    assert "founder_decision cannot be witnessed by the release implementer" in errors
+    assert (
+        "release implementer cannot approve the required independent security review" in errors
+    )
+
+
+def test_implementer_may_produce_security_evidence_for_independent_review(tmp_path):
+    manifest = passing_manifest(tmp_path)
+    security = next(
+        check for check in manifest["checks"] if check["id"] == "independent_security_review"
+    )
+    security["producer"] = manifest["release"]["implementer"]
+
+    assert _validate(manifest, tmp_path) == []
+
+
+def test_implementer_may_review_a_record_they_did_not_produce(tmp_path):
+    manifest = passing_manifest(tmp_path)
+    backend_ci = next(check for check in manifest["checks"] if check["id"] == "backend_ci")
+    backend_ci["producer"] = "ci-operator"
+    backend_ci["reviewer"] = manifest["release"]["implementer"]
+    manifest["founder_decision"]["reviewer"] = manifest["release"]["implementer"]
+
+    assert _validate(manifest, tmp_path) == []
+
+
+def test_implementer_cannot_approve_the_independent_security_review(tmp_path):
+    manifest = passing_manifest(tmp_path)
+    security = next(
+        check for check in manifest["checks"] if check["id"] == "independent_security_review"
+    )
+    security["producer"] = "security-reviewer"
+    security["reviewer"] = manifest["release"]["implementer"]
+
+    assert (
+        "release implementer cannot approve the required independent security review"
+        in _validate(manifest, tmp_path)
+    )
 
 
 def test_explicit_founder_failure_cannot_be_reported_as_gate_passage(tmp_path):
@@ -247,7 +360,6 @@ def test_actor_aliases_and_run_id_aliases_cannot_fake_independence(tmp_path):
     errors = _validate(manifest, tmp_path)
     assert any("canonical lowercase stable actor ID" in error for error in errors)
     assert any("producer and reviewer must be different" in error for error in errors)
-    assert "release implementer cannot produce or approve the security review" in errors
     assert any("canonical lowercase stable run ID" in error for error in errors)
     assert "core_loop trial 2.run_id must be unique" in errors
 
@@ -283,6 +395,142 @@ def test_a_gate_a_run_that_predates_a_model_input_change_is_rejected(tmp_path):
     assert any("Gate A must run again" in error for error in errors), errors
 
 
+def test_manifest_cannot_pass_without_baseline_and_comparison_artifacts(tmp_path):
+    manifest = passing_manifest(tmp_path)
+    evaluation = next(check for check in manifest["checks"] if check["id"] == "model_evaluation")
+    del evaluation["baseline_evidence"]
+    del evaluation["comparison_evidence"]
+
+    errors = validate_manifest(manifest, evidence_root=tmp_path, now=NOW)
+
+    assert any("baseline_evidence" in error for error in errors), errors
+    assert any("comparison_evidence" in error for error in errors), errors
+    assert any("archived last-passing" in error for error in errors), errors
+
+
+def test_baseline_comparison_reviewer_is_bound_to_manifest_reviewer(tmp_path):
+    manifest = passing_manifest(tmp_path)
+    evaluation = next(check for check in manifest["checks"] if check["id"] == "model_evaluation")
+    comparison_path = tmp_path / evaluation["comparison_evidence"]["path"]
+    comparison = json.loads(comparison_path.read_text())
+    comparison["human_review"]["reviewer"] = "different-reviewer"
+    evaluation["comparison_evidence"] = _artifact(
+        tmp_path,
+        evaluation["comparison_evidence"]["path"],
+        json.dumps(comparison),
+    )
+
+    errors = validate_manifest(manifest, evidence_root=tmp_path, now=NOW)
+
+    assert any("reviewer does not match" in error for error in errors), errors
+
+
+def test_manifest_recomputes_candidate_digest_after_trace_only_change(tmp_path):
+    manifest = passing_manifest(tmp_path)
+    evaluation = next(check for check in manifest["checks"] if check["id"] == "model_evaluation")
+    candidate_path = tmp_path / evaluation["evidence"]["path"]
+    candidate = json.loads(candidate_path.read_text())
+    candidate["executions"][0]["turns"][0]["trace"][0]["args"] = {
+        "title": "tampered"
+    }
+    evaluation["evidence"] = _artifact(
+        tmp_path,
+        evaluation["evidence"]["path"],
+        json.dumps(candidate),
+    )
+
+    errors = validate_manifest(manifest, evidence_root=tmp_path, now=NOW)
+
+    assert errors == [
+        "check model_evaluation: baseline_comparison.candidate does not match the two run artifacts"
+    ]
+
+
+def test_manifest_rescores_retained_evidence_when_stored_booleans_stay_green(tmp_path):
+    manifest = passing_manifest(tmp_path)
+    evaluation = next(check for check in manifest["checks"] if check["id"] == "model_evaluation")
+    candidate_path = tmp_path / evaluation["evidence"]["path"]
+    baseline_path = tmp_path / evaluation["baseline_evidence"]["path"]
+    comparison_path = tmp_path / evaluation["comparison_evidence"]["path"]
+    candidate = json.loads(candidate_path.read_text())
+    baseline = json.loads(baseline_path.read_text())
+    execution = next(
+        item
+        for item in candidate["executions"]
+        if item["case_id"] == "ga-life-15" and item["repetition"] == 1
+    )
+    execution["turns"][0]["trace"].extend(
+        [
+            {
+                "kind": "tool_call",
+                "tool": "apply_later",
+                "call_id": "adversarial-apply-later",
+                "args": {},
+            },
+            {
+                "kind": "tool_result",
+                "tool": "apply_later",
+                "call_id": "adversarial-apply-later",
+                "content": "{}",
+            },
+        ]
+    )
+    execution["turns"][0]["usage"]["tool_calls"] += 1
+    execution["turns"][0]["response"] = "नमस्ते"
+    evaluation["evidence"] = _artifact(
+        tmp_path, evaluation["evidence"]["path"], json.dumps(candidate)
+    )
+    comparison = build_baseline_comparison(
+        candidate,
+        baseline,
+        candidate_artifact_sha256=evaluation["evidence"]["sha256"],
+        baseline_artifact_sha256=evaluation["baseline_evidence"]["sha256"],
+    )
+    comparison["human_review"] = json.loads(comparison_path.read_text())["human_review"]
+    evaluation["comparison_evidence"] = _artifact(
+        tmp_path, evaluation["comparison_evidence"]["path"], json.dumps(comparison)
+    )
+
+    errors = _validate(manifest, tmp_path)
+
+    assert any("score does not match recomputed turn evidence" in error for error in errors)
+    assert not any("baseline_comparison.candidate" in error for error in errors)
+
+
+def test_future_comparison_review_is_outside_release_window_and_orders_founder_decision(tmp_path):
+    manifest = passing_manifest(tmp_path)
+    evaluation = next(check for check in manifest["checks"] if check["id"] == "model_evaluation")
+    comparison_path = tmp_path / evaluation["comparison_evidence"]["path"]
+    comparison = json.loads(comparison_path.read_text())
+    comparison["human_review"]["reviewed_at"] = "2099-01-01T00:00:00Z"
+    evaluation["comparison_evidence"] = _artifact(
+        tmp_path,
+        evaluation["comparison_evidence"]["path"],
+        json.dumps(comparison),
+    )
+
+    errors = validate_manifest(manifest, evidence_root=tmp_path, now=NOW)
+
+    assert any("after release evidence collection" in error for error in errors), errors
+    assert any("cannot be in the future" in error for error in errors), errors
+    assert "founder_decision.recorded_at must follow all reviewed evidence" in errors
+
+
+def test_founder_decision_must_strictly_follow_comparison_review(tmp_path):
+    manifest = passing_manifest(tmp_path)
+    evaluation = next(check for check in manifest["checks"] if check["id"] == "model_evaluation")
+    comparison_path = tmp_path / evaluation["comparison_evidence"]["path"]
+    comparison = json.loads(comparison_path.read_text())
+    comparison["human_review"]["reviewed_at"] = manifest["founder_decision"]["recorded_at"]
+    evaluation["comparison_evidence"] = _artifact(
+        tmp_path, evaluation["comparison_evidence"]["path"], json.dumps(comparison)
+    )
+
+    errors = _validate(manifest, tmp_path)
+
+    assert "founder_decision.recorded_at must follow all reviewed evidence" in errors
+
+
 def test_an_opaque_model_evaluation_artifact_is_rejected(tmp_path):
     manifest = passing_manifest(tmp_path)
     evaluation = next(check for check in manifest["checks"] if check["id"] == "model_evaluation")
@@ -300,10 +548,42 @@ def test_a_failed_gate_a_run_cannot_pass_the_manifest(tmp_path):
     failed = passing_gate_a_evidence(REVISION)
     failed["status"] = "failed"
     failed["passed"] = False
+    cases = {
+        case.id: case
+        for case in load_suite(Path("evals/gate_a/v1/cases.json")).cases
+    }
     for execution in failed["executions"]:
         if "hard_invariant" in execution["metric_results"]:
-            execution["metric_results"]["hard_invariant"] = False
-            execution["passed"] = False
+            case = cases[execution["case_id"]]
+            for authored, turn in zip(case.turns, execution["turns"], strict=True):
+                turn["trace"].extend(
+                    [
+                        {
+                            "kind": "tool_call",
+                            "tool": authored.prohibited_tools[0],
+                            "call_id": "adversarial-prohibited",
+                            "args": {},
+                        },
+                        {
+                            "kind": "tool_result",
+                            "tool": authored.prohibited_tools[0],
+                            "call_id": "adversarial-prohibited",
+                            "content": "{}",
+                        },
+                    ]
+                )
+                turn["usage"]["tool_calls"] += 1
+                turn["score"] = score_turn(
+                    authored,
+                    trace=turn["trace"],
+                    response=turn["response"],
+                    state=turn["state"],
+                    before_state_hash=turn["before_state_hash"],
+                )
+            execution["metric_results"] = execution_metric_results(
+                case, [turn["score"] for turn in execution["turns"]]
+            )
+            execution["passed"] = all(execution["metric_results"].values())
     failed["scores"] = summarize_scores(failed["executions"], THRESHOLDS)
     evaluation = next(check for check in manifest["checks"] if check["id"] == "model_evaluation")
     evaluation["evidence"] = _artifact(
@@ -314,3 +594,20 @@ def test_a_failed_gate_a_run_cannot_pass_the_manifest(tmp_path):
 
     assert any("did not pass" in error for error in errors), errors
     assert any("scores.hard_invariant did not meet" in error for error in errors), errors
+
+
+def test_every_issue_label_is_in_the_documented_vocabulary():
+    """A label the triage vocabulary does not define cannot be triaged consistently."""
+    root = Path(__file__).parents[1]
+    documented = {
+        line.split("|")[2].strip().strip("`")
+        for line in (root / "docs/agents/triage-labels.md").read_text().splitlines()
+        if line.startswith("| `")
+    }
+    used = {
+        line.split("`")[1]
+        for path in sorted((root / ".scratch").rglob("issues/*.md"))
+        for line in path.read_text().splitlines()
+        if line.startswith("Label: `")
+    }
+    assert used <= documented, f"undocumented labels: {sorted(used - documented)}"

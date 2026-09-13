@@ -8,6 +8,7 @@
 | `needs-info` | `needs-info` | Waiting for reporter information |
 | `ready-for-agent` | `ready-for-agent` | Fully specified and AFK-ready |
 | `ready-for-human` | `ready-for-human` | Human interaction or implementation required |
+| `done` | `done` | Accepted and verified; the issue records its evidence |
 | `wontfix` | `wontfix` | Will not be actioned |
 
 ## Severity

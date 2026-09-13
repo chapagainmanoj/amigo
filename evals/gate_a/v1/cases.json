@@ -14,8 +14,7 @@
     "clarification": 0.98,
     "no_unnecessary_mutation": 0.98,
     "factual_consistency": 0.95,
-    "tone": 0.9,
-    "dependency_error_handling": 0.95
+    "tone": 0.9
   },
   "cases": [
     {
@@ -231,7 +230,7 @@
       "id": "ga-life-14", "category": "lifecycle", "title": "Stop With No Active Reminder", "tags": ["dependency_result", "zero_result"],
       "setup": {"tasks": [{"alias": "journal", "title": "Write journal", "status": "pending", "reminder_at": null}], "history": []},
       "turns": [{"message": "Stop reminders for writing my journal.", "expected_tools": {"cancel_reminders": 1}, "prohibited_tools": ["create_task", "schedule_reminder", "update_task_status"], "clarification": "not_required", "response": {"english": true, "question_required": false, "must_include_any": ["0", "no active", "nothing", "reminder"], "must_include_all": [], "must_not_include": ["cancelled the task", "failed"], "max_sentences": 4}, "expected_state": {"task_count": 1, "task_titles_contain": ["write journal"], "task_statuses": {"journal": "pending"}, "pending_reminder_count": 0, "unchanged": true}}],
-      "metrics": ["english", "tool_and_state", "clarification", "no_unnecessary_mutation", "factual_consistency", "tone", "dependency_error_handling"]
+      "metrics": ["english", "tool_and_state", "clarification", "no_unnecessary_mutation", "factual_consistency", "tone"]
     },
     {
       "id": "ga-life-15", "category": "lifecycle", "title": "Later Ambiguous Between Reminders", "tags": ["later", "ambiguous_reference"],

@@ -127,3 +127,85 @@ pass/fail decision.
 
 Per this issue's own contract, missing evidence stays visibly not passing. No criterion is marked
 complete, and Gate B remains closed.
+
+### 2026-09-13 — Implementer-produced evidence aligned with the approved ownership decision
+
+Review flagged `validate_preflight_evidence.py` as scope creep for refusing a security review the
+release implementer *produced*, arguing the approved policy only prohibits self-approval.
+
+Corrected against the authoritative release-gate decision: implementers may produce evidence but
+cannot review their own records or approve their own Critical security/privacy work. The checker
+now permits the release implementer in the producer field only when a distinct independent
+reviewer approves the record. The founder remains barred from serving as the required independent
+security reviewer. A positive regression proves the allowed producer/reviewer split without
+weakening the existing self-review rejection.
+
+Independent re-review passed the corrected ownership rule and its adversarial coverage. The
+evidence checker still rejects implementer self-review, founder security approval, actor aliases,
+missing artifacts, revision/deployment drift, and every other previously reviewed fail-closed
+condition.
+
+### 2026-09-13 — Review-role scope and Gate A comparison correction
+
+A subsequent review found two remaining contract mismatches. First, the validator still barred the
+release implementer from reviewing every record, although the approved decision allows an
+implementer to review evidence someone else produced. The blanket restriction and the unrelated
+founder-decision witness restriction are removed. Producer and reviewer must still differ on every
+record, and the release implementer and founder remain explicitly barred from serving as the
+required independent security reviewer. Positive and adversarial regressions cover both sides of
+that boundary.
+
+Second, `model_evaluation` can no longer pass with only a current candidate artifact. It must link
+the separately hashed archived last-passing run and the separately hashed, human-reviewed
+candidate comparison. Validation derives score deltas and failure patterns from the two run
+artifacts, binds the reviewer identity to the manifest record, and rejects absent, pending, stale,
+or incomplete review. This is contract implementation only: neither a real baseline nor candidate
+provider run exists, so no release-evidence criterion is newly complete and Gate A remains open.
+
+Independent review returned changes required because execution summaries could still replace
+required turn evidence, the comparison omitted the candidate artifact digest, its review time was
+not bounded or ordered, and malformed repetition lists could crash validation. All four are
+corrected. Manifest validation now recomputes the finalized candidate and baseline SHA-256 values,
+requires exact authored execution category/metrics plus complete ordered turn traces and scores,
+derives metrics from those turn scores, bounds comparison review time to the release interval and
+current time, and includes it in the evidence ordering the founder decision must follow. Valid but
+malformed JSON returns blockers rather than exceptions.
+
+Local verification after these corrections: all 425 backend tests pass, the 98 focused
+evidence/currency tests pass, Gate A validates 60 cases at three repetitions, Ruff is clean, and
+`git diff --check` passes. Independent re-review is pending.
+
+The second independent re-review found that stored per-turn scorer booleans were still trusted.
+Manifest-linked Gate A validation now independently rescores every retained turn from its authored
+expectation, pre-turn state hash, trace, response, and resulting state; the recorded turn score,
+execution metrics, and summary must agree with that derivation. A forged transcript containing a
+prohibited `apply_later` call and non-English response is rejected even when every stored boolean
+remains green, and the manifest regression rebuilds valid candidate/comparison digests to prove
+the failure comes from rescoring rather than SHA mismatch.
+
+The manifest entry point now rejects non-object top-level JSON and non-object release, topology,
+findings, and founder-decision sections without exceptions. Candidate/baseline `executions: 5`
+also fails closed. Finally, the founder decision timestamp must be strictly later than every
+evidence timestamp, including comparison review; equality is no longer accepted. These changes
+do not create staging evidence or close any criterion.
+
+Local verification after the second corrections: all 436 backend tests pass, the 109 focused
+evidence/currency tests pass, Gate A validates 60 cases at three repetitions, Ruff is clean, and
+`git diff --check` passes. Independent re-review is pending.
+
+The third review found valid-JSON paths that could crash trace validation, unmatched or invented
+Tool evidence that could be presented as a real exchange, state hashes that were never
+recomputed, and required model-run metadata/totals that the manifest path did not validate. The
+linked checker now validates provider call IDs and ordered matching results against the real Gate
+A Tool schema, deeply validates and rehashes the shared canonical state snapshot, verifies alias
+consistency and multi-turn chaining, and derives execution/run usage and cost aggregates. It also
+requires the recorded environment, pricing, model settings, fixed clock/timezone, case-set and Tool
+schema metadata, retry policy, and clean-tree diff hash.
+
+The manifest CLI now catches malformed JSON, non-UTF-8 bytes, and read failures and returns a
+clean nonzero blocker. Adversarial regressions cover each route. No staging or provider evidence
+was created and no acceptance criterion closes.
+
+Local verification after the third corrections: all 466 backend tests pass, the 138 focused
+evidence/currency tests pass, Gate A validates 60 cases at three repetitions, Ruff is clean, and
+`git diff --check` passes. Independent re-review is pending.

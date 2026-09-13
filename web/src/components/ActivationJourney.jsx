@@ -279,7 +279,9 @@ export default function ActivationJourney({ session, state, refresh, onFinish })
                 Delivery: {state.test.delivery_state.replaceAll('_', ' ')}
               </div>
               <div className="activation-actions">
-                <a className="btn-primary" href="https://t.me/amigo_agent_bot" target="_blank" rel="noreferrer">Open Telegram <ExternalLink size={16} /></a>
+                {state.telegram_url
+                  ? <a className="btn-primary" href={state.telegram_url} target="_blank" rel="noreferrer">Open Telegram <ExternalLink size={16} /></a>
+                  : <p className="activation-help">Open Telegram from the chat where Amigo messaged you.</p>}
                 <button className="btn-secondary" onClick={refresh} disabled={busy}><RefreshCw size={16} /> Check status</button>
               </div>
               {state.test.can_retry && state.proposal && (

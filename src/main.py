@@ -51,7 +51,9 @@ handlers = BotHandlers(
 )
 update_coordinator = TelegramUpdateCoordinator(store)
 
-bot_username = "amigo_agent_bot"
+# Unknown until getMe succeeds for the configured token. Never seeded with a literal
+# handle: a default would name the production bot from every other environment.
+bot_username: str | None = None
 
 
 @asynccontextmanager

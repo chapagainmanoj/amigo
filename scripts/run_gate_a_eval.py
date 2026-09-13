@@ -28,16 +28,24 @@ from src.commands.base import CommandContext  # noqa: E402
 from src.commands.tasks import CreateTaskCommand, CreateTaskInput  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.evaluation.gate_a import (  # noqa: E402
+    GATE_A_ENVIRONMENT,
+    GATE_A_POLICY,
+    GATE_A_PRICING,
     PROMPT_SOURCE,
     TIME_BEHAVIOR_SOURCES,
     TURN_CONTEXT_SOURCES,
     VALIDATOR_SOURCE,
     GateASuite,
+    build_baseline_comparison,
+    build_gate_a_state_snapshot,
     canonical_hash,
+    dependency_versions,
+    execution_metric_results,
     extract_trace,
     file_set_hash,
     invalidating_inputs,
     load_suite,
+    observed_model_names,
     score_turn,
     summarize_scores,
     tool_schema,
@@ -48,16 +56,6 @@ from src.utils import Clock  # noqa: E402
 
 DEFAULT_SUITE = ROOT / "evals/gate_a/v1/cases.json"
 INVALIDATING_INPUTS = invalidating_inputs(ROOT)
-PRICING = {
-    "currency": "USD",
-    "input_per_million_tokens": 1.50,
-    "output_per_million_tokens": 9.00,
-    "source": "https://ai.google.dev/gemini-api/docs/pricing",
-    "checked_on": "2026-08-31",
-    "billing_tier": "paid-standard-conservative",
-}
-
-
 class FixedClock(Clock):
     """Evaluation clock shared by prompt and time interpretation."""
 
@@ -116,13 +114,17 @@ def _release_inputs(suite_path: Path, suite: GateASuite) -> dict:
         "git_revision": _git("rev-parse", "HEAD"),
         "working_tree_dirty": bool(status),
         "working_tree_diff_sha256": hashlib.sha256(diff).hexdigest(),
+        # The configured alias, which is a request, not an identity.
         "model": settings.default_model,
         "provider_model": (
             f"google:{settings.default_model}"
             if settings.default_model.startswith("gemini-")
             else settings.default_model
         ),
+        # Filled in from what the provider reported once the run has actually spoken to it.
+        "observed_model_names": [],
         "model_settings": {},
+        "dependency_versions": dependency_versions(),
         "prompt_source_sha256": hashlib.sha256((ROOT / PROMPT_SOURCE).read_bytes()).hexdigest(),
         "tool_schema_sha256": canonical_hash(schema),
         "tool_schema": schema,
@@ -200,74 +202,14 @@ async def _setup_case(case, suite: GateASuite, repetition: int):
 
 
 def _state(store: InMemoryStore, aliases: dict[str, str]) -> dict:
-    tasks = [
-        {
-            "task_id": task["task_id"],
-            "title": task["title"],
-            "status": task["status"],
-            "due_date": task.get("due_date"),
-            "version": task.get("version"),
-        }
-        for task in store._tasks.values()
-    ]
-    reminders = [
-        {
-            "reminder_id": reminder["reminder_id"],
-            "task_id": reminder["task_id"],
-            "status": reminder["status"],
-            "scheduled_time": reminder["scheduled_time"],
-        }
-        for reminder in store._reminders.values()
-        if reminder["status"] in {"pending", "sending", "sent"}
-    ]
-    stable = {
-        "tasks": sorted(
-            ({key: value for key, value in task.items() if key != "task_id"} for task in tasks),
-            key=lambda item: (item["title"], item["status"]),
-        ),
-        "pending_reminders": sorted(
-            (
-                {key: value for key, value in reminder.items() if key != "reminder_id"}
-                for reminder in reminders
-            ),
-            key=lambda item: (item["task_id"], item["scheduled_time"]),
-        ),
-    }
-    return {
-        "tasks": tasks,
-        "pending_reminders": reminders,
-        "aliases": {
-            alias: next((task for task in tasks if task["task_id"] == task_id), {})
-            for alias, task_id in aliases.items()
-        },
-        "state_hash": canonical_hash(stable),
-    }
-
-
-def _metric_results(case, turn_results: list[dict]) -> dict[str, bool]:
-    def all_turns(key: str) -> bool:
-        return all(result[key] for result in turn_results)
-
-    mapping = {
-        "hard_invariant": all_turns("passed"),
-        "safety_boundary": all_turns("response_passed")
-        and all_turns("no_unnecessary_mutation_passed"),
-        "english": all_turns("english_passed"),
-        "mutation_risk_clarification": all_turns("clarification_passed")
-        and all_turns("no_unnecessary_mutation_passed"),
-        "tool_and_state": all_turns("tool_state_passed"),
-        "task_extraction": all_turns("task_extraction_passed"),
-        "clarification": all_turns("clarification_passed"),
-        "no_unnecessary_mutation": all_turns("no_unnecessary_mutation_passed"),
-        "factual_consistency": all_turns("factual_consistency_passed"),
-        "tone": all_turns("tone_passed"),
-        "dependency_error_handling": all_turns("factual_consistency_passed"),
-    }
-    return {metric: mapping[metric] for metric in case.metrics}
+    return build_gate_a_state_snapshot(
+        list(store._tasks.values()), list(store._reminders.values()), aliases
+    )
 
 
 async def _run_execution(case, suite: GateASuite, repetition: int, provider_model) -> dict:
     store, deps, aliases = await _setup_case(case, suite, repetition)
+    observed_models: set[str] = set()
     turn_evidence = []
     total_input = 0
     total_output = 0
@@ -278,7 +220,9 @@ async def _run_execution(case, suite: GateASuite, repetition: int, provider_mode
         turn_started = time.perf_counter()
         result = await run_agent_turn(deps, turn.message, model=provider_model)
         latency_ms = round((time.perf_counter() - turn_started) * 1_000, 2)
-        trace, response = extract_trace(result.new_messages())
+        messages = result.new_messages()
+        trace, response = extract_trace(messages)
+        observed_models.update(observed_model_names(messages))
         usage = result.usage
         total_input += usage.input_tokens
         total_output += usage.output_tokens
@@ -294,6 +238,7 @@ async def _run_execution(case, suite: GateASuite, repetition: int, provider_mode
             {
                 "turn": turn_index,
                 "message": turn.message,
+                "before_state_hash": before["state_hash"],
                 "trace": trace,
                 "response": response,
                 "state": after,
@@ -312,21 +257,33 @@ async def _run_execution(case, suite: GateASuite, repetition: int, provider_mode
         )
     turn_scores = [item["score"] for item in turn_evidence]
     cost = (
-        total_input * PRICING["input_per_million_tokens"]
-        + total_output * PRICING["output_per_million_tokens"]
+        total_input * GATE_A_PRICING["input_per_million_tokens"]
+        + total_output * GATE_A_PRICING["output_per_million_tokens"]
     ) / 1_000_000
+    metric_results = execution_metric_results(case, turn_scores)
     return {
         "case_id": case.id,
         "category": case.category,
         "repetition": repetition,
+        "observed_model_names": sorted(observed_models),
         "status": "completed",
-        "passed": all(score["passed"] for score in turn_scores),
-        "metric_results": _metric_results(case, turn_scores),
+        # Per-execution passage is derived from the independently scored metrics. The release
+        # verdict is derived from their category thresholds across all executions below.
+        "passed": all(metric_results.values()),
+        "metric_results": metric_results,
         "turns": turn_evidence,
         "latency_ms": round((time.perf_counter() - started) * 1_000, 2),
         "usage": {"input_tokens": total_input, "output_tokens": total_output},
         "estimated_cost_usd": round(cost, 8),
     }
+
+
+def _merge_observed_model_names(release_inputs: dict, execution: dict) -> None:
+    """Accumulate provider identities without assuming an errored execution has one."""
+    release_inputs["observed_model_names"] = sorted(
+        set(release_inputs["observed_model_names"])
+        | set(execution.get("observed_model_names") or [])
+    )
 
 
 def _write_evidence(path: Path, evidence: dict) -> None:
@@ -348,23 +305,64 @@ async def run(args) -> int:
     selected = [case for case in suite.cases if not args.case or case.id == args.case]
     if not selected:
         raise SystemExit(f"unknown case: {args.case}")
+    baseline = None
+    baseline_sha256 = None
+    if args.case and args.establish_baseline:
+        raise SystemExit("--establish-baseline cannot be combined with --case")
+    if args.establish_baseline and args.baseline is not None:
+        raise SystemExit("--establish-baseline cannot be combined with --baseline")
+    if not args.case and not args.establish_baseline:
+        if args.baseline is None:
+            raise SystemExit(
+                "--baseline is required for a declared run; supply the archived last-passing "
+                "Gate A JSON artifact"
+            )
+        try:
+            baseline_bytes = args.baseline.read_bytes()
+            baseline = json.loads(baseline_bytes)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise SystemExit(f"cannot read Gate A baseline {args.baseline}: {error}") from error
+        baseline_inputs = baseline.get("release_inputs") if isinstance(baseline, dict) else None
+        baseline_revision = (
+            baseline_inputs.get("git_revision") if isinstance(baseline_inputs, dict) else None
+        )
+        from scripts.check_gate_a_evidence import check_evidence
+
+        baseline_errors = check_evidence(
+            baseline,
+            revision=baseline_revision or "",
+            root=ROOT,
+            suite_path=suite_path,
+            _historical_baseline=True,
+        )
+        if baseline_errors:
+            formatted = "\n".join(f"- {error}" for error in baseline_errors)
+            raise SystemExit(f"the supplied Gate A baseline is not passing:\n{formatted}")
+        baseline_sha256 = hashlib.sha256(baseline_bytes).hexdigest()
     release_inputs = _release_inputs(suite_path, suite)
     evidence = {
         "run_id": str(uuid.uuid4()),
         "suite_id": suite.suite_id,
+        "purpose": (
+            "development_case"
+            if args.case
+            else "baseline"
+            if args.establish_baseline
+            else "release_candidate"
+        ),
         "declared_at": datetime.now(UTC).isoformat(),
         "completed_at": None,
         "status": "running",
-        "environment": "controlled-local-isolated",
+        "environment": GATE_A_ENVIRONMENT,
         "minimum_provider_request_interval_seconds": args.request_interval_seconds,
         "repetitions": args.repetitions,
         "selected_cases": [case.id for case in selected],
         "release_inputs": release_inputs,
-        "pricing": PRICING,
+        "pricing": GATE_A_PRICING,
         "executions": [],
         "scores": None,
         "passed": False,
-        "policy": "No failed or unchanged execution is retried within this declared run.",
+        "policy": GATE_A_POLICY,
     }
     _write_evidence(args.output, evidence)
 
@@ -414,8 +412,10 @@ async def run(args) -> int:
                     "latency_ms": None,
                     "usage": {"input_tokens": 0, "output_tokens": 0},
                     "estimated_cost_usd": 0.0,
+                    "observed_model_names": [],
                 }
             evidence["executions"].append(execution)
+            _merge_observed_model_names(release_inputs, execution)
             _write_evidence(args.output, evidence)
 
     scoring_thresholds = suite.thresholds
@@ -441,6 +441,21 @@ async def run(args) -> int:
         ),
     }
     _write_evidence(args.output, evidence)
+    if baseline is not None and baseline_sha256 is not None:
+        comparison_output = args.comparison_output or args.output.with_name(
+            f"{args.output.stem}.comparison.json"
+        )
+        comparison = build_baseline_comparison(
+            evidence,
+            baseline,
+            candidate_artifact_sha256=hashlib.sha256(args.output.read_bytes()).hexdigest(),
+            baseline_artifact_sha256=baseline_sha256,
+        )
+        _write_evidence(comparison_output, comparison)
+        print(
+            f"baseline comparison written to {comparison_output}; "
+            "release evidence remains pending until its human_review is completed"
+        )
     print(json.dumps({"status": evidence["status"], **evidence["totals"]}, indent=2))
     return 0 if evidence["passed"] else 1
 
@@ -449,6 +464,24 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--suite", type=Path, default=DEFAULT_SUITE)
     parser.add_argument("--output", type=Path, default=ROOT / "evidence/gate-a/latest.json")
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        help="Archived full JSON artifact for the last passing declared Gate A run",
+    )
+    parser.add_argument(
+        "--establish-baseline",
+        action="store_true",
+        help=(
+            "Run the full suite to establish the first archived baseline; this output cannot "
+            "serve as release-candidate evidence"
+        ),
+    )
+    parser.add_argument(
+        "--comparison-output",
+        type=Path,
+        help="Comparison report path (defaults beside --output)",
+    )
     parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--case", help="Run one case for development; not release evidence")
     parser.add_argument("--repetitions", type=int, default=3)

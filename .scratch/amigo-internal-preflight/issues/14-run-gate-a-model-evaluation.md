@@ -175,3 +175,114 @@ check, or the turn-assertion validator each fails specific tests.
 
 Local verification after the fixes: 323 backend tests pass, `ruff check src tests scripts` passes,
 `git diff --check` clean.
+
+### 2026-09-13 — Provider identity bound to executions; fabricated Gate A metric removed
+
+Independent review found that the runner recorded a configured alias as the model identity and
+that `dependency_error_handling` was scored as a literal alias of factual consistency.
+
+The model-identity finding is fixed. The runner records the provider-reported model name on every
+execution plus the installed `pydantic-ai-slim`, `google-genai`, and `pydantic` versions. The
+evidence checker derives the aggregate identity from all 180 execution records, rejects a missing
+or mixed identity, and invalidates evidence when those dependency versions change. Ordinary
+execution errors retain an empty identity without crashing evidence capture.
+
+The previous `dependency_error_handling` score was fabricated: `ga-life-14` has a valid zero-result
+Tool response, not a dependency failure, and the runner aliased the metric to factual consistency.
+The authoritative case inventory assigns dependency and Tool-result error scenarios to Gate B,
+while the 95% threshold applies when that category is present. The unsupported metric is therefore
+removed from Gate A rather than credited without observations. No case count, authored behavior,
+or Gate A composition changed; `ga-life-14` remains and is scored for its actual contract.
+
+Graceful dependency-error handling still requires implementation and the approved Gate B cases
+before Gate B. Gate A remains open for its complete declared release-model run and independent
+evidence review.
+
+Final adversarial review also found and closed two evidence-integrity gaps: the aggregate provider
+identity is now derived from exactly one nonempty provider-reported name on every completed
+execution, and malformed mixed-type evidence returns validation errors instead of crashing. Error
+executions retain an empty identity without breaking capture. The corrected Gate A case-set SHA-256
+is `9f7c9988262e1d42a1884d86393a6a6ae63a11633864b834bcef6bf6ce1ef3ff`.
+
+Independent re-review passed. Current local verification: 400 backend tests, Ruff, Gate A
+60-case/3-repetition contract validation, frontend lint/build, and `git diff --check` all pass.
+
+### 2026-09-13 — Last-passing baseline comparison made fail-closed
+
+A later specification review found that the checker enforced candidate currency and thresholds
+but never implemented Decision 09's required comparison with the last passing baseline. The
+release path now requires three distinct artifacts: the full candidate run, the archived full
+last-passing run, and a comparison report bound to both finalized run artifacts by SHA-256. The
+checker validates
+the historical artifact as a complete passing declared run, rejects candidate self-comparison or
+a baseline that did not complete before candidate declaration, and independently recomputes every
+metric score/delta and every baseline, candidate, new, and resolved failure pattern. Patterns are
+stable authored-case plus failed-metric combinations with affected repetitions retained.
+
+The comparison starts pending. It cannot pass release validation until its human reviewer
+confirms the selected artifact is the last passing baseline, explicitly reviews subjective tone,
+enumerates every derived new failure-pattern ID exactly, records a UTC review time after candidate
+completion and inside the release interval, and adds notes. A future review is rejected and the
+founder decision must follow the comparison review. Human review cannot override the existing
+deterministic threshold and hard-invariant checks. The release manifest now requires separately
+hashed candidate, baseline, and comparison artifacts and binds the comparison reviewer to the
+model-evaluation evidence reviewer.
+
+No real provider result is claimed. There is no archived complete passing run today, so the first
+quota-capable session must use `--establish-baseline` for one full 180-execution run; a second,
+distinct 180-execution candidate and its reviewed comparison are then required for this release.
+Criteria 3–6 remain unchecked until those real artifacts exist and are independently reviewed.
+
+A first independent review of this slice returned changes required: execution-level category and
+metric declarations were still trusted, per-turn traces/scores were not required, the comparison
+did not bind the candidate bytes, comparison review time was absent from release ordering, and a
+JSON-list repetition could crash set insertion. The checker now binds each execution to its exact
+authored category, metric set, and complete ordered turn evidence; derives execution metrics from
+the per-turn scores; and rejects the demonstrated 179-empty/one-all-metrics forgery. The finalized
+candidate digest is recomputed in both CLI and manifest paths, so changing only a trace after
+approval invalidates the comparison. Repetition is validated as a non-boolean integer in 1–3
+before set insertion, and CLI JSON reads catch decoding and I/O failures.
+
+Local verification after these corrections: all 425 backend tests pass, the 98 focused
+evidence/currency tests pass, Gate A validates 60 cases at three repetitions, Ruff is clean, and
+`git diff --check` passes. Independent re-review is pending.
+
+The second independent re-review found one remaining trust boundary: the checker validated the
+shape of each retained turn score but still derived execution metrics from those stored booleans.
+It now invokes the production `score_turn` function again for every authored turn using the exact
+retained pre-turn state hash, trace, response, and resulting state. The recorded score must match
+that recomputation field for field, while execution metrics and category summaries are derived only
+from the recomputed values. Malformed nested trace/state evidence is rejected before rescoring.
+An adversarial regression leaves every stored boolean green while adding prohibited
+`apply_later` behavior and a non-English response; direct checker, CLI, and release-manifest paths
+all reject it.
+
+Comparison failure-pattern construction now treats non-list execution collections as invalid
+input rather than raising, including the valid-JSON `executions: 5` candidate/baseline cases. No
+provider run is claimed and criteria 3–6 remain open.
+
+Local verification after the second corrections: all 436 backend tests pass, the 109 focused
+evidence/currency tests pass, Gate A validates 60 cases at three repetitions, Ruff is clean, and
+`git diff --check` passes. Independent re-review is pending.
+
+The third independent pass found that trace and state evidence still admitted internally
+impossible artifacts and that several Decision 09 metadata fields were merely recorded, not
+validated. The trace contract now retains pydantic-ai Tool call IDs, permits only nonempty names
+from the actual Gate A Tool schema, and requires every ordered call to have a later nonempty result
+with the same ID and Tool name. Non-string and unhashable JSON `kind` values, unknown Tools,
+orphan results, unmatched calls, and malformed result content return blockers without exceptions.
+The shared passing fixture now contains the runner-faithful 117 calls and 117 matching results.
+
+Runner and checker now share one canonical state snapshot/hash implementation. It enforces exact
+nested Task, Reminder, and alias projections, alias-to-Task consistency, full-state SHA-256
+recomputation, and multi-turn hash chaining. Contradictory aliases, a changed field behind a stale
+hash, a fabricated hash, and a disconnected next-turn hash all fail adversarial regressions.
+
+The checker also validates the controlled environment, pricing snapshot, retry policy, request
+interval, provider/model settings, Tool schema, case-set version, fixed clock/timezone, clean diff
+hash, aggregate execution latency/usage/cost, and recomputed run token/cost totals. This hardening
+does not claim a provider run; criteria 3–6 remain open.
+
+Local verification after the third corrections: all 466 backend tests pass, the 138 focused
+evidence/currency tests pass, Gate A validates 60 cases at three repetitions, Ruff is clean, and
+`git diff --check` passes. Independent re-review is pending.

@@ -145,3 +145,37 @@ deterministic forced interleave rather than a random race.
 No acceptance criterion changes. Every remaining criterion is clean-account staging evidence on
 desktop and mobile, which needs the dedicated staging resources in
 `staging-provisioning-checklist.md`.
+
+### 2026-09-13 — Hardcoded bot handle removed; consent still cannot satisfy criterion 1
+
+Independent review found the resolution screen deep-linking to a literal
+`https://t.me/amigo_agent_bot`. A staging deployment would have sent participants to the
+production bot, defeating the separate Telegram resource that issue 16 has to prove.
+
+It was in three places, not one. `ConnectView.jsx` used the same literal as a fallback whenever
+`bot_link` was absent, and `src/main.py` seeded `bot_username` with it, so a deployment whose
+`getMe` failed served production Pairing links from every non-production environment — outside
+production that failure is only logged, never fatal.
+
+Fixed so the handle has exactly one source: whatever `getMe` returned for the configured token.
+`get_bot_username` fails closed with 503 rather than guessing, `/api/activation` serves
+`telegram_url` for the return path that carries no Pairing token, and no dashboard source names a
+bot at all. Four regressions cover it, including a repository guard that fails on any `t.me/`
+literal under `web/src`. Each was confirmed to fail against the previous code.
+
+Criterion 1 still cannot be checked, and not only for staging evidence. It requires acknowledging
+"the narrow promise, beta limits, and privacy/terms". There is no privacy policy and no terms
+anywhere in this repository, so the acknowledgement has nothing to link to. The
+`privacy_and_retention` checkbox also names retention without stating one. Both are founder
+deliverables, not code, and are not invented here.
+
+The governing privacy decision also requires age 18+, processors/cross-border disclosure, and a
+sensitive-data warning before Pairing. These remain part of the same founder privacy/terms
+deliverable; they are blockers, not optional additions. The application must not invent legal
+copy or mark criterion 1 complete before the approved notice exists and is linked.
+
+Independent re-review passed the environment-derived Telegram identity and fail-closed/omitted
+link behavior, including the repository guard against hardcoded dashboard bot handles. The same
+review confirmed criterion 1 remains open for the founder-approved privacy/terms, retention,
+processor/cross-border, age, and sensitive-data notice rather than a code defect that can be
+silently filled with invented policy.

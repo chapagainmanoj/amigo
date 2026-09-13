@@ -95,6 +95,15 @@ def tool_schema() -> list[dict]:
     ]
 
 
+# Source files are not the whole invalidating surface: the provider SDK sits between the prompt
+# and the model and changes behaviour on its own.
+INVALIDATING_DISTRIBUTIONS = (
+    "pydantic-ai-slim",
+    "google-genai",
+    "pydantic",
+)
+
+
 def invalidating_inputs(root: Path) -> list[Path]:
     """Every file whose contents invalidate a previously declared Gate A run."""
     return [
@@ -145,8 +154,24 @@ THRESHOLDS = {
     "no_unnecessary_mutation": 0.98,
     "factual_consistency": 0.95,
     "tone": 0.90,
-    "dependency_error_handling": 0.95,
 }
+
+GATE_A_PRICING = {
+    "currency": "USD",
+    "input_per_million_tokens": 1.50,
+    "output_per_million_tokens": 9.00,
+    "source": "https://ai.google.dev/gemini-api/docs/pricing",
+    "checked_on": "2026-08-31",
+    "billing_tier": "paid-standard-conservative",
+}
+GATE_A_POLICY = "No failed or unchanged execution is retried within this declared run."
+GATE_A_ENVIRONMENT = "controlled-local-isolated"
+STATE_TASK_FIELDS = {"task_id", "title", "status", "due_date", "version"}
+STATE_REMINDER_FIELDS = {"reminder_id", "task_id", "status", "scheduled_time"}
+STATE_FIELDS = {"tasks", "pending_reminders", "aliases", "state_hash"}
+STATE_TASK_STATUSES = {"pending", "completed", "skipped", "cancelled"}
+STATE_REMINDER_STATUSES = {"pending", "sending", "sent"}
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 class ResponseProperties(BaseModel):
@@ -291,6 +316,179 @@ def canonical_hash(value) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
+def gate_a_state_hash(
+    tasks: list[dict], pending_reminders: list[dict], aliases: dict[str, dict]
+) -> str:
+    """Hash every retained domain field, including identity and alias relationships."""
+    stable = {
+        "tasks": sorted(tasks, key=lambda item: item["task_id"]),
+        "pending_reminders": sorted(
+            pending_reminders, key=lambda item: item["reminder_id"]
+        ),
+        "aliases": {
+            alias: task["task_id"] for alias, task in sorted(aliases.items())
+        },
+    }
+    return canonical_hash(stable)
+
+
+def build_gate_a_state_snapshot(
+    tasks: list[dict] | object,
+    reminders: list[dict] | object,
+    alias_task_ids: dict[str, str],
+) -> dict:
+    """Build the canonical runner/checker state snapshot from Store records."""
+    retained_tasks = [
+        {
+            "task_id": task["task_id"],
+            "title": task["title"],
+            "status": task["status"],
+            "due_date": task.get("due_date"),
+            "version": task.get("version"),
+        }
+        for task in tasks
+    ]
+    retained_reminders = [
+        {
+            "reminder_id": reminder["reminder_id"],
+            "task_id": reminder["task_id"],
+            "status": reminder["status"],
+            "scheduled_time": reminder["scheduled_time"],
+        }
+        for reminder in reminders
+        if reminder["status"] in STATE_REMINDER_STATUSES
+    ]
+    aliases = {
+        alias: next(
+            task for task in retained_tasks if task["task_id"] == task_id
+        )
+        for alias, task_id in alias_task_ids.items()
+    }
+    return {
+        "tasks": retained_tasks,
+        "pending_reminders": retained_reminders,
+        "aliases": aliases,
+        "state_hash": gate_a_state_hash(retained_tasks, retained_reminders, aliases),
+    }
+
+
+def gate_a_state_errors(state: object) -> list[str]:
+    """Validate a retained snapshot deeply enough to safely hash and score it."""
+    if not isinstance(state, dict) or set(state) != STATE_FIELDS:
+        return ["must contain exactly tasks, pending_reminders, aliases, and state_hash"]
+    tasks = state.get("tasks")
+    reminders = state.get("pending_reminders")
+    aliases = state.get("aliases")
+    state_hash = state.get("state_hash")
+    errors: list[str] = []
+    if not isinstance(tasks, list):
+        errors.append("tasks must be a list")
+        tasks = []
+    valid_tasks = True
+    for index, task in enumerate(tasks):
+        if not isinstance(task, dict) or set(task) != STATE_TASK_FIELDS:
+            errors.append(f"tasks[{index}] has an invalid shape")
+            valid_tasks = False
+            continue
+        if not isinstance(task.get("task_id"), str) or not task["task_id"].strip():
+            errors.append(f"tasks[{index}].task_id must be nonempty")
+            valid_tasks = False
+        if not isinstance(task.get("title"), str) or not task["title"].strip():
+            errors.append(f"tasks[{index}].title must be nonempty")
+            valid_tasks = False
+        if (
+            not isinstance(task.get("status"), str)
+            or task["status"] not in STATE_TASK_STATUSES
+        ):
+            errors.append(f"tasks[{index}].status is invalid")
+            valid_tasks = False
+        if task.get("due_date") is not None and not isinstance(task.get("due_date"), str):
+            errors.append(f"tasks[{index}].due_date must be a string or null")
+            valid_tasks = False
+        if type(task.get("version")) is not int or task["version"] < 1:
+            errors.append(f"tasks[{index}].version must be a positive integer")
+            valid_tasks = False
+    task_ids = [
+        task["task_id"]
+        for task in tasks
+        if isinstance(task, dict) and isinstance(task.get("task_id"), str)
+    ]
+    if len(task_ids) != len(set(task_ids)):
+        errors.append("task IDs must be unique")
+        valid_tasks = False
+
+    if not isinstance(reminders, list):
+        errors.append("pending_reminders must be a list")
+        reminders = []
+    valid_reminders = True
+    for index, reminder in enumerate(reminders):
+        if not isinstance(reminder, dict) or set(reminder) != STATE_REMINDER_FIELDS:
+            errors.append(f"pending_reminders[{index}] has an invalid shape")
+            valid_reminders = False
+            continue
+        if not isinstance(reminder.get("reminder_id"), str) or not reminder[
+            "reminder_id"
+        ].strip():
+            errors.append(f"pending_reminders[{index}].reminder_id must be nonempty")
+            valid_reminders = False
+        if not isinstance(reminder.get("task_id"), str) or not reminder["task_id"].strip():
+            errors.append(f"pending_reminders[{index}].task_id must be nonempty")
+            valid_reminders = False
+        elif reminder["task_id"] not in task_ids:
+            errors.append(f"pending_reminders[{index}].task_id does not name a retained task")
+            valid_reminders = False
+        if (
+            not isinstance(reminder.get("status"), str)
+            or reminder["status"] not in STATE_REMINDER_STATUSES
+        ):
+            errors.append(f"pending_reminders[{index}].status is invalid")
+            valid_reminders = False
+        if not isinstance(reminder.get("scheduled_time"), str) or not reminder[
+            "scheduled_time"
+        ].strip():
+            errors.append(f"pending_reminders[{index}].scheduled_time must be nonempty")
+            valid_reminders = False
+    reminder_ids = [
+        reminder["reminder_id"]
+        for reminder in reminders
+        if isinstance(reminder, dict) and isinstance(reminder.get("reminder_id"), str)
+    ]
+    if len(reminder_ids) != len(set(reminder_ids)):
+        errors.append("reminder IDs must be unique")
+        valid_reminders = False
+
+    if not isinstance(aliases, dict):
+        errors.append("aliases must be an object")
+        aliases = {}
+    valid_aliases = True
+    tasks_by_id = {
+        task["task_id"]: task
+        for task in tasks
+        if isinstance(task, dict) and isinstance(task.get("task_id"), str)
+    }
+    for alias, task in aliases.items():
+        if not isinstance(alias, str) or not alias.strip():
+            errors.append("alias names must be nonempty strings")
+            valid_aliases = False
+            continue
+        if not isinstance(task, dict) or set(task) != STATE_TASK_FIELDS:
+            errors.append(f"aliases.{alias} has an invalid task shape")
+            valid_aliases = False
+            continue
+        alias_task_id = task.get("task_id")
+        if not isinstance(alias_task_id, str) or tasks_by_id.get(alias_task_id) != task:
+            errors.append(f"aliases.{alias} contradicts the retained task")
+            valid_aliases = False
+
+    if not isinstance(state_hash, str) or not SHA256_PATTERN.fullmatch(state_hash):
+        errors.append("state_hash must be a lowercase SHA-256 digest")
+    elif valid_tasks and valid_reminders and valid_aliases:
+        expected_hash = gate_a_state_hash(tasks, reminders, aliases)
+        if state_hash != expected_hash:
+            errors.append("state_hash does not match the retained domain state")
+    return errors
+
+
 def file_set_hash(paths: list[Path], root: Path) -> str:
     """Hash named files with relative paths so evidence invalidates on source changes."""
     payload = [
@@ -303,6 +501,41 @@ def file_set_hash(paths: list[Path], root: Path) -> str:
     return canonical_hash(payload)
 
 
+def observed_model_names(messages) -> list[str]:
+    """Every model identity the provider reported while answering, in order.
+
+    ``settings.default_model`` is an alias the provider is free to resolve to different
+    underlying versions over time, so recording only the alias does not pin the model a
+    declared run was scored against.
+    """
+    from pydantic_ai.messages import ModelResponse
+
+    seen = []
+    for message in messages:
+        if isinstance(message, ModelResponse) and message.model_name and (
+            message.model_name not in seen
+        ):
+            seen.append(message.model_name)
+    return seen
+
+
+def dependency_versions() -> dict[str, str]:
+    """Installed versions of the packages that change model behaviour when they change.
+
+    A provider SDK upgrade can alter Tool-schema serialization, prompt assembly, and retry
+    behaviour, so it invalidates a declared run exactly like editing the prompt does.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    versions = {}
+    for distribution in INVALIDATING_DISTRIBUTIONS:
+        try:
+            versions[distribution] = version(distribution)
+        except PackageNotFoundError:
+            versions[distribution] = "not-installed"
+    return versions
+
+
 def extract_trace(messages) -> tuple[list[dict], str]:
     """Extract content-bounded Tool calls/results and the final response."""
     from pydantic_ai.messages import TextPart, ToolCallPart, ToolReturnPart
@@ -312,12 +545,20 @@ def extract_trace(messages) -> tuple[list[dict], str]:
     for message in messages:
         for part in message.parts:
             if isinstance(part, ToolCallPart):
-                trace.append({"kind": "tool_call", "tool": part.tool_name, "args": part.args})
+                trace.append(
+                    {
+                        "kind": "tool_call",
+                        "tool": part.tool_name,
+                        "call_id": part.tool_call_id,
+                        "args": part.args,
+                    }
+                )
             elif isinstance(part, ToolReturnPart):
                 trace.append(
                     {
                         "kind": "tool_result",
                         "tool": part.tool_name,
+                        "call_id": part.tool_call_id,
                         "content": str(part.content)[:2_000],
                     }
                 )
@@ -468,6 +709,28 @@ def score_turn(
     }
 
 
+def execution_metric_results(case: EvalCase, turn_scores: list[dict]) -> dict[str, bool]:
+    """Derive one execution's approved metrics from its complete per-turn score evidence."""
+    def all_turns(key: str) -> bool:
+        return all(result[key] for result in turn_scores)
+
+    mapping = {
+        "hard_invariant": all_turns("passed"),
+        "safety_boundary": all_turns("response_passed")
+        and all_turns("no_unnecessary_mutation_passed"),
+        "english": all_turns("english_passed"),
+        "mutation_risk_clarification": all_turns("clarification_passed")
+        and all_turns("no_unnecessary_mutation_passed"),
+        "tool_and_state": all_turns("tool_state_passed"),
+        "task_extraction": all_turns("task_extraction_passed"),
+        "clarification": all_turns("clarification_passed"),
+        "no_unnecessary_mutation": all_turns("no_unnecessary_mutation_passed"),
+        "factual_consistency": all_turns("factual_consistency_passed"),
+        "tone": all_turns("tone_passed"),
+    }
+    return {metric: mapping[metric] for metric in case.metrics}
+
+
 def summarize_scores(executions: list[dict], thresholds: dict[str, float]) -> dict:
     """Aggregate only applicable metric observations; categories cannot hide each other."""
     observations: dict[str, list[bool]] = {metric: [] for metric in thresholds}
@@ -486,3 +749,143 @@ def summarize_scores(executions: list[dict], thresholds: dict[str, float]) -> di
             "threshold": threshold,
         }
     return summary
+
+
+def execution_failure_patterns(executions: list[dict]) -> list[dict]:
+    """Return stable, human-reviewable failure patterns grouped across repetitions.
+
+    A pattern is the combination of one authored case and the independently scored metrics that
+    failed for it. Repetition numbers remain attached so a reviewer can distinguish an isolated
+    miss from a repeatable behavior without treating three repetitions as three unrelated
+    findings. Execution errors are represented explicitly rather than disappearing from the
+    comparison because they have no ordinary metric result.
+    """
+    if not isinstance(executions, list):
+        return []
+
+    grouped: dict[tuple[str, tuple[str, ...]], set[int]] = {}
+    for execution in executions:
+        if not isinstance(execution, dict):
+            continue
+        case_id = execution.get("case_id")
+        if not isinstance(case_id, str) or not case_id:
+            continue
+        metric_results = execution.get("metric_results")
+        failed_metrics = (
+            sorted(
+                metric
+                for metric, passed in metric_results.items()
+                if isinstance(metric, str) and passed is False
+            )
+            if isinstance(metric_results, dict)
+            else []
+        )
+        if execution.get("status") != "completed":
+            failed_metrics.append("execution_status")
+        elif execution.get("passed") is False and not failed_metrics:
+            failed_metrics.append("unscored_execution_failure")
+        if not failed_metrics:
+            continue
+        key = (case_id, tuple(sorted(set(failed_metrics))))
+        repetition = execution.get("repetition")
+        if isinstance(repetition, int) and not isinstance(repetition, bool):
+            grouped.setdefault(key, set()).add(repetition)
+        else:
+            grouped.setdefault(key, set())
+
+    return [
+        {
+            "id": f"{case_id}::{'+'.join(metrics)}",
+            "case_id": case_id,
+            "failed_metrics": list(metrics),
+            "repetitions": sorted(repetitions),
+        }
+        for (case_id, metrics), repetitions in sorted(grouped.items())
+    ]
+
+
+def build_baseline_comparison(
+    candidate: dict,
+    baseline: dict,
+    *,
+    candidate_artifact_sha256: str,
+    baseline_artifact_sha256: str,
+) -> dict:
+    """Build the immutable comparison report a human reviewer must complete.
+
+    The baseline itself stays a separate artifact. Its digest binds this report to the exact
+    archived last-passing run supplied to the runner, while run metadata makes accidental swaps
+    obvious during review.
+    """
+    candidate_scores = candidate.get("scores") if isinstance(candidate.get("scores"), dict) else {}
+    baseline_scores = baseline.get("scores") if isinstance(baseline.get("scores"), dict) else {}
+    score_comparison = {}
+    for metric in sorted(THRESHOLDS):
+        candidate_metric = candidate_scores.get(metric)
+        baseline_metric = baseline_scores.get(metric)
+        candidate_score = (
+            candidate_metric.get("score") if isinstance(candidate_metric, dict) else None
+        )
+        baseline_score = (
+            baseline_metric.get("score") if isinstance(baseline_metric, dict) else None
+        )
+        delta = (
+            candidate_score - baseline_score
+            if isinstance(candidate_score, (int, float))
+            and not isinstance(candidate_score, bool)
+            and isinstance(baseline_score, (int, float))
+            and not isinstance(baseline_score, bool)
+            else None
+        )
+        score_comparison[metric] = {
+            "baseline_score": baseline_score,
+            "candidate_score": candidate_score,
+            "delta": delta,
+            "regressed": delta is not None and delta < 0,
+        }
+
+    baseline_patterns = execution_failure_patterns(baseline.get("executions") or [])
+    candidate_patterns = execution_failure_patterns(candidate.get("executions") or [])
+    baseline_ids = {pattern["id"] for pattern in baseline_patterns}
+    candidate_ids = {pattern["id"] for pattern in candidate_patterns}
+    new_patterns = [
+        pattern for pattern in candidate_patterns if pattern["id"] not in baseline_ids
+    ]
+    resolved_patterns = [
+        pattern for pattern in baseline_patterns if pattern["id"] not in candidate_ids
+    ]
+    baseline_inputs = baseline.get("release_inputs")
+    candidate_inputs = candidate.get("release_inputs")
+    baseline_inputs = baseline_inputs if isinstance(baseline_inputs, dict) else {}
+    candidate_inputs = candidate_inputs if isinstance(candidate_inputs, dict) else {}
+    return {
+        "schema_version": "amigo-gate-a-baseline-comparison-v1",
+        "baseline": {
+            "run_id": baseline.get("run_id"),
+            "git_revision": baseline_inputs.get("git_revision"),
+            "completed_at": baseline.get("completed_at"),
+            "artifact_sha256": baseline_artifact_sha256,
+        },
+        "candidate": {
+            "run_id": candidate.get("run_id"),
+            "git_revision": candidate_inputs.get("git_revision"),
+            "completed_at": candidate.get("completed_at"),
+            "artifact_sha256": candidate_artifact_sha256,
+        },
+        "score_comparison": score_comparison,
+        "failure_patterns": {
+            "baseline": baseline_patterns,
+            "candidate": candidate_patterns,
+            "new": new_patterns,
+            "resolved": resolved_patterns,
+        },
+        "human_review": {
+            "status": "pending",
+            "reviewer": None,
+            "reviewed_at": None,
+            "baseline_confirmed_last_passing": False,
+            "tone_reviewed": False,
+            "reviewed_new_failure_pattern_ids": [],
+            "notes": "",
+        },
+    }

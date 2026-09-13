@@ -41,7 +41,7 @@ export default function ConnectView({ pairedUser, onPairSuccess }) {
     return () => clearInterval(interval)
   }, [pairingData, pairedUser, onPairSuccess])
 
-  const botLink = pairingData?.bot_link || 'https://t.me/amigo_agent_bot'
+  const botLink = pairingData?.bot_link || null
 
   return (
     <div className="animate-slide-in">

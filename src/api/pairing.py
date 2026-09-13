@@ -3,9 +3,9 @@
 import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 
-from src.api.dependencies import get_store
+from src.api.dependencies import get_bot_username, get_store
 from src.auth import AuthenticatedIdentity, get_authenticated_identity
 from src.config import settings
 from src.memory.pairing import (
@@ -22,9 +22,9 @@ router = APIRouter()
 
 @router.post("/api/pairing-token")
 async def get_pairing_token(
-    request: Request,
     identity: Annotated[AuthenticatedIdentity, Depends(get_authenticated_identity)],
     store: Annotated[object, Depends(get_store)],
+    bot_username: Annotated[str, Depends(get_bot_username)],
 ):
     """Issue one expiring Pairing link only after verified acknowledgement."""
     auth_id = identity.auth_id
@@ -54,7 +54,6 @@ async def get_pairing_token(
             headers={"Retry-After": str(int(PAIRING_TOKEN_WINDOW.total_seconds()))},
         ) from None
 
-    bot_username = getattr(request.app.state, "bot_username", "amigo_agent_bot")
     return {
         "bot_link": f"https://t.me/{bot_username}?start=pair_{token}",
         "expires_at": expires_at.isoformat(),

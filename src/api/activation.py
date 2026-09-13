@@ -13,7 +13,7 @@ from src.activation import (
     validate_quiet_hours,
     validate_timezone,
 )
-from src.api.dependencies import get_store
+from src.api.dependencies import get_optional_bot_username, get_store
 from src.auth import AuthenticatedIdentity, get_authenticated_identity
 from src.commands.activation import CreateActivationTestCommand
 from src.commands.base import (
@@ -63,9 +63,15 @@ def _require_verified(identity: AuthenticatedIdentity) -> None:
 async def get_activation(
     identity: Annotated[AuthenticatedIdentity, Depends(get_authenticated_identity)],
     store: Annotated[object, Depends(get_store)],
+    bot_username: Annotated[str | None, Depends(get_optional_bot_username)] = None,
 ):
     state = await store.get_activation_state(identity.auth_id)
     state["email_verified"] = identity.email_verified
+    # The return path to Telegram has no Pairing token to carry, so it cannot reuse
+    # ``bot_link`` from the Pairing endpoint. The dashboard must still never name a bot
+    # itself: an environment that hardcodes one deep-links its participants into another
+    # environment's bot.
+    state["telegram_url"] = f"https://t.me/{bot_username}" if bot_username else None
     if not identity.email_verified:
         state["step"] = "email_verification"
         state["completed"] = False
@@ -84,6 +90,7 @@ async def acknowledge_activation(
     acknowledgement: AcknowledgeRequest,
     identity: Annotated[AuthenticatedIdentity, Depends(get_authenticated_identity)],
     store: Annotated[object, Depends(get_store)],
+    bot_username: Annotated[str | None, Depends(get_optional_bot_username)] = None,
 ):
     _require_verified(identity)
     if acknowledgement.policy_version != ACTIVATION_POLICY_VERSION:
@@ -101,7 +108,7 @@ async def acknowledge_activation(
     ):
         raise HTTPException(status_code=422, detail="All setup acknowledgements are required.")
     await store.acknowledge_activation_terms(identity.auth_id, ACTIVATION_POLICY_VERSION)
-    return await get_activation(identity, store)
+    return await get_activation(identity, store, bot_username)
 
 
 @router.post("/api/activation/profile")
@@ -109,6 +116,7 @@ async def update_activation_profile(
     profile: ProfileRequest,
     identity: Annotated[AuthenticatedIdentity, Depends(get_authenticated_identity)],
     store: Annotated[object, Depends(get_store)],
+    bot_username: Annotated[str | None, Depends(get_optional_bot_username)] = None,
 ):
     _require_verified(identity)
     # These validators are the only normalizer in the stack, so their rejections are
@@ -129,7 +137,7 @@ async def update_activation_profile(
         )
     except ValueError as error:
         raise HTTPException(status_code=409, detail=str(error)) from None
-    return await get_activation(identity, store)
+    return await get_activation(identity, store, bot_username)
 
 
 @router.post("/api/activation/test-reminder", status_code=202)

@@ -13,9 +13,46 @@ from src.evaluation.gate_a import (
     ExpectedState,
     GateASuite,
     ResponseProperties,
+    extract_trace,
     load_suite,
     score_turn,
 )
+
+
+def test_trace_preserves_pydantic_call_result_order_and_identity():
+    from pydantic_ai.messages import (
+        ModelRequest,
+        ModelResponse,
+        TextPart,
+        ToolCallPart,
+        ToolReturnPart,
+    )
+
+    trace, response = extract_trace(
+        [
+            ModelResponse(
+                parts=[
+                    ToolCallPart("create_task", {"title": "One"}, "call-1"),
+                    ToolCallPart("create_task", {"title": "Two"}, "call-2"),
+                ]
+            ),
+            ModelRequest(
+                parts=[
+                    ToolReturnPart("create_task", {"ok": 1}, "call-1"),
+                    ToolReturnPart("create_task", {"ok": 2}, "call-2"),
+                ]
+            ),
+            ModelResponse(parts=[TextPart("Done.")]),
+        ]
+    )
+
+    assert [(item["kind"], item["call_id"]) for item in trace] == [
+        ("tool_call", "call-1"),
+        ("tool_call", "call-2"),
+        ("tool_result", "call-1"),
+        ("tool_result", "call-2"),
+    ]
+    assert response == "Done."
 
 SUITE_PATH = Path(__file__).parents[1] / "evals/gate_a/v1/cases.json"
 
@@ -30,6 +67,14 @@ def test_gate_a_suite_has_exact_approved_inventory_and_metric_coverage():
     assert all(case.turns for case in suite.cases)
     assert all(turn.response for case in suite.cases for turn in case.turns)
     assert all(turn.expected_state for case in suite.cases for turn in case.turns)
+
+
+def test_gate_a_does_not_claim_gate_b_dependency_error_evidence():
+    """Decision 09 assigns dependency and Tool-result error cases to Gate B."""
+    suite = load_suite(SUITE_PATH)
+
+    assert "dependency_error_handling" not in THRESHOLDS
+    assert all("dependency_error_handling" not in case.metrics for case in suite.cases)
 
 
 def test_scorer_rejects_prohibited_mutation_and_changed_state():
