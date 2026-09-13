@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.activation import (
     ACTIVATION_POLICY_VERSION,
@@ -27,8 +28,9 @@ from src.auth import (
     get_authenticated_user_id,
 )
 from src.commands.activation import CreateActivationTestCommand
-from src.commands.base import CommandContext, IdempotencyConflictError
+from src.commands.base import CommandContext, IdempotencyConflictError, PairingChangedError
 from src.commands.tasks import ResolveTaskCommand
+from src.main import RETRYABLE_HEADERS
 from src.memory.memory_store import InMemoryStore
 from src.utils import Clock, utc_now
 from tests.fakes import FakeStore
@@ -535,3 +537,91 @@ async def test_activation_profile_rejects_bad_input_with_400(field, value):
         response = await client.post("/api/activation/profile", json=payload)
 
     assert response.status_code == 400, response.text
+
+
+async def test_activation_test_pairing_change_is_a_retryable_409():
+    """A Pairing that lands mid-request is a retry instruction, not a server fault.
+
+    Regression: migration 013 raises `activation_pairing_changed` rather than taking a
+    row lock out of order, and nothing mapped it — so it reached the dashboard as a 500
+    with no retryable signal and the participant was stuck at the test-Reminder step.
+    """
+
+    class PairingRacesStore(InMemoryStore):
+        async def create_activation_test_command(self, *args, **kwargs):
+            raise PairingChangedError(
+                "Telegram Pairing completed while this request was in flight; retry it"
+            )
+
+    store = PairingRacesStore()
+    identity = AuthenticatedIdentity("auth-pairingrace", True, "racer@example.test")
+    app = FastAPI()
+    app.state.store = store
+    app.include_router(activation_router)
+
+    async def authenticated_identity():
+        return identity
+
+    async def configured_store():
+        return store
+
+    app.dependency_overrides[get_authenticated_identity] = authenticated_identity
+    app.dependency_overrides[get_store] = configured_store
+
+    user = await store.create_user(556677)
+    await store.update_user(user["user_id"], {"supabase_auth_id": identity.auth_id})
+    scheduled_at = (utc_now() + timedelta(minutes=2)).replace(tzinfo=UTC)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/activation/test-reminder",
+            json={
+                "scheduled_at": scheduled_at.isoformat(),
+                "timezone": "America/Toronto",
+                "exact_time_confirmed": True,
+                "retry": False,
+            },
+            headers={"Idempotency-Key": "race-key-1"},
+        )
+
+    assert response.status_code == 409, response.text
+    assert response.headers.get("X-Retryable") == "true"
+    assert "retry" in response.json()["detail"].lower()
+    # Setting the header is not enough: the dashboard is always a different origin, so the
+    # browser hides any response header the API does not explicitly expose. Without this the
+    # retry never fires in a real deployment and the participant is shown an instruction the
+    # code was written to carry out for them.
+    assert "X-Retryable" in RETRYABLE_HEADERS
+
+
+async def test_the_real_app_exposes_the_retryable_header_across_origins():
+    """The deployed app must advertise it, not just a test app built to.
+
+    Regression: the header was set on the response but `CORSMiddleware` was configured with
+    no `expose_headers`, so the browser hid it and the dashboard retry never fired in any
+    real deployment. The bare-app test above could not see that, because it built its own
+    middleware.
+    """
+    from src.main import app as real_app
+
+    cors = next(
+        (m for m in real_app.user_middleware if m.cls is CORSMiddleware),
+        None,
+    )
+    assert cors is not None, "the deployed app must configure CORS"
+    exposed = cors.kwargs.get("expose_headers") or []
+    assert "X-Retryable" in exposed, f"expose_headers={exposed!r}"
+
+    origin = "http://localhost:5173"
+    transport = httpx.ASGITransport(app=real_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.options(
+            "/api/activation",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+
+    assert response.status_code == 200, response.text

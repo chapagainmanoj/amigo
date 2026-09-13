@@ -113,12 +113,18 @@ origins = [
 if not is_production(settings):
     origins.extend(["http://localhost:5173", "http://localhost:3000"])
 
+RETRYABLE_HEADERS = ["X-Retryable"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The dashboard is always a different origin from the API, so any response header it has
+    # to read must be named here. Without this the browser hides X-Retryable entirely and the
+    # Activation retry silently never happens.
+    expose_headers=RETRYABLE_HEADERS,
 )
 
 

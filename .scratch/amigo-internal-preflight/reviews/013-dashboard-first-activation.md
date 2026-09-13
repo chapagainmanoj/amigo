@@ -1555,3 +1555,181 @@ Timing note: the project owner approved while a second independent re-review of 
 was still running. The first independent review's blocking finding was fixed and re-measured
 before approval was requested. Any finding the re-review returns will be recorded here and acted
 on rather than deferred.
+
+## 2026-09-13 — Second independent review: the first amendment was wrong
+
+The lock reorder recorded above did not fix the hazard. It moved it.
+
+`create_activation_test_command` took a **second** `activation_journeys` row lock inside the
+identity re-check, while already holding the `user_profiles` row lock. `get_activation_state`
+locks journeys first. That is a cycle, so the comment claiming "a fixed row-lock order keeps this
+safe" was false in the same file that asserts it.
+
+Reachability is not theoretical: `complete_pairing` only ever moves `supabase_auth_id` from NULL
+to a value, so the first journeys lookup matches `auth_id = NULL`, finds nothing and takes no
+lock — making the inverted second lock the only journeys lock the transaction takes.
+
+I reproduced it myself this time, against the committed migration:
+
+```
+=== C_create  rc=1  ERROR:  deadlock detected
+CONTEXT: while locking tuple (0,16) in relation "activation_journeys"
+         SQL statement "SELECT journey.* FROM public.activation_journeys AS journey
+         WHERE journey.auth_id = profile_row.supabase_auth_id FOR UPDATE"
+         PL/pgSQL function create_activation_test_command(...)
+```
+
+Proposed fix: do not take a second journeys lock while holding `user_profiles`. When the identity
+changed underneath the transaction, abandon it — `RAISE EXCEPTION 'activation_pairing_changed'` —
+and let the caller retry under the now-correct advisory key. `src/api/activation.py` already maps
+a `ValueError` from this command to 409, which is the right retryable answer.
+
+Proposed amended migration: `/private/tmp/claude-501/-Users-mano-Workspace-amigo/fd470cab-1951-42d0-a839-05ddfd0b0e7f/scratchpad/migration-013-fix/013_amended.sql`
+sha256 `619aafe7cdb4b184aa77ea56c45eeb7662908f80f375f3333d457c78c2efe94f`
+(one hunk: the second `FOR UPDATE` becomes the exception). **Not applied — awaiting approval.**
+
+Measured on the proposal: the same forced interleave returns
+`ERROR: activation_pairing_changed` from the racing call and no deadlock anywhere.
+
+### The guard was still vacuous, and is now fixed
+
+`scripts/check_activation_lock_order.py` passed against a database I had just proved deadlocks.
+Its trial paired the profile first, so every session derived the same advisory key and
+`pg_advisory_xact_lock` serialised them — row-lock order was unobservable by construction. It also
+accepted a run where the command never executed at all, because its liveness check was an `any()`
+satisfied by the readers alone.
+
+It now drives the interleave deterministically with two helper sessions holding the advisory key
+and the `user_profiles` row while `complete_pairing` commits in between, and it requires the
+command to have reached the locked identity re-check. Verified in both directions:
+
+- against the committed migration: `FAIL: 1 deadlocks in 5 trials` naming `create`
+- against the proposed amendment: `ok: no deadlocks in 5 trials`
+- against a database whose command is replaced by `RAISE EXCEPTION 'mutant_disabled'`:
+  `FAIL: the deadlock probe could not run: create: ERROR: mutant_disabled`
+
+A random-race probe does not work here — 8 unforced rounds produced 0 deadlocks on both the
+defective and the fixed ordering, which is why the previous version reported success.
+
+This guard change is applied; it touches no protected file.
+
+### Known open, not fixed here
+
+`complete_pairing` (migration 003) takes no advisory lock and locks two `user_profiles` rows by
+different keys, so two concurrent calls with crossed chat/auth pairs can deadlock with each other.
+Pre-existing, outside 013, and it is the source of the stale-key window this amendment handles.
+
+## Adopted 2026-09-13
+
+The project owner approved the amendment. `migrations/013_dashboard_first_activation.sql` is now
+sha256 `619aafe7cdb4b184aa77ea56c45eeb7662908f80f375f3333d457c78c2efe94f`. The deterministic
+lock-order probe reports no deadlocks against the adopted chain, and reported one against the
+previous bytes.
+
+## 2026-09-13 — Third independent review: the amendment shipped a regression
+
+The review of the adopted change found the amendment I had just landed broke a serial path.
+
+**The guard fired when nothing had changed.** It compared `journey_row.auth_id` with
+`profile_row.supabase_auth_id`. When a profile is paired but has no `activation_journeys` row,
+`journey_row.auth_id` is NULL and `NULL IS DISTINCT FROM <auth>` is TRUE — so a plain
+single-session call raised `activation_pairing_changed` where it used to raise
+`activation_profile_incomplete`. No concurrency involved. Measured on three databases:
+
+```
+pre-amendment  ERROR:  activation_profile_incomplete
+adopted        ERROR:  activation_pairing_changed     <- the regression
+fixed          ERROR:  activation_profile_incomplete
+```
+
+Fixed by capturing the identity the advisory key was derived from (`observed_auth_id`) before
+the advisory lock and comparing against that, so the guard fires only on an actual change. The
+forced pairing race still returns `activation_pairing_changed` with no deadlock.
+`migrations/013_dashboard_first_activation.sql` is now sha256
+`133c6b57c9c7d7aa05dd4a5b0b228c6e34b2ca34e945f13bc149a4b124a3d29b`.
+
+**Nothing mapped the new error, so it reached the dashboard as a 500.** `_raise_command_error`
+and the Activation ladder in `src/memory/store.py` did not list it, so the raw
+`postgrest.APIError` fell through `except ValueError` in `src/api/activation.py`. The migration
+comment said "let the caller retry" and no caller did. Now: `PairingChangedError(ValueError)` in
+`src/commands/base.py`, mapped in the store, returned as `409` with `X-Retryable: true`, and
+`web/` retries once with a fresh idempotency key — safe because the command abandons its
+transaction before writing a receipt, which was verified by execution.
+
+**The runtime probe was unreliable and overclaimed.** Its forced interleave formed only about
+two thirds of the time; a missed interleave exited 1 through `SetupError` by accident rather
+than design. It now retries the interleave up to five times, fails hard and distinctly if it
+never forms, and checks `complete_pairing` actually returned `"paired"` rather than trusting its
+exit code. Measured after the change: 3/3 detections against the defective ordering, clean
+against the fixed one. Its docstring no longer claims to cover the Activation functions in
+general — it covers two of them.
+
+**`tests/test_migration_lock_order.py` is the durable guard.** It reads the migration text and
+requires every function that row-locks both tables to take `activation_journeys` first. No
+database, no timing, no luck. Confirmed to fail when the 013 locks are swapped back.
+
+## Approved and adopted 2026-09-13 (second amendment)
+
+The project owner approved the regression fix. `migrations/013_dashboard_first_activation.sql`
+is checked in at sha256 `133c6b57c9c7d7aa05dd4a5b0b228c6e34b2ca34e945f13bc149a4b124a3d29b`.
+
+Verification on a freshly built chain from that file: the serial path (paired profile, no
+journey row) again raises `activation_profile_incomplete`, matching pre-amendment behaviour;
+the forced pairing race raises `activation_pairing_changed` with no deadlock anywhere; the
+schema-chain guard passes; 353 backend tests pass; `ruff check src tests scripts`,
+`npm run lint`, and `npm run build` pass; `git diff --check` is clean.
+
+Two amendments to this migration were needed after it was first approved. Recording why, so the
+pattern is visible rather than buried: the first amendment was reviewed only by argument, and
+the guard that was supposed to catch exactly this class of defect passed vacuously against a
+database that demonstrably deadlocked. The measurement, not the reasoning, found both defects
+both times.
+
+## 2026-09-13 — Fourth review: the retry was dead in every real deployment
+
+The SQL amendment held up — the reviewer could not break it across every serial path, the
+value-to-different-value case is unreachable, the lock order is total across 001–014, and
+nothing is written before the raise (verified against the database on both the `retry=false`
+and `retry=true` paths, so the client's fresh idempotency key cannot double-create).
+
+The client half did not.
+
+**`X-Retryable` was invisible to the browser.** `CORSMiddleware` in `src/main.py` had no
+`expose_headers`, and `X-Retryable` is not CORS-safelisted, so cross-origin JavaScript read
+`null`. The dashboard is *always* cross-origin — `render.yaml` deploys it as a separate static
+service, and locally it is `:5173` against `:8000`. The reviewer proved it in a real browser
+against the real router and the real CORS block: `r.headers.get("X-Retryable") = null`, so
+`err.retryable` was false and the participant was shown the retry instruction the code existed
+to carry out for them.
+
+My test missed it because it built a bare `FastAPI()` with no CORS middleware — the feature was
+tested in a configuration that does not exist anywhere.
+
+Fixed: `expose_headers=RETRYABLE_HEADERS` on the deployed app, and the regression test now
+asserts against `src.main.app`'s own middleware rather than an app it built itself. Removing
+the `expose_headers` line fails that test; removing it did *not* fail the first version.
+
+**The static lock-order test was matching the wrong things.** Its forward-scanning regex bound a
+`FOR UPDATE` to whatever `FROM public.X` preceded it within 400 characters, across statement
+boundaries — it read `apply_later_command` as locking `user_profiles` when that is an unlocked
+read and the real locks are on `tasks` and `reminders`. Three inversion shapes escaped it
+entirely: distance between the read and the lock, `FOR UPDATE OF a, b`, and a bare `UPDATE`
+taking the first lock.
+
+Rewritten to anchor each lock on the nearest *preceding* table reference, to treat
+`UPDATE public.X` as a lock site, to distinguish a write-back to a held row from a genuine
+second acquisition of another row in the same table — the exact shape of the defect that
+shipped — and to refuse `FOR UPDATE OF` with several targets rather than guess an order the
+text cannot express. Each of those shapes now has its own test, and the real pre-amendment
+inversion is still caught.
+
+**The probe's success line overstated its evidence.** The randomised trials have *measured*
+zero detection power: every session derives the same advisory key, so the advisory lock
+serialises them and the row-lock order is unobservable. 60 randomised trials against a
+known-broken database found 0 deadlocks. Only the forced interleave is load-bearing, and it
+drives one shape. Both facts are now in the docstring and in the success line rather than
+implied away.
+
+Still open: `complete_pairing` in migration 003. The reviewer measures it deadlocking; I could
+not reproduce it in 20 unforced trials or a forced attempt. Migration 015 is drafted but will
+not be proposed for approval until the defect it fixes has been demonstrated.

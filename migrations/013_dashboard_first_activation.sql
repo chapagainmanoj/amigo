@@ -252,6 +252,7 @@ AS $$
 DECLARE
   existing_receipt public.command_receipts%ROWTYPE;
   profile_row public.user_profiles%ROWTYPE;
+  observed_auth_id UUID;
   journey_row public.activation_journeys%ROWTYPE;
   task_row public.tasks%ROWTYPE;
   replaced_reminder public.reminders%ROWTYPE;
@@ -293,6 +294,10 @@ BEGIN
     RAISE EXCEPTION 'user_not_found';
   END IF;
 
+  -- The identity the advisory key below is derived from. Only a change to *this* value
+  -- between the unlocked read and the row lock means the key went stale.
+  observed_auth_id := profile_row.supabase_auth_id;
+
   PERFORM pg_advisory_xact_lock(
     hashtextextended(COALESCE(profile_row.supabase_auth_id::text, p_user_id::text), 0)
   );
@@ -333,14 +338,14 @@ BEGIN
     RAISE EXCEPTION 'user_not_found';
   END IF;
 
-  -- Re-verify the identity under the row lock: it may have been paired since the
-  -- unlocked read that chose the advisory key.
-  IF journey_row.auth_id IS DISTINCT FROM profile_row.supabase_auth_id THEN
-    SELECT journey.*
-    INTO journey_row
-    FROM public.activation_journeys AS journey
-    WHERE journey.auth_id = profile_row.supabase_auth_id
-    FOR UPDATE;
+  -- Re-verify the identity under the row lock: complete_pairing may have set
+  -- supabase_auth_id since the unlocked read that chose both the advisory key and the
+  -- journey row above. Taking a second activation_journeys lock here would invert the
+  -- order this function just established and deadlock against get_activation_state,
+  -- which locks journeys first. The identity changed underneath this transaction, so the
+  -- correct answer is to abandon it and let the caller retry under the now-correct key.
+  IF observed_auth_id IS DISTINCT FROM profile_row.supabase_auth_id THEN
+    RAISE EXCEPTION 'activation_pairing_changed';
   END IF;
 
   IF journey_row.auth_id IS NULL OR journey_row.profile_completed_at IS NULL THEN

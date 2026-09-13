@@ -138,8 +138,10 @@ export default function ActivationJourney({ session, state, refresh, onFinish })
   const createTest = (retry = false) => act(async () => {
     const proposal = state.proposal
     if (!proposal) throw new Error('Refresh the exact Reminder time before confirming.')
-    await apiRequest('/api/activation/test-reminder', {
+    const submit = () => apiRequest('/api/activation/test-reminder', {
       method: 'POST',
+      // A fresh key per attempt: the server wrote nothing, so this is a new command rather
+      // than a replay of the abandoned one.
       headers: { 'Idempotency-Key': crypto.randomUUID() },
       body: JSON.stringify({
         scheduled_at: proposal.scheduled_at,
@@ -148,6 +150,15 @@ export default function ActivationJourney({ session, state, refresh, onFinish })
         retry,
       }),
     })
+    try {
+      await submit()
+    } catch (err) {
+      // Telegram Pairing can land while this request is in flight. The server abandons that
+      // attempt without writing anything, so one automatic retry finishes the step instead
+      // of stranding the participant on an error they cannot act on.
+      if (!err.retryable) throw err
+      await submit()
+    }
     await refresh()
   })
 

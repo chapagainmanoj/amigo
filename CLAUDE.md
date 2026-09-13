@@ -113,6 +113,6 @@ Issues use workflow-state labels plus severity labels. See
 
 Amigo uses a single-context domain layout. See `docs/agents/domain.md`.
 
-## Agent style
+## Agent response style
 
 When reporting information to me, be extremely concise and sacrifice grammar for the sake of concision.

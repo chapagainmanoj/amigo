@@ -1,9 +1,21 @@
 """Deterministic Gate A suite and scorer contract tests."""
 
+import json
 from collections import Counter
 from pathlib import Path
 
-from src.evaluation.gate_a import CATEGORY_COUNTS, THRESHOLDS, load_suite, score_turn
+import pytest
+from pydantic import ValidationError
+
+from src.evaluation.gate_a import (
+    CATEGORY_COUNTS,
+    THRESHOLDS,
+    ExpectedState,
+    GateASuite,
+    ResponseProperties,
+    load_suite,
+    score_turn,
+)
 
 SUITE_PATH = Path(__file__).parents[1] / "evals/gate_a/v1/cases.json"
 
@@ -64,3 +76,89 @@ def test_scorer_accepts_clarification_without_state_change():
     assert score["passed"]
     assert score["clarification_passed"]
 
+
+def _suite_payload():
+    return json.loads(SUITE_PATH.read_text())
+
+
+def test_contract_rejects_a_suite_that_drops_a_required_behaviour_family():
+    """Composition counts cannot prove criterion 1 coverage; the tag families must."""
+    payload = _suite_payload()
+    for case in payload["cases"]:
+        case["tags"] = [tag for tag in case["tags"] if tag != "greeting"] or ["single"]
+
+    with pytest.raises(ValidationError) as error:
+        GateASuite.model_validate(payload)
+
+    assert "greeting" in str(error.value)
+
+
+def test_contract_rejects_a_turn_that_declares_no_prohibited_tools():
+    """Criterion 2 requires a declared prohibition, not an omitted one."""
+    payload = _suite_payload()
+    payload["cases"][0]["turns"][0]["prohibited_tools"] = []
+
+    with pytest.raises(ValidationError):
+        GateASuite.model_validate(payload)
+
+
+def test_every_approved_turn_declares_the_full_criterion_two_contract():
+    suite = load_suite(SUITE_PATH)
+
+    for case in suite.cases:
+        for turn in case.turns:
+            assert turn.prohibited_tools, f"{case.id} omits prohibited Tools"
+            assert turn.clarification in {"required", "not_required"}
+            assert turn.response is not None
+            assert turn.expected_state is not None
+
+
+def test_contract_rejects_a_turn_that_asserts_nothing():
+    """Every response and state field defaults to "do not care", so silence is a free pass."""
+    payload = _suite_payload()
+    payload["cases"][0]["turns"][0] = {
+        "message": "Add buy oat milk to my list.",
+        "prohibited_tools": ["cancel_reminders"],
+        "clarification": "not_required",
+        "response": {},
+        "expected_state": {},
+    }
+
+    with pytest.raises(ValidationError) as error:
+        GateASuite.model_validate(payload)
+
+    assert "expected Tools" in str(error.value)
+
+
+def test_contract_rejects_a_turn_whose_expected_state_declares_nothing():
+    payload = _suite_payload()
+    payload["cases"][0]["turns"][0]["expected_state"] = {}
+
+    with pytest.raises(ValidationError) as error:
+        GateASuite.model_validate(payload)
+
+    assert "expected resulting state" in str(error.value)
+
+
+def test_a_turn_that_asserts_nothing_would_otherwise_score_as_a_pass():
+    """Why the contract above matters: an empty assertion set passes every metric."""
+    from src.evaluation.gate_a import EvalTurn
+
+    turn = EvalTurn.model_construct(
+        message="Add buy oat milk to my list.",
+        expected_tools={},
+        prohibited_tools=["cancel_reminders"],
+        clarification="not_required",
+        response=ResponseProperties(),
+        expected_state=ExpectedState(),
+    )
+
+    score = score_turn(
+        turn,
+        trace=[],
+        response="Okay.",
+        state={"tasks": [], "pending_reminders": [], "aliases": {}, "state_hash": "H"},
+        before_state_hash="H",
+    )
+
+    assert score["passed"], "the model created nothing and still passed — hence the contract"

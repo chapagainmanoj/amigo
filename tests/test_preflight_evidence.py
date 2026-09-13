@@ -1,6 +1,7 @@
 """Internal Preflight release-evidence contract tests."""
 
 import hashlib
+import json
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,6 +11,8 @@ from scripts.validate_preflight_evidence import (
     template_manifest,
     validate_manifest,
 )
+from src.evaluation.gate_a import THRESHOLDS, summarize_scores
+from tests.gate_a_fixtures import passing_gate_a_evidence
 
 REVISION = "a" * 40
 DEPLOYMENT_ID = "render-deploy-123"
@@ -45,6 +48,15 @@ def passing_manifest(root: Path) -> dict:
     security = next(check for check in checks if check["id"] == "independent_security_review")
     security["producer"] = "security-reviewer"
     security["reviewer"] = "security-witness"
+
+    # The Gate A artifact is cross-checked against the release revision, so it must be the real
+    # declared-run JSON rather than an opaque placeholder.
+    evaluation = next(check for check in checks if check["id"] == "model_evaluation")
+    evaluation["evidence"] = _artifact(
+        root,
+        "checks/model_evaluation.json",
+        json.dumps(passing_gate_a_evidence(REVISION)),
+    )
 
     trials = []
     previous_digest = None
@@ -238,3 +250,67 @@ def test_actor_aliases_and_run_id_aliases_cannot_fake_independence(tmp_path):
     assert "release implementer cannot produce or approve the security review" in errors
     assert any("canonical lowercase stable run ID" in error for error in errors)
     assert "core_loop trial 2.run_id must be unique" in errors
+
+
+def test_a_gate_a_run_from_another_revision_cannot_be_attached(tmp_path):
+    """`model_evaluation.revision` is typed by a human; the artifact must prove itself."""
+    manifest = passing_manifest(tmp_path)
+    stale = passing_gate_a_evidence("b" * 40)
+    evaluation = next(check for check in manifest["checks"] if check["id"] == "model_evaluation")
+    evaluation["evidence"] = _artifact(
+        tmp_path, "checks/model_evaluation.json", json.dumps(stale)
+    )
+
+    errors = validate_manifest(manifest, evidence_root=tmp_path, now=NOW)
+
+    assert any(
+        error.startswith("check model_evaluation: the declared run was executed against")
+        for error in errors
+    ), errors
+
+
+def test_a_gate_a_run_that_predates_a_model_input_change_is_rejected(tmp_path):
+    manifest = passing_manifest(tmp_path)
+    stale = passing_gate_a_evidence(REVISION)
+    stale["release_inputs"]["all_invalidating_inputs_sha256"] = "0" * 64
+    evaluation = next(check for check in manifest["checks"] if check["id"] == "model_evaluation")
+    evaluation["evidence"] = _artifact(
+        tmp_path, "checks/model_evaluation.json", json.dumps(stale)
+    )
+
+    errors = validate_manifest(manifest, evidence_root=tmp_path, now=NOW)
+
+    assert any("Gate A must run again" in error for error in errors), errors
+
+
+def test_an_opaque_model_evaluation_artifact_is_rejected(tmp_path):
+    manifest = passing_manifest(tmp_path)
+    evaluation = next(check for check in manifest["checks"] if check["id"] == "model_evaluation")
+    evaluation["evidence"] = _artifact(
+        tmp_path, "checks/model_evaluation.json", "screenshot of a green run"
+    )
+
+    errors = validate_manifest(manifest, evidence_root=tmp_path, now=NOW)
+
+    assert "check model_evaluation.evidence must be the declared Gate A run JSON" in errors
+
+
+def test_a_failed_gate_a_run_cannot_pass_the_manifest(tmp_path):
+    manifest = passing_manifest(tmp_path)
+    failed = passing_gate_a_evidence(REVISION)
+    failed["status"] = "failed"
+    failed["passed"] = False
+    for execution in failed["executions"]:
+        if "hard_invariant" in execution["metric_results"]:
+            execution["metric_results"]["hard_invariant"] = False
+            execution["passed"] = False
+    failed["scores"] = summarize_scores(failed["executions"], THRESHOLDS)
+    evaluation = next(check for check in manifest["checks"] if check["id"] == "model_evaluation")
+    evaluation["evidence"] = _artifact(
+        tmp_path, "checks/model_evaluation.json", json.dumps(failed)
+    )
+
+    errors = validate_manifest(manifest, evidence_root=tmp_path, now=NOW)
+
+    assert any("did not pass" in error for error in errors), errors
+    assert any("scores.hard_invariant did not meet" in error for error in errors), errors

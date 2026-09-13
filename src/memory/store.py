@@ -8,6 +8,7 @@ from time import perf_counter
 from src.commands.base import (
     IdempotencyConflictError,
     InvalidTransitionError,
+    PairingChangedError,
     StaleVersionError,
 )
 from src.memory.pairing import ActivationTermsRequiredError, PairingTokenRateLimitError
@@ -995,6 +996,10 @@ class MemoryStore:
         except Exception as error:
             _raise_command_error(error)
             message = str(error)
+            if "activation_pairing_changed" in message:
+                raise PairingChangedError(
+                    "Telegram Pairing completed while this request was in flight; retry it"
+                ) from None
             if "activation_profile_incomplete" in message:
                 raise ValueError("Activation profile must be completed first") from None
             if "activation_test_exists" in message:

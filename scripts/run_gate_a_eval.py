@@ -23,41 +23,31 @@ from pydantic_ai.exceptions import ModelHTTPError  # noqa: E402
 from pydantic_ai.models.google import GoogleModel  # noqa: E402
 from pydantic_ai.providers.google import GoogleProvider  # noqa: E402
 
-from src.agent.agent import AgentDeps, amigo_agent, run_agent_turn  # noqa: E402
+from src.agent.agent import AgentDeps, run_agent_turn  # noqa: E402
 from src.commands.base import CommandContext  # noqa: E402
 from src.commands.tasks import CreateTaskCommand, CreateTaskInput  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.evaluation.gate_a import (  # noqa: E402
+    PROMPT_SOURCE,
+    TIME_BEHAVIOR_SOURCES,
+    TURN_CONTEXT_SOURCES,
+    VALIDATOR_SOURCE,
     GateASuite,
     canonical_hash,
     extract_trace,
     file_set_hash,
+    invalidating_inputs,
     load_suite,
     score_turn,
     summarize_scores,
+    tool_schema,
 )
 from src.memory.memory_store import InMemoryStore  # noqa: E402
 from src.scheduler.reminders import ReminderScheduler  # noqa: E402
 from src.utils import Clock  # noqa: E402
 
 DEFAULT_SUITE = ROOT / "evals/gate_a/v1/cases.json"
-INVALIDATING_INPUTS = [
-    *sorted((ROOT / "migrations").glob("*.sql")),
-    ROOT / "scripts/run_gate_a_eval.py",
-    ROOT / "src/agent/agent.py",
-    ROOT / "src/agent/prompts.py",
-    ROOT / "src/commands/later.py",
-    ROOT / "src/commands/reminders.py",
-    ROOT / "src/commands/tasks.py",
-    ROOT / "src/evaluation/gate_a.py",
-    ROOT / "src/memory/context.py",
-    ROOT / "src/memory/memory_store.py",
-    ROOT / "src/memory/store.py",
-    ROOT / "src/time_resolution.py",
-    ROOT / "src/tools/reminders.py",
-    ROOT / "src/tools/tasks.py",
-    ROOT / "src/utils/__init__.py",
-]
+INVALIDATING_INPUTS = invalidating_inputs(ROOT)
 PRICING = {
     "currency": "USD",
     "input_per_million_tokens": 1.50,
@@ -116,27 +106,12 @@ def _git(*args: str) -> str:
     ).stdout.strip()
 
 
-def _tool_schema() -> list[dict]:
-    tools = []
-    for name, tool in sorted(amigo_agent._function_toolset.tools.items()):
-        schema = tool.function_schema
-        tools.append(
-            {
-                "name": name,
-                "description": schema.description,
-                "parameters": schema.json_schema,
-                "return_schema": schema.return_schema,
-            }
-        )
-    return tools
-
-
 def _release_inputs(suite_path: Path, suite: GateASuite) -> dict:
     status = _git("status", "--porcelain=v1")
     diff = subprocess.run(
         ["git", "diff", "--binary"], cwd=ROOT, check=True, capture_output=True
     ).stdout
-    tool_schema = _tool_schema()
+    schema = tool_schema()
     return {
         "git_revision": _git("rev-parse", "HEAD"),
         "working_tree_dirty": bool(status),
@@ -148,22 +123,14 @@ def _release_inputs(suite_path: Path, suite: GateASuite) -> dict:
             else settings.default_model
         ),
         "model_settings": {},
-        "prompt_source_sha256": hashlib.sha256(
-            (ROOT / "src/agent/prompts.py").read_bytes()
-        ).hexdigest(),
-        "tool_schema_sha256": canonical_hash(tool_schema),
-        "tool_schema": tool_schema,
+        "prompt_source_sha256": hashlib.sha256((ROOT / PROMPT_SOURCE).read_bytes()).hexdigest(),
+        "tool_schema_sha256": canonical_hash(schema),
+        "tool_schema": schema,
         "turn_context_source_sha256": file_set_hash(
-            [ROOT / "src/agent/agent.py", ROOT / "src/memory/context.py"], ROOT
+            [ROOT / relative for relative in TURN_CONTEXT_SOURCES], ROOT
         ),
         "time_behavior_source_sha256": file_set_hash(
-            [
-                ROOT / "src/commands/later.py",
-                ROOT / "src/commands/reminders.py",
-                ROOT / "src/time_resolution.py",
-                ROOT / "src/utils/__init__.py",
-            ],
-            ROOT,
+            [ROOT / relative for relative in TIME_BEHAVIOR_SOURCES], ROOT
         ),
         "all_invalidating_inputs_sha256": file_set_hash(INVALIDATING_INPUTS, ROOT),
         "case_set_sha256": hashlib.sha256(suite_path.read_bytes()).hexdigest(),
@@ -171,7 +138,7 @@ def _release_inputs(suite_path: Path, suite: GateASuite) -> dict:
         "fixed_utc": suite.fixed_utc,
         "timezone": suite.timezone,
         "validator_source_sha256": hashlib.sha256(
-            (ROOT / "src/evaluation/gate_a.py").read_bytes()
+            (ROOT / VALIDATOR_SOURCE).read_bytes()
         ).hexdigest(),
     }
 

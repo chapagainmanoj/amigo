@@ -16,7 +16,11 @@ from src.activation import (
 from src.api.dependencies import get_store
 from src.auth import AuthenticatedIdentity, get_authenticated_identity
 from src.commands.activation import CreateActivationTestCommand
-from src.commands.base import CommandContext, IdempotencyConflictError
+from src.commands.base import (
+    CommandContext,
+    IdempotencyConflictError,
+    PairingChangedError,
+)
 from src.utils import default_clock
 
 router = APIRouter()
@@ -150,6 +154,12 @@ async def create_activation_test_reminder(
             timezone=request.timezone,
             retry=request.retry,
         )
+    except PairingChangedError as error:
+        # Nothing was written, and the next attempt derives the now-correct identity, so this
+        # is a retry instruction rather than a failure the participant has to resolve.
+        raise HTTPException(
+            status_code=409, detail=str(error), headers={"X-Retryable": "true"}
+        ) from None
     except IdempotencyConflictError:
         raise HTTPException(status_code=409, detail="Idempotency key conflict.") from None
     except ValueError as error:

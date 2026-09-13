@@ -139,3 +139,24 @@ Supabase, dashboard, and model resources; a verified single scheduler owner and 
 before and after a restart; restart recovery without duplicate, cross-participant, or lost
 delivery; observable liveness, readiness, errors, delivery, and lateness; and a synthetic clean
 account completing the Core Loop. None of that is simulated or claimed here.
+
+### 2026-09-13 — Migration 014 adopted; exact-version startup gate is now satisfiable
+
+`migrations/014_application_schema_version.sql`, `tests/sql/app_schema_version.sql`, and
+`scripts/check_schema_chain.py` are checked in and wired into CI. The chain guard proves both
+directions the in-database assertions cannot: 014 refuses each of the eight constructible
+incomplete chains, and the ledger head is compared with `EXPECTED_SCHEMA_VERSION` so a migration
+applied without its row — which fails open by reporting a lower revision — is caught.
+
+Independent review found and blocked a security defect in the previously approved bytes: the
+`REVOKE` omitted `service_role`, which the Supabase role bootstrap grants full DML on every new
+table, so the application's own credential could rewrite the ledger its startup gate reads. Fixed
+and asserted before adoption.
+
+One open risk belongs to this issue: the gate has never run against a real PostgREST.
+`MemoryStore.verify_schema_version` passes `result.data` into a check that demands an exact `int`,
+and no other scalar RPC exists in the codebase to infer the response shape from. If PostgREST
+returns `[14]` or an object, startup fails closed on every boot against a correct database. Verify
+this first when staging exists.
+
+No acceptance criterion changes; all six remain real-deployment evidence.

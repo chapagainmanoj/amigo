@@ -57,9 +57,6 @@ conversations.
 Some implemented prototype behavior is not beta-ready. In particular, the locally implemented
 Activation, cross-surface lifecycle, pairing security, reminder reliability, production
 observability, and data-rights behavior still require the applicable staging and release evidence.
-The staged Activation application code also requires protected migration 014, which remains
-outside the repository pending explicit human approval; the current worktree is not deployable
-until that schema chain is complete.
 
 ## What Memory Means Today
 

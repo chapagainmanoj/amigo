@@ -29,7 +29,12 @@ export async function apiRequest(path, options = {}) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}))
-    throw new Error(errorData.detail || `API request failed with status ${response.status}`)
+    const error = new Error(errorData.detail || `API request failed with status ${response.status}`)
+    error.status = response.status
+    // The server marks a conflict that resolves itself on a second attempt, so callers can
+    // retry rather than showing the participant an error they cannot act on.
+    error.retryable = response.headers.get('X-Retryable') === 'true'
+    throw error
   }
 
   return response.json()

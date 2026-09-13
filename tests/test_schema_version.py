@@ -1,5 +1,6 @@
 """Exact database schema gate and startup-order regressions."""
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -122,3 +123,24 @@ async def test_verified_schema_precedes_scheduler_recovery():
         "outbox:drain",
         "scheduler:reload",
     ]
+
+
+def test_expected_schema_version_matches_the_migration_chain():
+    """The constant must track the migrations on disk, derived rather than hand-set.
+
+    Without this, adding a migration and forgetting to bump the constant leaves the
+    startup gate certifying a database that is one revision behind the code.
+    """
+    # Anchored to this file, not the working directory, so the guard does not depend on
+    # where pytest was invoked from.
+    migrations = sorted((Path(__file__).parents[1] / "migrations").glob("[0-9][0-9][0-9]_*.sql"))
+    assert migrations, "no migrations found"
+
+    numbers = [int(path.name[:3]) for path in migrations]
+    assert numbers == list(range(1, len(numbers) + 1)), (
+        f"migration chain is not contiguous: {numbers}"
+    )
+    assert numbers[-1] == EXPECTED_SCHEMA_VERSION, (
+        f"EXPECTED_SCHEMA_VERSION is {EXPECTED_SCHEMA_VERSION} but the chain ends at "
+        f"{numbers[-1]} ({migrations[-1].name})"
+    )

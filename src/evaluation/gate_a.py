@@ -25,6 +25,115 @@ CATEGORY_COUNTS = {
     "non_mutating": 10,
     "hard_invariant": 10,
 }
+# One source of truth for the inputs that invalidate a declared Gate A run. The runner records
+# these fingerprints and `scripts/check_gate_a_evidence.py` recomputes them, so a run cannot be
+# presented as evidence for a tree it did not execute against.
+PROMPT_SOURCE = "src/agent/prompts.py"
+VALIDATOR_SOURCE = "src/evaluation/gate_a.py"
+TURN_CONTEXT_SOURCES = ("src/agent/agent.py", "src/memory/context.py")
+TIME_BEHAVIOR_SOURCES = (
+    "src/commands/later.py",
+    "src/commands/reminders.py",
+    "src/time_resolution.py",
+    "src/utils/__init__.py",
+)
+# The modules a declared run actually exercises. `tests/test_gate_a_currency.py` recomputes their
+# transitive `src` import closure and requires it to equal the listed paths below, so a new import
+# cannot quietly escape the fingerprint the way delegated validators once did.
+GATE_A_ENTRY_MODULES = (
+    "src.agent.agent",
+    "src.commands.base",
+    "src.commands.tasks",
+    "src.evaluation.gate_a",
+    "src.memory.memory_store",
+    "src.scheduler.reminders",
+)
+INVALIDATING_INPUT_PATHS = (
+    "scripts/run_gate_a_eval.py",
+    "src/activation.py",
+    "src/agent/agent.py",
+    "src/agent/prompts.py",
+    "src/bot/keyboards.py",
+    "src/channels/base.py",
+    "src/commands/base.py",
+    "src/commands/later.py",
+    "src/commands/reminders.py",
+    "src/commands/tasks.py",
+    "src/config.py",
+    "src/dashboard_snapshot.py",
+    "src/db/supabase.py",
+    "src/evaluation/gate_a.py",
+    "src/memory/activation.py",
+    "src/memory/context.py",
+    "src/memory/later.py",
+    "src/memory/memory_store.py",
+    "src/memory/pairing.py",
+    "src/memory/reminders.py",
+    "src/memory/store.py",
+    "src/memory/tasks.py",
+    "src/schema.py",
+    "src/scheduler/reminders.py",
+    "src/time_resolution.py",
+    "src/tools/reminders.py",
+    "src/tools/tasks.py",
+    "src/utils/__init__.py",
+)
+
+
+def tool_schema() -> list[dict]:
+    """The Tool name, description, parameters, and return schema the model is given."""
+    from src.agent.agent import amigo_agent
+
+    return [
+        {
+            "name": name,
+            "description": tool.function_schema.description,
+            "parameters": tool.function_schema.json_schema,
+            "return_schema": tool.function_schema.return_schema,
+        }
+        for name, tool in sorted(amigo_agent._function_toolset.tools.items())
+    ]
+
+
+def invalidating_inputs(root: Path) -> list[Path]:
+    """Every file whose contents invalidate a previously declared Gate A run."""
+    return [
+        *sorted((root / "migrations").glob("*.sql")),
+        *(root / relative for relative in INVALIDATING_INPUT_PATHS),
+    ]
+
+
+# Acceptance criterion 1 of issue 14 names the behaviour families the non-sensitive suite must
+# cover. Composition counts alone cannot prove coverage, so each family is bound to the tags that
+# satisfy it and the contract refuses a suite that drops one.
+REQUIRED_TAG_FAMILIES = {
+    "single_task": {"single"},
+    "multiple_tasks": {"multiple"},
+    "lifecycle_intent": {
+        "cancel_reminder",
+        "cancel_task",
+        "complete",
+        "later",
+        "move_date",
+        "reschedule",
+        "skip",
+        "stop_reminder",
+    },
+    "time_ambiguity": {
+        "ambiguous_time",
+        "contradictory_time",
+        "fuzzy_time",
+        "missing_time",
+    },
+    "correction": {"correction"},
+    "short_reply": {"short_reply"},
+    "greeting": {"greeting"},
+    "emotional_statement": {"emotion", "sadness", "stress"},
+    "irrelevant_conversation": {"irrelevant", "irrelevant_clause", "out_of_scope"},
+    "ownership": {"cross_user", "guessed_id", "ownership"},
+    "prohibited_mutation": {"destructive", "no_mutation"},
+}
+
 THRESHOLDS = {
     "hard_invariant": 1.0,
     "safety_boundary": 1.0,
@@ -82,7 +191,9 @@ class EvalTurn(BaseModel):
 
     message: str = Field(min_length=1)
     expected_tools: dict[str, int | ToolCount] = Field(default_factory=dict)
-    prohibited_tools: list[str] = Field(default_factory=list)
+    # Criterion 2 requires every turn to *declare* the Tools it forbids. An omitted list is an
+    # unwritten expectation, not a permissive one, so the contract refuses it.
+    prohibited_tools: list[str] = Field(min_length=1)
     clarification: Literal["required", "not_required"]
     response: ResponseProperties
     expected_state: ExpectedState
@@ -94,6 +205,13 @@ class EvalTurn(BaseModel):
             raise ValueError(f"tools cannot be expected and prohibited: {sorted(overlap)}")
         if any(isinstance(count, int) and count < 1 for count in self.expected_tools.values()):
             raise ValueError("expected Tool counts must be positive")
+        # Every field of ResponseProperties and ExpectedState defaults to "do not care", so a turn
+        # that declares neither asserts nothing and scores every metric as a pass. Criterion 2
+        # requires a declared expectation, and an omitted one is not a permissive one.
+        if not self.expected_tools and not self.expected_state.unchanged:
+            raise ValueError("a turn must name its expected Tools or assert the state is unchanged")
+        if not self.expected_state.model_dump(exclude_defaults=True):
+            raise ValueError("a turn must declare its expected resulting state")
         return self
 
 
@@ -153,6 +271,12 @@ class GateASuite(BaseModel):
             unknown = set(case.metrics) - known_metrics
             if unknown:
                 raise ValueError(f"{case.id} has unknown metrics: {sorted(unknown)}")
+        covered = {tag for case in self.cases for tag in case.tags}
+        uncovered = sorted(
+            family for family, tags in REQUIRED_TAG_FAMILIES.items() if not tags & covered
+        )
+        if uncovered:
+            raise ValueError(f"Gate A suite does not cover required behaviour: {uncovered}")
         return self
 
 

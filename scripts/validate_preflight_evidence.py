@@ -6,8 +6,15 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.check_gate_a_evidence import check_evidence as check_gate_a_evidence  # noqa: E402
 
 REQUIRED_CHECKS = {
     "backend_ci", "frontend_ci", "clean_migrations", "model_evaluation",
@@ -135,6 +142,40 @@ def _validate_metadata(
     return observed_at, digest
 
 
+
+def _validate_model_evaluation_artifact(
+    check: object, revision: object, evidence_root: Path | None, errors: list[str]
+) -> None:
+    """The Gate A artifact must itself prove it ran against this revision.
+
+    Without this, ``model_evaluation.revision`` is only a field someone typed: a stale declared
+    run could be attached to a new release and pass every other check.
+    """
+    if not isinstance(check, dict) or not isinstance(revision, str):
+        return
+    evidence = check.get("evidence")
+    if not isinstance(evidence, dict) or evidence_root is None:
+        return
+    path_value = evidence.get("path")
+    if not _required_text(path_value):
+        return
+    relative = PurePosixPath(path_value)
+    if relative.is_absolute() or ".." in relative.parts:
+        return
+    artifact = (evidence_root.resolve() / Path(*relative.parts)).resolve()
+    if not artifact.is_file():
+        return
+    try:
+        payload = json.loads(artifact.read_text())
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+        # A screenshot named .json is the realistic case, and it must fail the manifest rather
+        # than raise out of a function callers use as a library.
+        errors.append("check model_evaluation.evidence must be the declared Gate A run JSON")
+        return
+    for reason in check_gate_a_evidence(payload, revision=revision):
+        errors.append(f"check model_evaluation: {reason}")
+
+
 def template_manifest() -> dict:
     """Return a complete-shape manifest whose missing values intentionally cannot pass."""
     metadata = {
@@ -248,6 +289,9 @@ def validate_manifest(
             evidence_times.append(observed_at)
     for missing in sorted(REQUIRED_CHECKS - checks_by_id.keys()):
         errors.append(f"required check {missing} is missing")
+    _validate_model_evaluation_artifact(
+        checks_by_id.get("model_evaluation"), revision, evidence_root, errors
+    )
 
     trials = manifest.get("core_loop_trials")
     if not isinstance(trials, list) or len(trials) != 3:

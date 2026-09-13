@@ -140,12 +140,6 @@ Where to get these:
 
 #### 2. Set up the database
 
-> **Preflight worktree limitation:** application changes currently staged in this worktree require
-> exact schema version 14, but protected migration 014 is still awaiting explicit human
-> approval and is not checked in. The 001–013 instructions below describe the latest approved
-> schema, not a bootable schema for these uncommitted application changes. Do not deploy this
-> worktree until that remaining migration and its assertions are approved and added in order.
-
 1. Create a Supabase project.
 2. Open the SQL editor in the Supabase dashboard.
 3. Run [`migrations/001_initial_schema.sql`](migrations/001_initial_schema.sql).
@@ -161,6 +155,9 @@ Where to get these:
 13. Run [`migrations/011_reminder_reliability_instrumentation.sql`](migrations/011_reminder_reliability_instrumentation.sql).
 14. Run [`migrations/012_canonical_planning_day_move.sql`](migrations/012_canonical_planning_day_move.sql).
 15. Run [`migrations/013_dashboard_first_activation.sql`](migrations/013_dashboard_first_activation.sql).
+16. Run [`migrations/014_application_schema_version.sql`](migrations/014_application_schema_version.sql).
+    This one refuses to apply unless every migration above it is really present, and records the
+    revision the application checks before it starts any scheduled work.
 
 Apply migrations in numeric order. Migrations 003 and 004 make Pairing backend-only and enforce
 the reviewed cross-tenant grants and row-level policies. Migration 005 adds canonical Task states
@@ -203,16 +200,15 @@ checked, the scheduler heartbeat is stale, or durable scheduler effects have fai
 ### Test & Lint
 
 ```bash
-python -m pytest tests/ -v         # 257 tests at the 2026-09-11 local verification
+python -m pytest tests/ -v         # 385 tests at the 2026-09-13 local verification
 ruff check src tests scripts       # lint
 python scripts/run_gate_a_eval.py --validate-only
 ```
 
 Python tests use in-memory fakes and make no Supabase, Telegram, or Gemini calls. CI additionally
-applies every checked-in migration (currently 001–013) to PostgreSQL 15 and runs legacy backfill,
-two-participant isolation, durable command/outbox, Activation, and lock-order regressions. Until
-protected migration 014 is approved and added, this CI database does not satisfy the staged
-application's schema-14 startup gate. See
+applies every checked-in migration (001–014) to PostgreSQL 15 and runs legacy backfill,
+two-participant isolation, durable command/outbox, Activation, lock-order, and schema-chain
+regressions. The CI database now satisfies the application's exact schema-14 startup gate. See
 [`tests/fakes.py`](tests/fakes.py) for the shared test doubles.
 
 The controlled before/after runtime procedure is documented in
@@ -220,7 +216,11 @@ The controlled before/after runtime procedure is documented in
 tests are not a substitute for its dedicated staging workload.
 
 The versioned Gate A model suite, declared-run procedure, evidence contract, and current quota
-blocker are documented in [`docs/model-evaluation.md`](docs/model-evaluation.md).
+blocker are documented in [`docs/model-evaluation.md`](docs/model-evaluation.md). A declared run
+is only evidence for the revision it executed against:
+[`scripts/check_gate_a_evidence.py`](scripts/check_gate_a_evidence.py) recomputes every recorded
+fingerprint and the category scores themselves, and refuses a stale, partial, foreign, or
+self-declared-passing run.
 
 ### Smoke Checks
 
@@ -278,7 +278,7 @@ abstractions, extensibility hooks, and testing strategy.
 
 - Dashboard-first Activation application code through verified account, beta-limit
   acknowledgement, secure Telegram Pairing, profile/quiet hours, and a delivered and resolved
-  private test Reminder; it requires the still-unapproved migration 014 before deployment
+  private test Reminder
 - Local CLI mode for development (no external services needed)
 - Natural-language task extraction with Gemini Flash
 - Structured agent planning with tool-based side effects (ADR 0001)

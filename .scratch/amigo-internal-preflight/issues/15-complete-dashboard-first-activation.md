@@ -132,3 +132,16 @@ visible end-to-end behavior, and the outstanding evidence is the same for all si
 Dashboard Account completing the journey against separate staging Supabase, Telegram, and dashboard
 resources, including actual Telegram delivery and desktop/mobile checks. That evidence cannot be
 produced from this worktree and is not simulated here.
+
+### 2026-09-13 — Migration 014 adopted; the schema blocker is cleared
+
+`migrations/014_application_schema_version.sql` is checked in, so the Activation application code
+can now boot against a complete chain. A defect in migration 013 found by independent review was
+also fixed in the same change: `create_activation_test_command` inverted its row-lock order
+against `get_activation_state` and deadlocked when `complete_pairing` landed mid-flight. It now
+raises the retryable `activation_pairing_changed` instead, and CI proves the property with a
+deterministic forced interleave rather than a random race.
+
+No acceptance criterion changes. Every remaining criterion is clean-account staging evidence on
+desktop and mobile, which needs the dedicated staging resources in
+`staging-provisioning-checklist.md`.

@@ -69,7 +69,9 @@ jobs:
             -f migrations/012_canonical_planning_day_move.sql \
             -f tests/sql/move_task_planning_day_command.sql \
             -f migrations/013_dashboard_first_activation.sql \
-            -f tests/sql/activation_journey.sql
+            -f tests/sql/activation_journey.sql \
+            -f migrations/014_application_schema_version.sql \
+            -f tests/sql/app_schema_version.sql
 
       - name: Prove the Activation functions cannot deadlock
         env:
@@ -79,6 +81,14 @@ jobs:
           PGPASSWORD: postgres
           PGOPTIONS: "-c role=service_role"
         run: python scripts/check_activation_lock_order.py
+
+      - name: Prove the schema-version gate cannot be faked in either direction
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGDATABASE: amigo_test
+          PGPASSWORD: postgres
+        run: python scripts/check_schema_chain.py
 
       - name: Lint
         run: ruff check src tests scripts

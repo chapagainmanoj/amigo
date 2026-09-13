@@ -61,6 +61,26 @@ Context, lifecycle/time behavior, safety rules, suite, or validator changes. Com
 artifact with the last passing baseline; a hard-invariant failure or any independently scored
 category below its approved threshold blocks the gate.
 
+That rule is enforced rather than remembered. `src/evaluation/gate_a.py` holds the single list of
+invalidating inputs, and the checker recomputes every fingerprint from the tree:
+
+```bash
+python scripts/check_gate_a_evidence.py --revision "$(git rev-parse HEAD)"
+```
+
+It is fail-closed, and it derives the verdict rather than reading it: the category summary is
+recomputed from the recorded executions, so a hand-written `passed` flag proves nothing. A run is
+refused when it is missing, unreadable, aborted on a provider incident, `--case`-scoped, short of
+180 executions, missing repetition 1, 2, or 3 for any case, carrying an execution that did not
+complete and pass, scored below an approved threshold, executed from a dirty tree, executed
+against another revision or another model, or when its recorded prompt, Tool schema, Turn
+Context, time-behavior, migration, or suite fingerprints no longer match the working tree — the
+failure names the input that changed. The invalidating-input list is checked against the import
+closure of the modules a run exercises, so a newly imported module cannot escape it. It is not a pull-request gate, because a declared run costs 180
+provider executions; it gates the release, and
+`scripts/validate_preflight_evidence.py` calls it on the `model_evaluation` artifact so a stale
+run cannot be attached to a new release by typing a revision into the manifest.
+
 ## Current status
 
 The 60-case contract and deterministic validation are implemented. A complete release run is not

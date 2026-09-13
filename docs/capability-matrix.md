@@ -10,13 +10,13 @@ the current repository; it does not mean production reliability, security, or us
 have passed. A beta experiment must be presented as experimental. A roadmap item must never be
 described in the present tense.
 
-The current preflight worktree stages application code that requires protected migrations
-014. That migration is not yet checked in, so the Activation application code is not in the
-“shipped” column and this worktree must not be deployed until the schema chain is approved.
+The schema chain is complete through migration 014, so the worktree is bootable. The Activation
+application code is still not in the “shipped” column: it has no clean-account staging evidence,
+which is a separate gate from having the schema.
 
 | Shipped in the current prototype | Beta experiment or release-gated | Roadmap, not available |
 |---|---|---|
-| Dashboard email signup, confirmation, and sign-in through Supabase Auth | Dashboard-first Activation application code awaiting migration 014, then clean-account staging/usability evidence | Durable personal Memory and semantic/temporal retrieval |
+| Dashboard email signup, confirmation, and sign-in through Supabase Auth | Dashboard-first Activation application code awaiting clean-account staging/usability evidence | Durable personal Memory and semantic/temporal retrieval |
 | Expiring single-use dashboard-to-Telegram account Pairing | Cross-surface Task, Reminder, and Session staging evidence | Memory Inspector, export controls, and learning/use pauses |
 | Telegram text conversation | Natural-language task extraction accuracy and clarification behavior | Recommender, Coach, and Reflect Modes |
 | Dashboard profile setup with validated name, IANA timezone, and quiet hours | First-message-of-day planning using recent Task context; Amigo does not initiate it | Adaptive Interaction Style or automatic Mode routing |

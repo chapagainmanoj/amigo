@@ -12,6 +12,14 @@ class StaleVersionError(ValueError):
     """Raised when a command targets an aggregate version that is no longer current."""
 
 
+class PairingChangedError(ValueError):
+    """Telegram Pairing landed while a command was already in flight.
+
+    The command abandoned its transaction rather than take a row lock out of order, so
+    nothing was written and the caller can simply retry.
+    """
+
+
 class InvalidTransitionError(ValueError):
     """Raised when a terminal aggregate is asked to transition to another outcome."""
 
