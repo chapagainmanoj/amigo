@@ -357,42 +357,42 @@ export default function DashboardView() {
                     {rem.task.population === 'carried_over' && ' · carried over'}
                   </div>
                   {DUE_STATES.has(rem.delivery_state) ? (
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '6px' }}>
                       <button
                         onClick={() => handleResolveTask(rem.task, 'completed')}
-                        className="btn-primary"
-                        style={{ flex: 1, fontSize: '0.85rem', padding: '6px 10px' }}
+                        className="btn-minimal"
+                        style={{ flex: 1 }}
                       >
                         Done
                       </button>
                       <button
                         onClick={() => handleResolveTask(rem.task, 'skipped')}
-                        className="btn-secondary"
-                        style={{ flex: 1, fontSize: '0.85rem', padding: '6px 10px' }}
+                        className="btn-minimal"
+                        style={{ flex: 1 }}
                       >
                         Skip
                       </button>
                       <button
                         onClick={() => handleSnooze(rem)}
-                        className="btn-secondary"
-                        style={{ flex: 1, fontSize: '0.85rem', padding: '6px 10px' }}
+                        className="btn-minimal"
+                        style={{ flex: 1 }}
                       >
                         Later
                       </button>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '6px' }}>
                       <button
                         onClick={() => handleSnooze(rem)}
-                        className="btn-secondary"
-                        style={{ flex: 1, fontSize: '0.85rem', padding: '6px 10px' }}
+                        className="btn-minimal"
+                        style={{ flex: 1 }}
                       >
                         Later
                       </button>
                       <button
                         onClick={() => handleCancelReminder(rem)}
-                        className="btn-secondary"
-                        style={{ flex: 1, fontSize: '0.85rem', padding: '6px 10px' }}
+                        className="btn-minimal"
+                        style={{ flex: 1 }}
                       >
                         Cancel
                       </button>
