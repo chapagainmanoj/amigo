@@ -37,7 +37,7 @@ export default function AppShell({ session }) {
   }
 
   if (checkingPairing) {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--mist)' }}>Checking pairing status...</div>
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--ink-2)' }}>Checking pairing status...</div>
   }
 
   if (!activation) {
@@ -65,14 +65,14 @@ export default function AppShell({ session }) {
       {/* Desktop Sidebar */}
       <aside style={{
         width: '240px',
-        borderRight: '1px solid rgba(255,255,255,0.04)',
+        borderRight: '1px solid var(--rule)',
         display: 'flex',
         flexDirection: 'column',
         padding: '24px 16px',
-        backgroundColor: 'var(--ink)'
+        backgroundColor: 'var(--oat)'
       }}>
         <div style={{ marginBottom: '40px', padding: '0 8px' }}>
-          <h2 className="display-text" style={{ fontSize: '1.5rem', color: 'var(--paper)' }}>Amigo</h2>
+          <h2 className="display-text" style={{ fontSize: '1.5rem', color: 'var(--ink)' }}>Amigo</h2>
         </div>
         
         <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -95,8 +95,8 @@ export default function AppShell({ session }) {
           </button>
         </nav>
 
-        <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '24px' }}>
-          <div style={{ padding: '0 12px', marginBottom: '16px', color: 'var(--mist)', fontSize: '0.85rem', wordBreak: 'break-all' }}>
+        <div style={{ marginTop: 'auto', borderTop: '1px solid var(--rule)', paddingTop: '24px' }}>
+          <div style={{ padding: '0 12px', marginBottom: '16px', color: 'var(--ink-2)', fontSize: '0.85rem', wordBreak: 'break-all' }}>
             {session?.user?.email}
           </div>
           <button 
@@ -110,10 +110,10 @@ export default function AppShell({ session }) {
       </aside>
 
       {/* Main Content Area */}
-      <main style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--ink)' }}>
+      <main style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--oat)' }}>
         <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 24px' }}>
           {!pairedUser && (
-            <div style={{ background: 'rgba(255, 138, 91, 0.1)', border: '1px solid rgba(255, 138, 91, 0.2)', padding: '16px', borderRadius: '8px', marginBottom: '24px', color: '#FF8A5B' }}>
+            <div style={{ background: 'var(--sand)', border: '1px solid var(--rule)', padding: '16px', borderRadius: '8px', marginBottom: '24px', color: 'var(--signal-deep)' }}>
               <strong>Connect Telegram to continue.</strong> Pair your account to chat with Amigo, schedule reminders, and view your dashboard.
             </div>
           )}

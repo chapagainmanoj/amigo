@@ -49,14 +49,14 @@ export default function ConnectView({ pairedUser, onPairSuccess }) {
         <h1 className="display-text" style={{ fontSize: '2.5rem', marginBottom: '8px' }}>
           Connect Telegram
         </h1>
-        <p style={{ color: 'var(--mist)' }}>
+        <p style={{ color: 'var(--ink-2)' }}>
           Pair Telegram to chat with Amigo and receive reminders.
         </p>
       </div>
 
       <div className="flat-card" style={{ padding: '40px', minHeight: '400px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-          <MessageCircle size={24} color="#229ED9" />
+          <MessageCircle size={24} color="#1B7FAE" />
           <h2 style={{ fontSize: '1.5rem' }}>Telegram</h2>
         </div>
 
@@ -73,37 +73,37 @@ export default function ConnectView({ pairedUser, onPairSuccess }) {
           >
             <div
               style={{
-                background: 'rgba(29, 158, 117, 0.1)',
+                background: 'var(--sand)',
                 padding: '24px',
                 borderRadius: '50%',
                 marginBottom: '24px',
-                color: '#1D9E75',
+                color: 'var(--ok)',
               }}
             >
               <CheckCircle size={48} />
             </div>
-            <h3 style={{ fontSize: '1.25rem', marginBottom: '8px', color: 'var(--paper)' }}>
+            <h3 style={{ fontSize: '1.25rem', marginBottom: '8px', color: 'var(--ink)' }}>
               Telegram connected
             </h3>
-            <p style={{ color: 'var(--mist)' }}>
+            <p style={{ color: 'var(--ink-2)' }}>
               Ready for tasks and reminders in Telegram.
             </p>
           </div>
         ) : (
           <>
-            <p style={{ color: 'var(--mist)', marginBottom: '32px', maxWidth: '440px' }}>
+            <p style={{ color: 'var(--ink-2)', marginBottom: '32px', maxWidth: '440px' }}>
               Scan the QR code with your phone, or open Telegram below. The link pairs this
               dashboard account with the Amigo bot.
             </p>
 
             {loading && (
-              <div style={{ color: 'var(--mist)', marginBottom: '32px' }}>
+              <div style={{ color: 'var(--ink-2)', marginBottom: '32px' }}>
                 Generating pairing link...
               </div>
             )}
             {error && (
               <div style={{ marginBottom: '24px' }}>
-                <div style={{ color: 'var(--ember)', marginBottom: '8px' }}>{error}</div>
+                <div style={{ color: 'var(--danger)', marginBottom: '8px' }}>{error}</div>
                 <button
                   onClick={fetchPairingToken}
                   className="btn-secondary"

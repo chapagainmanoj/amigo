@@ -28,7 +28,7 @@ function App() {
   }, [])
 
   if (loading) {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--mist)' }}>Loading...</div>
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--ink-2)' }}>Loading...</div>
   }
 
   if (!session) {

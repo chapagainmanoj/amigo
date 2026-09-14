@@ -177,7 +177,7 @@ export default function DashboardView() {
           <h1 className="horizon-greeting">{greeting.headline}</h1>
           <p className="horizon-subtext">{greeting.subtext}</p>
           <div className="horizon-progress-pill">
-            <CheckCircle2 size={16} color="var(--ember)" />
+            <CheckCircle2 size={16} color="var(--ok)" />
             <span>
               <strong>{doneCount}</strong> of {totalCount} done today
             </span>
@@ -213,7 +213,7 @@ export default function DashboardView() {
                 placeholder="Add a new task..."
                 value={newTaskTitle}
                 onChange={(e) => setNewTaskTitle(e.target.value)}
-                style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.03)' }}
+                style={{ flex: 1, backgroundColor: 'var(--oat)', border: '1px solid var(--rule)' }}
               />
               <button
                 type="submit"
@@ -237,7 +237,8 @@ export default function DashboardView() {
                     display: 'flex',
                     alignItems: 'center',
                     padding: '12px',
-                    background: 'rgba(255,255,255,0.02)',
+                    background: 'var(--oat)',
+                    border: '1px solid var(--rule)',
                     borderRadius: '8px',
                     opacity: task.status === 'completed' ? 0.6 : 1,
                     transition: 'opacity 0.2s ease',
@@ -249,7 +250,7 @@ export default function DashboardView() {
                     aria-label={task.status === 'completed' ? 'Task completed' : 'Mark task done'}
                     style={{
                       background: 'transparent',
-                      color: task.status === 'completed' ? 'var(--ember)' : 'var(--mist)',
+                      color: task.status === 'completed' ? 'var(--ok)' : 'var(--ink-2)',
                       marginRight: '12px',
                       flexShrink: 0,
                     }}
@@ -264,7 +265,7 @@ export default function DashboardView() {
                     style={{
                       flex: 1,
                       textDecoration: task.status === 'completed' ? 'line-through' : 'none',
-                      color: task.status === 'completed' ? 'var(--mist)' : 'var(--paper)',
+                      color: task.status === 'completed' ? 'var(--ink-2)' : 'var(--ink)',
                     }}
                   >
                     {task.title}
@@ -274,7 +275,7 @@ export default function DashboardView() {
                       onClick={() => handleResolveTask(task, 'skipped')}
                       style={{
                         background: 'transparent',
-                        color: 'var(--mist)',
+                        color: 'var(--ink-2)',
                         padding: '4px 8px',
                       }}
                     >
@@ -285,14 +286,14 @@ export default function DashboardView() {
                     onClick={() => handleResolveTask(task, 'cancelled')}
                     disabled={task.status !== 'pending'}
                     aria-label="Cancel task"
-                    style={{ background: 'transparent', color: 'var(--mist)', padding: '4px' }}
+                    style={{ background: 'transparent', color: 'var(--ink-2)', padding: '4px' }}
                   >
                     <Trash2 size={16} />
                   </button>
                 </div>
               ))}
               {tasks.length === 0 && (
-                <div style={{ color: 'var(--mist)', textAlign: 'center', padding: '24px 0' }}>
+                <div style={{ color: 'var(--ink-2)', textAlign: 'center', padding: '24px 0' }}>
                   No tasks pending.
                 </div>
               )}
@@ -308,7 +309,8 @@ export default function DashboardView() {
                 key={task.task_id}
                 style={{
                   padding: '12px',
-                  background: 'rgba(255,255,255,0.02)',
+                  background: 'var(--oat)',
+                    border: '1px solid var(--rule)',
                   borderRadius: '8px',
                   marginBottom: '8px',
                 }}
@@ -317,7 +319,7 @@ export default function DashboardView() {
               </div>
             ))}
             {inboxTasks.length === 0 && (
-              <div style={{ color: 'var(--mist)', textAlign: 'center', padding: '12px 0' }}>
+              <div style={{ color: 'var(--ink-2)', textAlign: 'center', padding: '12px 0' }}>
                 Inbox is clear.
               </div>
             )}
@@ -329,11 +331,11 @@ export default function DashboardView() {
           <div className="flat-card" style={{ padding: '16px' }}>
             {carriedTasks.map((task) => (
               <div key={task.task_id} style={{ padding: '12px' }}>
-                {task.title} <span style={{ color: 'var(--mist)' }}>· from {task.due_date}</span>
+                {task.title} <span style={{ color: 'var(--ink-2)' }}>· from {task.due_date}</span>
               </div>
             ))}
             {carriedTasks.length === 0 && (
-              <div style={{ color: 'var(--mist)', textAlign: 'center', padding: '12px 0' }}>
+              <div style={{ color: 'var(--ink-2)', textAlign: 'center', padding: '12px 0' }}>
                 Nothing carried over.
               </div>
             )}
@@ -353,13 +355,14 @@ export default function DashboardView() {
               {reminders.map((rem) => (
                 <div
                   key={rem.reminder_id}
-                  style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px' }}
+                  style={{ padding: '12px', background: 'var(--oat)',
+                    border: '1px solid var(--rule)', borderRadius: '8px' }}
                 >
                   <div
                     style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}
                   >
-                    <Clock size={14} color="var(--gold)" />
-                    <span style={{ fontSize: '0.85rem', color: 'var(--gold)' }}>
+                    <Clock size={14} color="var(--signal-deep)" />
+                    <span style={{ fontSize: '0.85rem', color: 'var(--signal-deep)' }}>
                       {rem.intended_local_date} {rem.intended_local_time.slice(0, 5)}{' '}
                       {rem.intended_timezone} · {rem.delivery_state}
                     </span>
@@ -420,7 +423,7 @@ export default function DashboardView() {
                 </div>
               ))}
               {reminders.length === 0 && (
-                <div style={{ color: 'var(--mist)', fontSize: '0.9rem' }}>
+                <div style={{ color: 'var(--ink-2)', fontSize: '0.9rem' }}>
                   No active reminders.
                 </div>
               )}
@@ -443,10 +446,10 @@ export default function DashboardView() {
                     gap: '12px',
                     alignItems: 'flex-start',
                     paddingBottom: '12px',
-                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                    borderBottom: '1px solid var(--rule)',
                   }}
                 >
-                  <MessageSquare size={16} color="var(--mist)" style={{ marginTop: '4px' }} />
+                  <MessageSquare size={16} color="var(--ink-2)" style={{ marginTop: '4px' }} />
                   <div>
                     <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
                       {sess.label}
@@ -456,20 +459,20 @@ export default function DashboardView() {
                         display: 'flex',
                         gap: '8px',
                         fontSize: '0.8rem',
-                        color: 'var(--mist)',
+                        color: 'var(--ink-2)',
                       }}
                     >
                       <span>{new Date(sess.started_at).toLocaleString()}</span>
                       <span>•</span>
                       <span>{sess.duration_minutes}m</span>
                       <span>•</span>
-                      <span style={{ color: 'var(--ember)' }}>{sess.session_type_label}</span>
+                      <span style={{ color: 'var(--signal-deep)' }}>{sess.session_type_label}</span>
                     </div>
                   </div>
                 </div>
               ))}
               {sessions.length === 0 && (
-                <div style={{ color: 'var(--mist)', fontSize: '0.9rem' }}>
+                <div style={{ color: 'var(--ink-2)', fontSize: '0.9rem' }}>
                   No recent sessions.
                 </div>
               )}

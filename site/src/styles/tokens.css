@@ -1,0 +1,34 @@
+/* Amigo marketing palette.
+ *
+ * Deliberately NOT the dashboard palette (web/src/index.css). The dashboard is a dark product
+ * surface; this is a warm, light, editorial marketing surface. tests/test_landing_page.py pins
+ * these exact values — change a hex here and recompute the contrast table in
+ * docs/landing-page-spec.md section 4.1 before you do.
+ *
+ * THE ONE RULE: --signal appears exactly ONCE in the rendered page, on the reminder bubble in
+ * the Telegram demo. Amigo's whole product is a single well-timed nudge, so the accent is that
+ * nudge. The waitlist CTA is --ink, not --signal: an accent spent on the two most prominent
+ * elements is not an accent, it is a second brand colour, and the page reads as decorated
+ * rather than considered.
+ */
+:root {
+  /* Ground */
+  --oat: #FBF8F2;
+  --sand: #F1E9DC;
+  --rule: #E5DCCB;
+
+  /* Text */
+  --ink: #1F1A17;
+  --ink-2: #6F655C;
+
+  /* The signal. Fill only — as text on --oat it is 3.58 and fails AA.
+   * Text placed ON the fill must be --signal-ink (4.92), never --oat (3.30). */
+  --signal: #EA5A2D;
+  --signal-ink: #1F1A17;
+  --signal-deep: #A33A0B;
+
+  /* The single full-bleed inversion. A deepening of the same warm material rather than a
+   * second hue — a green band under a warm accent reads muddy. */
+  --band: #241E1A;
+  --band-soft: #A99E93;
+}

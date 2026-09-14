@@ -35,7 +35,7 @@ def test_render_blueprint_declares_one_telegram_application_owner():
     static_services = [block for block in services if "staticPublishPath:" in block]
 
     assert len(application_services) == 1
-    assert len(static_services) == 1
+    assert len(static_services) == 2
     application = application_services[0]
     assert "name: amigo\n" in application
     assert "runtime: docker" in application

@@ -46,3 +46,12 @@ services:
         sync: false
       - key: VITE_API_URL
         value: https://amigo-agkb.onrender.com
+
+  - type: web
+    name: amigo-site
+    runtime: static
+    buildCommand: cd site && npm ci && npm run build
+    staticPublishPath: site/dist
+    envVars:
+      - key: VITE_WAITLIST_ENDPOINT
+        sync: false

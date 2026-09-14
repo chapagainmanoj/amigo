@@ -15,12 +15,12 @@ export default function Toast({ message, onClose }) {
       position: 'fixed',
       bottom: '24px',
       right: '24px',
-      backgroundColor: 'var(--ember)',
-      color: 'var(--ink)',
+      backgroundColor: 'var(--oat)',
+      color: 'var(--oat)',
       padding: '12px 24px',
       borderRadius: '8px',
       fontWeight: '600',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+      border: '1px solid var(--rule)',
       zIndex: 1000
     }}>
       {message}
