@@ -23,6 +23,11 @@ function failureMessage(error, subject) {
 // outbox has not sent yet, and leaving it with only Later/Cancel is how stale reminders pile
 // up. Done and Skip resolve the Task, and that cancels the still-pending send as part of the
 // same transition, so neither state needs a separate Cancel.
+// Cancel stays on this branch too. Done and Skip go through resolve_task, which returns
+// before its own reminder cleanup when the Task needs no transition, so a Reminder left
+// active behind an already-resolved Task cannot be cleared by either one -- Done reports
+// success and changes nothing, Skip fails outright. Cancel keys off the Reminder's status
+// alone, so it is the only action that clears those rows.
 const DUE_STATES = new Set(['delivered', 'overdue'])
 
 export default function DashboardView() {
@@ -89,18 +94,25 @@ export default function DashboardView() {
     if (task.status && task.status !== 'pending') return
 
     try {
-      await apiRequest(`/api/tasks/${task.task_id}/resolve`, {
+      const result = await apiRequest(`/api/tasks/${task.task_id}/resolve`, {
         method: 'POST',
         headers: { 'Idempotency-Key': crypto.randomUUID() },
         body: JSON.stringify({ outcome, expected_version: task.version }),
       })
-      setToastMsg(
-        outcome === 'completed'
-          ? 'Task completed'
-          : outcome === 'skipped'
-            ? 'Task skipped'
-            : 'Task cancelled',
-      )
+      // resolve_task reports `transitioned: false` when the Task was already in the requested
+      // state. Nothing moved, and its Reminders were never reached, so saying "Task completed"
+      // would explain a list that visibly did not change.
+      if (result?.transitioned === false) {
+        setToastMsg('That Task was already resolved — use Cancel to clear the reminder')
+      } else {
+        setToastMsg(
+          outcome === 'completed'
+            ? 'Task completed'
+            : outcome === 'skipped'
+              ? 'Task skipped'
+              : 'Task cancelled',
+        )
+      }
       await fetchSnapshot()
     } catch (error) {
       setToastMsg(failureMessage(error, 'Task'))
@@ -357,7 +369,7 @@ export default function DashboardView() {
                     {rem.task.population === 'carried_over' && ' · carried over'}
                   </div>
                   {DUE_STATES.has(rem.delivery_state) ? (
-                    <div style={{ display: 'flex', gap: '6px' }}>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                       <button
                         onClick={() => handleResolveTask(rem.task, 'completed')}
                         className="btn-minimal"
@@ -378,6 +390,13 @@ export default function DashboardView() {
                         style={{ flex: 1 }}
                       >
                         Later
+                      </button>
+                      <button
+                        onClick={() => handleCancelReminder(rem)}
+                        className="btn-minimal"
+                        style={{ flex: 1 }}
+                      >
+                        Cancel
                       </button>
                     </div>
                   ) : (
