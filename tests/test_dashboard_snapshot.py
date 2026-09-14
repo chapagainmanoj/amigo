@@ -1,6 +1,8 @@
 """Canonical dashboard snapshot contract tests."""
 
+import re
 from datetime import datetime
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI
@@ -10,6 +12,8 @@ from src.api.dependencies import get_activated_user
 from src.dashboard_snapshot import build_dashboard_snapshot
 from src.utils import UTC
 from tests.fakes import FakeStore
+
+ROOT = Path(__file__).parents[1]
 
 
 def test_snapshot_populations_reminders_and_stale_sessions_are_consistent():
@@ -141,3 +145,35 @@ async def test_authenticated_snapshot_is_tenant_scoped_and_replaced_as_one_docum
     assert snapshot["snapshot_version"]
     assert snapshot["generated_at"]
     assert [task["title"] for task in snapshot["tasks"]["inbox"]] == ["Owned"]
+
+
+def _delivery_states_from_migration() -> set[str]:
+    """The exact delivery_state literals the snapshot function can emit."""
+    sql = (ROOT / "migrations/010_consistent_dashboard_snapshot.sql").read_text()
+    case = re.search(r"'delivery_state',\s*CASE(.*?)END", sql, re.DOTALL)
+    assert case, "the snapshot no longer builds delivery_state with a CASE"
+    pairs = re.findall(r"THEN\s*'([a-z_]+)'|ELSE\s*'([a-z_]+)'", case.group(1))
+    return {value for pair in pairs for value in pair if value}
+
+
+def _due_states_from_dashboard() -> set[str]:
+    """The delivery states the dashboard treats as needing an outcome."""
+    source = (ROOT / "web/src/components/DashboardView.jsx").read_text()
+    declared = re.search(r"const DUE_STATES = new Set\(\[(.*?)\]\)", source, re.DOTALL)
+    assert declared, "DashboardView no longer declares DUE_STATES"
+    return set(re.findall(r"'([a-z_]+)'", declared.group(1)))
+
+
+def test_the_dashboard_only_branches_on_delivery_states_the_snapshot_emits():
+    """A renamed SQL literal must not silently strip Done/Skip from a reminder card.
+
+    The card picks its buttons from these strings, so a migration that renames one would drop
+    those reminders into the not-yet-due branch with no terminal action — exactly how stale
+    reminders accumulate — and nothing else would fail.
+    """
+    emitted = _delivery_states_from_migration()
+    due = _due_states_from_dashboard()
+
+    assert due <= emitted, f"dashboard branches on states the snapshot never emits: {due - emitted}"
+    assert emitted - due, "every delivery state is treated as due; the other branch is dead"
+    assert due == {"delivered", "overdue"}

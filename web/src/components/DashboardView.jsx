@@ -5,6 +5,26 @@ import { timeOfDayGreeting } from '../mockData'
 import Toast from './Toast'
 import ModeChips from './ModeChips'
 
+// apiRequest attaches `status` from the response and `retryable` from the X-Retryable header.
+// A rejection carrying neither never reached the API at all, so reporting it as a conflict
+// would be wrong twice: it names a cause we did not observe, and it tells the participant to
+// refresh when refreshing cannot help. Only 409 means someone else moved this record.
+function failureMessage(error, subject) {
+  const status = error?.status
+  if (status === undefined) return 'Could not reach Amigo — check your connection'
+  if (error?.retryable) return `${subject} was busy — try that again`
+  if (status === 409) return `${subject} changed elsewhere — refresh and try again`
+  if (status >= 500) return `Could not update ${subject.toLowerCase()} — try again shortly`
+  return error?.message || `Could not update ${subject.toLowerCase()}`
+}
+
+// A reminder whose moment has passed needs an outcome, not a reschedule. Whether delivery
+// actually succeeded is our problem, not the participant's: an 'overdue' reminder is one the
+// outbox has not sent yet, and leaving it with only Later/Cancel is how stale reminders pile
+// up. Done and Skip resolve the Task, and that cancels the still-pending send as part of the
+// same transition, so neither state needs a separate Cancel.
+const DUE_STATES = new Set(['delivered', 'overdue'])
+
 export default function DashboardView() {
   const [snapshot, setSnapshot] = useState({
     tasks: { today: [], inbox: [], carried_over: [] },
@@ -66,7 +86,7 @@ export default function DashboardView() {
   }, [fetchSnapshot])
 
   const handleResolveTask = async (task, outcome) => {
-    if (task.status !== 'pending') return
+    if (task.status && task.status !== 'pending') return
 
     try {
       await apiRequest(`/api/tasks/${task.task_id}/resolve`, {
@@ -82,8 +102,8 @@ export default function DashboardView() {
             : 'Task cancelled',
       )
       await fetchSnapshot()
-    } catch {
-      setToastMsg('Task changed elsewhere — refresh and try again')
+    } catch (error) {
+      setToastMsg(failureMessage(error, 'Task'))
     }
   }
 
@@ -100,8 +120,8 @@ export default function DashboardView() {
       setNewTaskTitle('')
       setToastMsg('Task added to Inbox')
       await fetchSnapshot()
-    } catch {
-      setToastMsg('Failed to add task')
+    } catch (error) {
+      setToastMsg(failureMessage(error, 'Task'))
     }
   }
 
@@ -116,8 +136,21 @@ export default function DashboardView() {
         `Next: ${result.intended_local_date} ${result.intended_local_time.slice(0, 5)} ${result.intended_timezone}`,
       )
       await fetchSnapshot()
-    } catch {
-      setToastMsg('Failed to snooze reminder')
+    } catch (error) {
+      setToastMsg(failureMessage(error, 'Reminder'))
+    }
+  }
+
+  const handleCancelReminder = async (reminder) => {
+    try {
+      await apiRequest(`/api/reminders/${reminder.reminder_id}`, {
+        method: 'DELETE',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+      })
+      setToastMsg('Reminder cancelled')
+      await fetchSnapshot()
+    } catch (error) {
+      setToastMsg(failureMessage(error, 'Reminder'))
     }
   }
 
@@ -323,13 +356,48 @@ export default function DashboardView() {
                     {rem.task.title}
                     {rem.task.population === 'carried_over' && ' · carried over'}
                   </div>
-                  <button
-                    onClick={() => handleSnooze(rem)}
-                    className="btn-secondary"
-                    style={{ width: '100%', fontSize: '0.85rem' }}
-                  >
-                    Later
-                  </button>
+                  {DUE_STATES.has(rem.delivery_state) ? (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => handleResolveTask(rem.task, 'completed')}
+                        className="btn-primary"
+                        style={{ flex: 1, fontSize: '0.85rem', padding: '6px 10px' }}
+                      >
+                        Done
+                      </button>
+                      <button
+                        onClick={() => handleResolveTask(rem.task, 'skipped')}
+                        className="btn-secondary"
+                        style={{ flex: 1, fontSize: '0.85rem', padding: '6px 10px' }}
+                      >
+                        Skip
+                      </button>
+                      <button
+                        onClick={() => handleSnooze(rem)}
+                        className="btn-secondary"
+                        style={{ flex: 1, fontSize: '0.85rem', padding: '6px 10px' }}
+                      >
+                        Later
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => handleSnooze(rem)}
+                        className="btn-secondary"
+                        style={{ flex: 1, fontSize: '0.85rem', padding: '6px 10px' }}
+                      >
+                        Later
+                      </button>
+                      <button
+                        onClick={() => handleCancelReminder(rem)}
+                        className="btn-secondary"
+                        style={{ flex: 1, fontSize: '0.85rem', padding: '6px 10px' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
               {reminders.length === 0 && (
