@@ -16,7 +16,7 @@ from src.channels.cli import CLIChannel
 from src.config import settings
 from src.memory.memory_store import InMemoryStore
 from src.memory.sessions import SessionManager
-from src.runtime_config import validate_runtime_configuration
+from src.runtime_config import require_agent_credentials, validate_runtime_configuration
 from src.scheduler.outbox import SchedulerOutboxWorker
 from src.scheduler.reminders import ReminderScheduler
 
@@ -97,6 +97,7 @@ async def _handle_cli_commands(text: str, store: InMemoryStore) -> bool:
 async def run_cli(onboard: bool = False):
     """Main CLI loop — wire components and run an interactive chat session."""
     validate_runtime_configuration(settings)
+    require_agent_credentials(settings)
     logging.basicConfig(
         level=getattr(logging, settings.log_level),
         format="%(asctime)s %(name)s %(levelname)s %(message)s",

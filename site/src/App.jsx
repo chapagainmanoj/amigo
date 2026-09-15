@@ -7,9 +7,8 @@ import HonestyBlock from './components/HonestyBlock'
 import WhyBand from './components/WhyBand'
 import OpenSource from './components/OpenSource'
 import Faq from './components/Faq'
-import WaitlistForm from './components/WaitlistForm'
+import ClosingCta from './components/ClosingCta'
 import SiteFooter from './components/SiteFooter'
-import Reveal from './components/Reveal'
 
 export default function App() {
   return (
@@ -30,17 +29,7 @@ export default function App() {
         <div className="site-container">
           <OpenSource />
           <Faq />
-          <section className="closing-cta-section" aria-labelledby="closing-cta-title">
-            <Reveal className="closing-cta-content">
-              <h2 id="closing-cta-title" className="closing-cta-title">
-                One message, when there is something to try.
-              </h2>
-              <p className="closing-cta-lead">
-                No newsletter, no countdowns. We will not email you again until Amigo opens.
-              </p>
-              <WaitlistForm variant="closing" />
-            </Reveal>
-          </section>
+          <ClosingCta titleId="closing-cta-title" />
         </div>
       </main>
       <SiteFooter />

@@ -30,6 +30,24 @@ def parse_allowed_chat_ids(raw_value: str) -> set[int]:
     return chat_ids
 
 
+def require_agent_credentials(config: object) -> None:
+    """Reject a missing model key before an entry point starts serving.
+
+    GOOGLE_API_KEY has no default on Settings any more, so pydantic no longer refuses to build a
+    configuration without one. That is deliberate — importing a module must not need a secret —
+    but it means every environment, not just production, has to check for itself at the point it
+    actually intends to run. Call this from an entry point, never at import: `src.main` is
+    imported during test collection, which never talks to a model.
+
+    Without it a missing key surfaces as the agent's friendly "having trouble thinking" reply,
+    which reads like a model outage rather than a configuration error.
+    """
+    if not str(getattr(config, "google_api_key", "")).strip():
+        raise UnsafeProductionConfigurationError(
+            "GOOGLE_API_KEY is required to run the agent. Set it in .env or the environment."
+        )
+
+
 def validate_runtime_configuration(config: object) -> None:
     """Reject unsafe production settings before startup creates any side effect."""
     if not is_production(config):

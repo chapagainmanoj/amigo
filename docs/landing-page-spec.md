@@ -414,20 +414,25 @@ addresses under a consent checkbox. Add the link back when there is a page to li
 
 ```
 site/
-├── index.html                   # <title>, meta description, OG/Twitter tags, theme-color #FBF8F2
+├── index.html                   # charset, viewport, and the <!--seo--> placeholder
 ├── package.json                 # name: amigo-site, same scripts as web/package.json
-├── vite.config.js               # identical to web/vite.config.js
+├── vite.config.js               # entries, and the plugin that writes each <head> from meta.js
 ├── eslint.config.js             # copy web/eslint.config.js verbatim
 ├── public/
 │   ├── favicon.svg
-│   ├── og.png                   # 1200×630, --oat ground, --ink wordmark + h1
-│   └── robots.txt               # Allow: /
+│   └── og.png                   # 1200×630, --oat ground, --ink wordmark + h1
 └── src/
     ├── main.jsx                 # mirrors web/src/main.jsx
     ├── App.jsx                  # composes the sections in the order of Section 5
     ├── styles/
     │   ├── tokens.css           # the :root block from Section 4.1, nothing else
     │   └── site.css             # everything else
+    ├── content/                 # every word the site says, and the per-page SEO
+    │   ├── meta.js               # titles, descriptions, OG — vite writes each <head> from this
+    │   ├── shared.jsx            # nav, footer, waitlist form, and the sentences said twice
+    │   ├── home.jsx              # section 5 of this spec, as data
+    │   ├── modes.jsx             # the modes page
+    │   └── legal.jsx             # the privacy notice
     ├── lib/
     │   └── waitlist.js          # submitWaitlist(email) — the only network call on the page
     └── components/
@@ -442,6 +447,11 @@ site/
         ├── SiteFooter.jsx
         └── Reveal.jsx           # IntersectionObserver wrapper used by every section
 ```
+
+Components hold structure; `src/content/` holds words. A component that carries its own copy
+fails `tests/test_site_content.py`, and a page with no entry in `content/meta.js` fails the build
+rather than shipping without a title. `sitemap.xml` and `robots.txt` are generated from the same
+page list, so neither can be left behind when a page is added.
 
 Conventions to match the existing `web/` code: function components with named default exports,
 hooks from `react`, `lucide-react` for icons (already a dependency in `web/`; add it to `site/`),

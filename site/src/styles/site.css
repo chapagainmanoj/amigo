@@ -785,6 +785,17 @@ a {
   line-height: 1.6;
 }
 
+.faq-link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 150ms ease;
+}
+
+.faq-link:hover {
+  color: var(--ink-2);
+}
+
 /* Waitlist form ----------------------------------------------------------- */
 
 .waitlist-form-container {
@@ -907,6 +918,18 @@ a {
   font-size: 0.875rem;
   line-height: 1.45;
   cursor: pointer;
+}
+
+.waitlist-consent-link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+  transition: color 150ms ease;
+}
+
+.waitlist-consent-link:hover {
+  color: var(--ink-2);
 }
 
 .waitlist-error,
@@ -1383,6 +1406,89 @@ a {
   color: var(--ink-2);
   font-size: 0.875rem;
   line-height: 1.55;
+}
+
+/* Legal prose ------------------------------------------------------------ */
+
+.legal {
+  max-width: 68ch;
+  padding-block: clamp(48px, 9vh, 88px) var(--rhythm);
+}
+
+.legal-title {
+  font-size: clamp(2.25rem, 4.6vw, 3.25rem);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.legal-meta {
+  margin-top: 12px;
+  color: var(--ink-2);
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+}
+
+.legal-lead {
+  margin-top: 28px;
+  padding-bottom: 30px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-size: clamp(1.0625rem, 1.6vw, 1.1875rem);
+  line-height: 1.6;
+}
+
+.legal-lead strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.legal-h2 {
+  margin-top: 44px;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.legal p {
+  margin-top: 14px;
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+
+.legal-list {
+  margin-top: 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.legal-list li {
+  padding-block: 10px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.legal-list li:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+
+.legal-list strong,
+.legal p strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.legal-link {
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color 150ms ease;
+}
+
+.legal-link:hover {
+  border-bottom-color: var(--ink);
 }
 
 /* Responsive -------------------------------------------------------------- */

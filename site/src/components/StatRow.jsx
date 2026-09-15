@@ -1,12 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-
-// Two facts about the market, then the answer. The third cell breaks the pattern on purpose:
-// it is the only one that is about Amigo, and the only one that carries --signal-deep.
-const STATS = [
-  { value: 52, suffix: '%', caption: 'abandon their habit app within the first month' },
-  { value: 70, suffix: '%', caption: 'quit lifestyle and wellbeing apps inside 100 days' },
-  { value: 0, suffix: '', caption: 'new apps Amigo asks you to install', answer: true },
-]
+import { STATS } from '../content/home'
 
 function useCountUp(target, start) {
   const [value, setValue] = useState(start ? 0 : target)

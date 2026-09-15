@@ -4,10 +4,14 @@
  * Phase 1 posts to a hosted form provider named by VITE_WAITLIST_ENDPOINT. Phase 2 (a
  * Supabase-backed table behind POST /api/waitlist) replaces the body of submitWaitlist and
  * touches nothing else — see docs/landing-page-spec.md section 8.
+ *
+ * The messages a visitor sees live in content/shared.jsx with the rest of the copy; only the
+ * behaviour is here.
  */
 
-const CONFIG_ERROR = "Waitlist signup isn't configured yet."
-const GENERIC_ERROR = "That didn't go through — try again in a moment."
+import { WAITLIST } from '../content/shared'
+
+const { unconfigured: CONFIG_ERROR, network: GENERIC_ERROR } = WAITLIST.errors
 
 // A provider that already holds this address answers 409 (or 422). That is a success for the
 // person signing up, and telling them otherwise both confuses them and leaks whether an

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { NAV } from '../content/shared'
 
 export default function SiteNav({ active = 'home' }) {
   const [scrolled, setScrolled] = useState(false)
@@ -31,7 +32,7 @@ export default function SiteNav({ active = 'home' }) {
   return (
     <header className={`site-nav ${scrolled ? 'scrolled' : ''}`}>
       <div className="site-nav-inner">
-        <a href="/" className="site-nav-wordmark" aria-label="Amigo home">
+        <a href="/" className="site-nav-wordmark" aria-label={NAV.wordmarkLabel}>
           Amigo
         </a>
         <div className="site-nav-actions">
@@ -40,11 +41,11 @@ export default function SiteNav({ active = 'home' }) {
             className={`site-nav-link ${active === 'products' ? 'site-nav-link--current' : ''}`}
             aria-current={active === 'products' ? 'page' : undefined}
           >
-            Products
+            {NAV.products}
           </a>
           <a href="/#waitlist" onClick={handleJoinClick} className="site-nav-cta">
-            <span className="cta-full">Join the waitlist</span>
-            <span className="cta-short" aria-hidden="true">Waitlist</span>
+            <span className="cta-full">{NAV.cta}</span>
+            <span className="cta-short" aria-hidden="true">{NAV.ctaShort}</span>
           </a>
         </div>
       </div>

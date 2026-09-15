@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { DEMO } from '../content/home'
+
+const { userAsk, botConfirm, divider, reminder, botDone } = DEMO.lines
 
 export default function TelegramDemo() {
   const containerRef = useRef(null)
@@ -74,35 +77,39 @@ export default function TelegramDemo() {
 
   return (
     <div className="telegram-demo-wrapper" ref={containerRef}>
-      {/* Visually-hidden accessible transcript for screen readers */}
+      {/* The same lines the bubbles animate, as a transcript for screen readers. Both read from
+          DEMO, so the spoken version cannot drift from the seen one. */}
       <div className="sr-only">
-        <p>Telegram Interaction Demo Transcript</p>
+        <p>{DEMO.transcriptLabel}</p>
         <ol>
-          <li>You: I need to send the proposal at 3 PM. Remind me then.</li>
-          <li>Amigo: Got it — "Send the proposal". I'll remind you at 3:00 PM.</li>
-          <li>Time: 3:00 PM</li>
-          <li>Amigo: Send the proposal (Actions: Done, Skip, Later)</li>
-          <li>You tapped: Done</li>
-          <li>Amigo: Nice. Marked done.</li>
+          <li>You: {userAsk.text}</li>
+          <li>
+            {DEMO.bot.name}: {botConfirm.text}
+          </li>
+          <li>Time: {divider}</li>
+          <li>
+            {DEMO.bot.name}: {reminder.text} (Actions: {DEMO.buttons.join(', ')})
+          </li>
+          <li>You tapped: {DEMO.pressed}</li>
+          <li>
+            {DEMO.bot.name}: {botDone.text}
+          </li>
         </ol>
       </div>
 
       <div className="telegram-demo-grid">
         <div className="telegram-demo-caption">
-          <h2 className="telegram-demo-heading">It lives in a chat you already have open.</h2>
-          <p className="telegram-demo-text">
-            One sentence in, one reminder out, three buttons to close it. Nothing to install, nothing to
-            organise, nothing to abandon.
-          </p>
+          <h2 className="telegram-demo-heading">{DEMO.heading}</h2>
+          <p className="telegram-demo-text">{DEMO.text}</p>
         </div>
 
         {/* Visual phone card mock */}
         <div className="telegram-phone-card" aria-hidden="true">
           <div className="telegram-phone-header">
-            <div className="telegram-bot-avatar">A</div>
+            <div className="telegram-bot-avatar">{DEMO.bot.avatar}</div>
             <div className="telegram-bot-meta">
-              <span className="telegram-bot-name">Amigo</span>
-              <span className="telegram-bot-status">bot</span>
+              <span className="telegram-bot-name">{DEMO.bot.name}</span>
+              <span className="telegram-bot-status">{DEMO.bot.status}</span>
             </div>
           </div>
 
@@ -111,8 +118,8 @@ export default function TelegramDemo() {
             {step >= 1 && (
               <div className="telegram-message telegram-user animate-fade-in">
                 <div className="telegram-bubble">
-                  I need to send the proposal at 3 PM. Remind me then.
-                  <span className="telegram-time">2:14 PM</span>
+                  {userAsk.text}
+                  <span className="telegram-time">{userAsk.time}</span>
                 </div>
               </div>
             )}
@@ -132,8 +139,8 @@ export default function TelegramDemo() {
             {step >= 3 && (
               <div className="telegram-message telegram-amigo animate-fade-in">
                 <div className="telegram-bubble">
-                  Got it — &ldquo;Send the proposal&rdquo;. I'll remind you at 3:00 PM.
-                  <span className="telegram-time">2:14 PM</span>
+                  {botConfirm.text}
+                  <span className="telegram-time">{botConfirm.time}</span>
                 </div>
               </div>
             )}
@@ -141,7 +148,7 @@ export default function TelegramDemo() {
             {/* Step 4+: Timestamp divider */}
             {step >= 4 && (
               <div className="telegram-divider animate-fade-in">
-                <span>3:00 PM</span>
+                <span>{divider}</span>
               </div>
             )}
 
@@ -162,23 +169,24 @@ export default function TelegramDemo() {
                 {/* The one place --signal is spent besides the CTA: the moment the
                     product actually exists for the user. */}
                 <div className="telegram-bubble telegram-bubble--reminder">
-                  Send the proposal
-                  <span className="telegram-time">3:00 PM</span>
+                  {reminder.text}
+                  <span className="telegram-time">{reminder.time}</span>
                 </div>
                 <div className="telegram-inline-keyboard">
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    className={`telegram-kbd-btn ${step >= 7 ? 'telegram-kbd-btn-active' : ''}`}
-                  >
-                    Done
-                  </button>
-                  <button type="button" tabIndex={-1} className="telegram-kbd-btn">
-                    Skip
-                  </button>
-                  <button type="button" tabIndex={-1} className="telegram-kbd-btn">
-                    Later
-                  </button>
+                  {DEMO.buttons.map((label) => {
+                    // Step 7 is the tap: only the button the transcript says was pressed lights up.
+                    const pressed = label === DEMO.pressed && step >= 7
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        tabIndex={-1}
+                        className={`telegram-kbd-btn ${pressed ? 'telegram-kbd-btn-active' : ''}`}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -198,8 +206,8 @@ export default function TelegramDemo() {
             {step >= 9 && (
               <div className="telegram-message telegram-amigo animate-fade-in">
                 <div className="telegram-bubble">
-                  Nice. Marked done.
-                  <span className="telegram-time">3:01 PM</span>
+                  {botDone.text}
+                  <span className="telegram-time">{botDone.time}</span>
                 </div>
               </div>
             )}

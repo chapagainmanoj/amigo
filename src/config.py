@@ -19,8 +19,14 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_service_key: str = ""
 
-    # Google AI
-    google_api_key: str
+    # Google AI (required in production; enforced by validate_runtime_configuration)
+    #
+    # Defaults to "" like every other secret here. Being the one field pydantic itself required
+    # meant constructing Settings at all needed a key, which defeated LazySettings: importing
+    # src.main during test collection loaded settings for real and aborted the run. Production
+    # safety is unchanged — runtime_config requires a 20+ character value whenever APP_ENV is
+    # production, exactly as it does for SUPABASE_SERVICE_KEY and the Telegram secrets.
+    google_api_key: str = ""
 
     # App
     app_base_url: str = "http://localhost:8000"

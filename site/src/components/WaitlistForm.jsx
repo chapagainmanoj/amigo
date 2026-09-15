@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { isWaitlistConfigured, isWaitlistPreview, submitWaitlist } from '../lib/waitlist'
+import { WAITLIST } from '../content/shared'
 
 export default function WaitlistForm({ variant = 'hero', anchorId: anchorIdProp }) {
   const idPrefix = `waitlist-${variant}`
@@ -32,14 +33,14 @@ export default function WaitlistForm({ variant = 'hero', anchorId: anchorIdProp 
     if ((!configured && !preview) || status === 'submitting') return
 
     if (!consent) {
-      setErrorMessage('Please tick the box so we know you want the email.')
+      setErrorMessage(WAITLIST.errors.consent)
       setStatus('error')
       return
     }
 
     const trimmedEmail = email.trim()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setErrorMessage('Please enter a valid email address.')
+      setErrorMessage(WAITLIST.errors.email)
       setStatus('error')
       return
     }
@@ -52,7 +53,7 @@ export default function WaitlistForm({ variant = 'hero', anchorId: anchorIdProp 
       setStatus('success')
     } catch (err) {
       setStatus('error')
-      setErrorMessage(err.message || "That didn't go through — try again in a moment.")
+      setErrorMessage(err.message || WAITLIST.errors.network)
     }
   }
 
@@ -63,10 +64,7 @@ export default function WaitlistForm({ variant = 'hero', anchorId: anchorIdProp 
         className={`waitlist-success waitlist-success-${variant}`}
         role="status"
       >
-        <p className="waitlist-success-text">
-          Check your inbox. Click the link in the confirmation email and you&rsquo;re on the
-          list.
-        </p>
+        <p className="waitlist-success-text">{WAITLIST.success}</p>
       </div>
     )
   }
@@ -75,18 +73,7 @@ export default function WaitlistForm({ variant = 'hero', anchorId: anchorIdProp 
     return (
       <div id={anchorId} className={`waitlist-form-container waitlist-${variant}`}>
         <div className="waitlist-unconfigured">
-          <p className="waitlist-notice">
-            We are not running open enrollment yet. You can track milestones and releases on{' '}
-            <a
-              href="https://github.com/chapagainmanoj/amigo"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="waitlist-fallback-link"
-            >
-              GitHub
-            </a>
-            .
-          </p>
+          <p className="waitlist-notice">{WAITLIST.unconfigured}</p>
         </div>
       </div>
     )
@@ -97,7 +84,7 @@ export default function WaitlistForm({ variant = 'hero', anchorId: anchorIdProp 
       <form className="waitlist-form" onSubmit={handleSubmit} noValidate>
         <div className="waitlist-inputs">
           <label htmlFor={emailInputId} className="sr-only">
-            Email address
+            {WAITLIST.emailLabel}
           </label>
           <input
             id={emailInputId}
@@ -109,7 +96,7 @@ export default function WaitlistForm({ variant = 'hero', anchorId: anchorIdProp 
               setEmail(e.target.value)
               clearError()
             }}
-            placeholder="you@example.com"
+            placeholder={WAITLIST.emailPlaceholder}
             className={`waitlist-input ${status === 'error' ? 'waitlist-input-error' : ''}`}
             aria-describedby={status === 'error' ? errorId : undefined}
             disabled={status === 'submitting'}
@@ -118,10 +105,10 @@ export default function WaitlistForm({ variant = 'hero', anchorId: anchorIdProp 
             {status === 'submitting' ? (
               <span className="waitlist-button-loading">
                 <span className="spinner" aria-hidden="true" />
-                Sending
+                {WAITLIST.submitting}
               </span>
             ) : (
-              'Join the waitlist'
+              WAITLIST.submit
             )}
           </button>
         </div>
@@ -140,7 +127,10 @@ export default function WaitlistForm({ variant = 'hero', anchorId: anchorIdProp 
             className="waitlist-checkbox"
           />
           <label htmlFor={consentId} className="waitlist-consent-label">
-            Email me once, when Amigo opens.
+            {WAITLIST.consent}{' '}
+            <a href={WAITLIST.consentLink.href} className="waitlist-consent-link">
+              {WAITLIST.consentLink.label}
+            </a>
           </label>
         </div>
 
@@ -151,10 +141,7 @@ export default function WaitlistForm({ variant = 'hero', anchorId: anchorIdProp 
         )}
 
         {import.meta.env.DEV && preview && (
-          <p className="waitlist-preview-note">
-            Dev preview — no endpoint set, so nothing is sent. Add VITE_WAITLIST_ENDPOINT to
-            site/.env to post for real.
-          </p>
+          <p className="waitlist-preview-note">{WAITLIST.previewNote}</p>
         )}
       </form>
     </div>

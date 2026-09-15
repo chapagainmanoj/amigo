@@ -1,25 +1,20 @@
 import Reveal from './Reveal'
 import StatRow from './StatRow'
 import WaitlistForm from './WaitlistForm'
+import { HERO } from '../content/home'
 
 export default function Hero() {
   return (
     <section className="hero-section" aria-label="Introduction">
       <Reveal>
-        <p className="kicker hero-kicker">Invitation-only · Not yet open</p>
+        <p className="kicker hero-kicker">{HERO.kicker}</p>
         <h1 className="hero-title">
-          Most task apps are
-          <br className="hero-br" /> abandoned in a <em>month</em>.
+          {HERO.titleLead}
+          <br className="hero-br" /> {HERO.titleRest} <em>{HERO.titleEmphasis}</em>.
         </h1>
-        <p className="hero-lead">
-          Not because people stop caring. Because the app is one more thing to open,
-          groom, and feel guilty about. Amigo doesn&rsquo;t ask you to open anything.
-        </p>
+        <p className="hero-lead">{HERO.lead}</p>
         <WaitlistForm variant="hero" />
-        <p className="hero-micro">
-          No newsletter, no launch countdown. One message when there is something real
-          to try.
-        </p>
+        <p className="hero-micro">{HERO.micro}</p>
       </Reveal>
       <StatRow />
     </section>

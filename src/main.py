@@ -24,7 +24,11 @@ from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
 from src.observability import monitor_event_loop_delay
 from src.reliability import assess_readiness
-from src.runtime_config import is_production, validate_runtime_configuration
+from src.runtime_config import (
+    is_production,
+    require_agent_credentials,
+    validate_runtime_configuration,
+)
 from src.scheduler.outbox import SchedulerOutboxWorker
 from src.scheduler.reminders import ReminderScheduler
 from src.startup import initialize_runtime
@@ -60,7 +64,9 @@ bot_username: str | None = None
 async def lifespan(app: FastAPI):
     """Start/stop scheduler and set Telegram webhook on app lifecycle."""
     global bot_username
-    # Startup
+    # Startup. Checked here rather than at import: this module is imported during test
+    # collection, which never runs an agent, but a process that reaches lifespan intends to.
+    require_agent_credentials(settings)
     await initialize_runtime(store, reminder_scheduler, outbox_worker)
 
     # Set webhook

@@ -24,6 +24,10 @@ from src.evaluation.gate_a import (
 )
 from tests.gate_a_fixtures import passing_gate_a_bundle, passing_gate_a_evidence
 
+# Repo root resolved from this file, never from the working directory: pytest can be invoked
+# from anywhere, and a cwd-relative path turns that into a FileNotFoundError.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 REVISION = "a" * 40
 DEPLOYMENT_ID = "render-deploy-123"
 NOW = datetime(2026, 9, 3, tzinfo=UTC)
@@ -550,7 +554,7 @@ def test_a_failed_gate_a_run_cannot_pass_the_manifest(tmp_path):
     failed["passed"] = False
     cases = {
         case.id: case
-        for case in load_suite(Path("evals/gate_a/v1/cases.json")).cases
+        for case in load_suite(REPO_ROOT / "evals/gate_a/v1/cases.json").cases
     }
     for execution in failed["executions"]:
         if "hard_invariant" in execution["metric_results"]:
@@ -598,15 +602,14 @@ def test_a_failed_gate_a_run_cannot_pass_the_manifest(tmp_path):
 
 def test_every_issue_label_is_in_the_documented_vocabulary():
     """A label the triage vocabulary does not define cannot be triaged consistently."""
-    root = Path(__file__).parents[1]
     documented = {
         line.split("|")[2].strip().strip("`")
-        for line in (root / "docs/agents/triage-labels.md").read_text().splitlines()
+        for line in (REPO_ROOT / "docs/agents/triage-labels.md").read_text().splitlines()
         if line.startswith("| `")
     }
     used = {
         line.split("`")[1]
-        for path in sorted((root / ".scratch").rglob("issues/*.md"))
+        for path in sorted((REPO_ROOT / ".scratch").rglob("issues/*.md"))
         for line in path.read_text().splitlines()
         if line.startswith("Label: `")
     }

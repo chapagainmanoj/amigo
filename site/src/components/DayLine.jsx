@@ -1,18 +1,10 @@
 import Reveal from './Reveal'
+import { DAY_LINE } from '../content/home'
 
-// The wedge, drawn: a whole waking day, and the only marks on it are the moments you asked for.
-// The emptiness is the picture. Built from rules and positioned marks rather than an SVG so the
-// labels stay real type at 375px instead of scaling down with a viewBox.
-//
-// The times are illustrative — a day someone might have asked for — not measured data.
-const START = 7
-const END = 23
-const HOURS = [7, 11, 15, 19, 23]
-const MARKS = [
-  { at: 9, label: '9:00' },
-  { at: 14.5, label: '2:30 PM' },
-  { at: 18.75, label: '6:45 PM' },
-]
+// Built from rules and positioned marks rather than an SVG so the labels stay real type at 375px
+// instead of scaling down with a viewBox. The hours and the marks themselves are copy, not
+// layout, so they live in the content module.
+const { start: START, end: END, hours: HOURS, marks: MARKS } = DAY_LINE
 
 const pct = (hour) => ((hour - START) / (END - START)) * 100
 
@@ -48,11 +40,7 @@ export default function DayLine() {
         ))}
       </div>
 
-      <figcaption className="day-line-caption">
-        One waking day. The three marks are reminders someone asked for — and they are Amigo&rsquo;s
-        entire presence in it. There is nothing else to open, and nothing accumulating while you are
-        away.
-      </figcaption>
+      <figcaption className="day-line-caption">{DAY_LINE.caption}</figcaption>
     </Reveal>
   )
 }
