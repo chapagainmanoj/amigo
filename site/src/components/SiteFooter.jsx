@@ -11,6 +11,9 @@ export default function SiteFooter() {
           {/* No "Privacy" link until there is a privacy page to point it at. Pointing it at
               SECURITY.md would label vulnerability-reporting instructions as a privacy
               statement, on a page that collects email addresses under a consent checkbox. */}
+          <a href="/products/" className="site-footer-link">
+            Products
+          </a>
           <a
             href="https://github.com/chapagainmanoj/amigo"
             target="_blank"

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OG card source</title>
+<!--
+  Source for site/public/og.png (home) and og-products.png (modes). Not part of the build: vite
+  only emits the entries listed in rollupOptions.input, so this file never ships.
+
+  It draws to a canvas rather than laying the card out in DOM because the card has to come out at
+  a true 1200x630, and a screenshot is capped by whatever viewport the capture tool can open.
+  Fonts are the real Fraunces and Inter, loaded from node_modules.
+
+  To regenerate, from site/:
+    python3 -m http.server 8912
+  open http://127.0.0.1:8912/tools/og.html, and use the two buttons. "Download" saves through the
+  browser; "Save to public/" posts to a local writer on :8913 if one is running.
+-->
+<style>
+  @font-face {
+    font-family: 'Fraunces Variable'; font-style: normal; font-weight: 100 900;
+    src: url('../node_modules/@fontsource-variable/fraunces/files/fraunces-latin-soft-normal.woff2') format('woff2-variations');
+  }
+  @font-face {
+    font-family: 'Fraunces Variable'; font-style: italic; font-weight: 100 900;
+    src: url('../node_modules/@fontsource-variable/fraunces/files/fraunces-latin-wght-italic.woff2') format('woff2-variations');
+  }
+  @font-face {
+    font-family: 'Inter Variable'; font-style: normal; font-weight: 100 900;
+    src: url('../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
+  }
+  body { margin: 0; padding: 24px; background: #2b2b2b; font: 14px 'Inter Variable', system-ui, sans-serif; color: #eee; }
+  canvas { width: 100%; max-width: 1200px; height: auto; display: block; }
+  .bar { display: flex; gap: 10px; align-items: center; margin: 14px 0; flex-wrap: wrap; }
+  button { padding: 7px 14px; border: 1px solid #666; border-radius: 6px; background: #3a3a3a; color: #eee; font: inherit; cursor: pointer; }
+  #status { opacity: .75; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <button id="home">Render home</button>
+  <button id="products">Render modes</button>
+  <button id="dl">Download PNG</button>
+  <button id="save">Save to public/</button>
+  <span id="status"></span>
+</div>
+<canvas id="c" width="1200" height="630"></canvas>
+
+<script>
+const T = {
+  oat: '#FBF8F2', sand: '#F1E9DC', rule: '#E5DCCB',
+  ink: '#1F1A17', ink2: '#6F655C',
+  signal: '#EA5A2D', signalInk: '#1F1A17',
+}
+const DISPLAY = "'Fraunces Variable', serif"
+const BODY = "'Inter Variable', system-ui, sans-serif"
+
+const CARDS = {
+  home: {
+    name: 'og.png',
+    title: [
+      { text: 'Most task apps are' },
+      { text: 'abandoned in a' },
+      { text: 'month.', italic: true },
+    ],
+    lead: [
+      'Amigo lives in Telegram. Tell it what you need to do,',
+      'and it asks you once — at the time you said.',
+    ],
+    meta: 'Built in the open · AGPL-3.0',
+  },
+  products: {
+    name: 'og-products.png',
+    title: [
+      { text: 'Four modes.' },
+      { text: 'One of them ', trailItalic: 'exists.' },
+    ],
+    lead: [
+      'Daily is built and working. Coach, Reflect and Recommender',
+      'are written down and unbuilt — each can still end in a no.',
+    ],
+    meta: 'Built in the open · AGPL-3.0',
+  },
+}
+
+const cv = document.getElementById('c')
+const ctx = cv.getContext('2d')
+let current = 'home'
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r)
+  ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r)
+  ctx.arcTo(x, y, x + w, y, r)
+  ctx.closePath()
+}
+
+function draw(key) {
+  current = key
+  const card = CARDS[key]
+  const W = 1200, H = 630, PX = 80, PY = 60
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.clearRect(0, 0, W, H)
+  ctx.fillStyle = T.oat
+  ctx.fillRect(0, 0, W, H)
+  ctx.textBaseline = 'alphabetic'
+
+  // Wordmark
+  ctx.fillStyle = T.ink
+  ctx.font = `400 40px ${DISPLAY}`
+  ctx.letterSpacing = '-0.4px'
+  ctx.textAlign = 'left'
+  ctx.fillText('Amigo', PX, PY + 34)
+
+  // Kicker — the site's own wording. Not a badge implying the beta is running.
+  ctx.font = `600 15px ${BODY}`
+  ctx.letterSpacing = '2.1px'
+  ctx.fillStyle = T.ink2
+  ctx.textAlign = 'right'
+  ctx.fillText('INVITATION-ONLY · NOT YET OPEN', W - PX, PY + 30)
+
+  // Laid out from the bottom up so a two-line headline and a three-line one both sit against the
+  // same footer rule instead of drifting into it.
+  const SIZE = 76, LH = 80, LEAD_LH = 35, LEAD_GAP = 48
+  const ruleY = H - PY - 86
+  const leadLast = ruleY - 41
+  const leadFirst = leadLast - (card.lead.length - 1) * LEAD_LH
+  const titleLast = leadFirst - LEAD_GAP
+  const titleFirst = titleLast - (card.title.length - 1) * LH
+
+  // Headline
+  ctx.textAlign = 'left'
+  ctx.fillStyle = T.ink
+  ctx.letterSpacing = '-2.2px'
+  let y = titleFirst
+  for (const line of card.title) {
+    ctx.font = `${line.italic ? 'italic ' : ''}400 ${SIZE}px ${DISPLAY}`
+    ctx.fillText(line.text, PX, y)
+    if (line.trailItalic) {
+      const w = ctx.measureText(line.text).width
+      ctx.font = `italic 400 ${SIZE}px ${DISPLAY}`
+      ctx.fillText(line.trailItalic, PX + w, y)
+    }
+    y += LH
+  }
+
+  // Lead
+  ctx.font = `400 24px ${BODY}`
+  ctx.letterSpacing = '-0.1px'
+  ctx.fillStyle = T.ink2
+  let ly = leadFirst
+  for (const line of card.lead) {
+    ctx.fillText(line, PX, ly)
+    ly += LEAD_LH
+  }
+
+  // Hairline
+  ctx.fillStyle = T.rule
+  ctx.fillRect(PX, ruleY, W - PX * 2, 1)
+
+  // Meta
+  ctx.font = `400 18px ${BODY}`
+  ctx.letterSpacing = '0px'
+  ctx.fillStyle = T.ink2
+  ctx.fillText(card.meta, PX, ruleY + 44)
+
+  // The one place --signal is spent, exactly as on the page: a reminder that arrived.
+  ctx.font = `600 19px ${BODY}`
+  const label = 'Send the proposal'
+  const bw = Math.round(ctx.measureText(label).width) + 34
+  const bh = 62
+  const bx = W - PX - bw
+  const by = ruleY + 24
+  ctx.fillStyle = T.signal
+  roundRect(bx, by, bw, bh, 15)
+  ctx.fill()
+  ctx.fillStyle = T.signalInk
+  ctx.fillText(label, bx + 17, by + 26)
+  ctx.font = `500 14px ${BODY}`
+  ctx.textAlign = 'right'
+  ctx.fillText('3:00 PM', bx + bw - 17, by + 47)
+  ctx.textAlign = 'left'
+
+  document.getElementById('status').textContent = `${card.name} — 1200×630`
+}
+
+document.getElementById('home').onclick = () => draw('home')
+document.getElementById('products').onclick = () => draw('products')
+document.getElementById('dl').onclick = () => {
+  const a = document.createElement('a')
+  a.href = cv.toDataURL('image/png')
+  a.download = CARDS[current].name
+  a.click()
+}
+document.getElementById('save').onclick = async () => {
+  const res = await fetch(`http://127.0.0.1:8913/?name=${CARDS[current].name}`, {
+    method: 'POST', body: cv.toDataURL('image/png'),
+  })
+  document.getElementById('status').textContent = await res.text()
+}
+
+document.fonts.ready.then(() => draw('home'))
+</script>
+</body>
+</html>

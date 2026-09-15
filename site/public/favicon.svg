@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="8" fill="#14121A"/>
-  <text x="16" y="22" text-anchor="middle" font-family="Georgia, serif" font-size="18" font-weight="400" fill="#FF8A5B">A</text>
+<!-- Brand tokens only: --band #241E1A ground, --signal #EA5A2D mark (4.7:1, legible at 16px).
+     The previous mark used #14121A and #FF8A5B, both retired with the dark palette. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Amigo">
+  <rect width="32" height="32" rx="8" fill="#241E1A"/>
+  <text x="16" y="23" text-anchor="middle" fill="#EA5A2D"
+        font-family="Fraunces, ui-serif, Georgia, 'Iowan Old Style', serif"
+        font-size="20" font-weight="500">A</text>
 </svg>

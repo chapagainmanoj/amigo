@@ -52,6 +52,10 @@ services:
     runtime: static
     buildCommand: cd site && npm ci && npm run build
     staticPublishPath: site/dist
+    domains:
+      - amigo.manojc.link
     envVars:
       - key: VITE_WAITLIST_ENDPOINT
-        sync: false
+        sync: false  # Hosted form provider endpoint; until it is set the page shows the fallback
+      - key: VITE_WAITLIST_FIELD
+        sync: false  # Only if the provider's field is not "email" (Buttondown: email_address)

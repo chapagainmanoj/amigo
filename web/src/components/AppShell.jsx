@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { LayoutDashboard, Link2, LogOut } from 'lucide-react'
+import { LayoutDashboard, Link2, LogOut, Menu, X } from 'lucide-react'
 import { supabase, apiRequest } from '../supabase'
 import DashboardView from './DashboardView'
 import ConnectView from './ConnectView'
@@ -10,6 +10,7 @@ export default function AppShell({ session }) {
   const [pairedUser, setPairedUser] = useState(null)
   const [checkingPairing, setCheckingPairing] = useState(true)
   const [activation, setActivation] = useState(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const activationResultKey = `amigo-activation-result:${session.user.id}`
   const [activationResultSeen, setActivationResultSeen] = useState(
     () => localStorage.getItem(activationResultKey) === 'seen',
@@ -60,24 +61,36 @@ export default function AppShell({ session }) {
 
   const effectiveView = pairedUser ? activeView : 'connect'
 
+  const navigateTo = (view) => {
+    setActiveView(view)
+    setMobileMenuOpen(false)
+  }
+
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      {/* Desktop Sidebar */}
-      <aside style={{
-        width: '240px',
-        borderRight: '1px solid var(--rule)',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '24px 16px',
-        backgroundColor: 'var(--oat)'
-      }}>
-        <div style={{ marginBottom: '40px', padding: '0 8px' }}>
+    <div className="app-shell">
+      {/* Mobile Top Header */}
+      <header className="app-mobile-header">
+        <h2 className="display-text" style={{ fontSize: '1.35rem', color: 'var(--ink)' }}>Amigo</h2>
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
+          className="app-mobile-toggle"
+          aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          aria-expanded={mobileMenuOpen}
+        >
+          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
+      </header>
+
+      {/* Sidebar Navigation */}
+      <aside className={`app-sidebar ${mobileMenuOpen ? 'app-sidebar--open' : ''}`}>
+        <div className="app-sidebar-logo" style={{ marginBottom: '40px', padding: '0 8px' }}>
           <h2 className="display-text" style={{ fontSize: '1.5rem', color: 'var(--ink)' }}>Amigo</h2>
         </div>
         
         <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <button 
-            onClick={() => pairedUser && setActiveView('dashboard')}
+            onClick={() => pairedUser && navigateTo('dashboard')}
             className={`nav-item ${effectiveView === 'dashboard' ? 'nav-item--active' : ''}`}
             disabled={!pairedUser}
             style={{ opacity: pairedUser ? 1 : 0.5, cursor: pairedUser ? 'pointer' : 'not-allowed' }}
@@ -87,7 +100,7 @@ export default function AppShell({ session }) {
           </button>
           
           <button 
-            onClick={() => setActiveView('connect')}
+            onClick={() => navigateTo('connect')}
             className={`nav-item ${effectiveView === 'connect' ? 'nav-item--active' : ''}`}
           >
             <Link2 size={20} />
@@ -110,8 +123,8 @@ export default function AppShell({ session }) {
       </aside>
 
       {/* Main Content Area */}
-      <main style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--oat)' }}>
-        <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 24px' }}>
+      <main className="app-main">
+        <div className="app-main-content">
           {!pairedUser && (
             <div style={{ background: 'var(--sand)', border: '1px solid var(--rule)', padding: '16px', borderRadius: '8px', marginBottom: '24px', color: 'var(--signal-deep)' }}>
               <strong>Connect Telegram to continue.</strong> Pair your account to chat with Amigo, schedule reminders, and view your dashboard.

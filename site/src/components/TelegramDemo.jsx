@@ -89,9 +89,9 @@ export default function TelegramDemo() {
 
       <div className="telegram-demo-grid">
         <div className="telegram-demo-caption">
-          <p>
-            <strong>It lives in a chat you already have open.</strong> One sentence in,
-            one reminder out, three buttons to close it. Nothing to install, nothing to
+          <h2 className="telegram-demo-heading">It lives in a chat you already have open.</h2>
+          <p className="telegram-demo-text">
+            One sentence in, one reminder out, three buttons to close it. Nothing to install, nothing to
             organise, nothing to abandon.
           </p>
         </div>

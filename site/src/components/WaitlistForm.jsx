@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import { isWaitlistConfigured, submitWaitlist } from '../lib/waitlist'
+import { useState } from 'react'
+import { isWaitlistConfigured, isWaitlistPreview, submitWaitlist } from '../lib/waitlist'
 
-export default function WaitlistForm({ variant = 'hero' }) {
+export default function WaitlistForm({ variant = 'hero', anchorId: anchorIdProp }) {
   const idPrefix = `waitlist-${variant}`
   const emailInputId = `${idPrefix}-email`
   const consentId = `${idPrefix}-consent`
@@ -10,21 +10,15 @@ export default function WaitlistForm({ variant = 'hero' }) {
   // The nav's "Join the waitlist" scrolls to #waitlist. The anchor has to exist in every
   // state of this component, including the unconfigured one the site ships in before the
   // founder sets VITE_WAITLIST_ENDPOINT — otherwise the primary CTA silently does nothing.
-  const anchorId = variant === 'hero' ? 'waitlist' : undefined
+  // Pages without a hero (the modes page) pass anchorId explicitly so their own form owns it.
+  const anchorId = anchorIdProp ?? (variant === 'hero' ? 'waitlist' : undefined)
 
   const configured = isWaitlistConfigured()
+  const preview = isWaitlistPreview()
   const [email, setEmail] = useState('')
   const [consent, setConsent] = useState(false)
-  const [status, setStatus] = useState(configured ? 'idle' : 'unconfigured')
+  const [status, setStatus] = useState(configured || preview ? 'idle' : 'unconfigured')
   const [errorMessage, setErrorMessage] = useState('')
-
-  const successRef = useRef(null)
-
-  useEffect(() => {
-    if (status === 'success' && successRef.current) {
-      successRef.current.focus()
-    }
-  }, [status])
 
   const clearError = () => {
     if (status === 'error') {
@@ -35,7 +29,7 @@ export default function WaitlistForm({ variant = 'hero' }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!configured || status === 'submitting') return
+    if ((!configured && !preview) || status === 'submitting') return
 
     if (!consent) {
       setErrorMessage('Please tick the box so we know you want the email.')
@@ -67,8 +61,6 @@ export default function WaitlistForm({ variant = 'hero' }) {
       <div
         id={anchorId}
         className={`waitlist-success waitlist-success-${variant}`}
-        ref={successRef}
-        tabIndex={-1}
         role="status"
       >
         <p className="waitlist-success-text">
@@ -82,26 +74,20 @@ export default function WaitlistForm({ variant = 'hero' }) {
   if (status === 'unconfigured') {
     return (
       <div id={anchorId} className={`waitlist-form-container waitlist-${variant}`}>
-        <form className="waitlist-form" onSubmit={(e) => e.preventDefault()}>
-          <div className="waitlist-inputs">
-            <label htmlFor={emailInputId} className="sr-only">
-              Email address
-            </label>
-            <input
-              id={emailInputId}
-              type="email"
-              disabled
-              placeholder="you@example.com"
-              className="waitlist-input"
-            />
-            <button type="button" disabled className="waitlist-button">
-              Join the waitlist
-            </button>
-          </div>
-          <p className="waitlist-notice" role="status">
-            Waitlist signup isn&rsquo;t configured yet.
+        <div className="waitlist-unconfigured">
+          <p className="waitlist-notice">
+            We are not running open enrollment yet. You can track milestones and releases on{' '}
+            <a
+              href="https://github.com/chapagainmanoj/amigo"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="waitlist-fallback-link"
+            >
+              GitHub
+            </a>
+            .
           </p>
-        </form>
+        </div>
       </div>
     )
   }
@@ -161,6 +147,13 @@ export default function WaitlistForm({ variant = 'hero' }) {
         {status === 'error' && (
           <p id={errorId} className="waitlist-error" role="alert">
             {errorMessage}
+          </p>
+        )}
+
+        {import.meta.env.DEV && preview && (
+          <p className="waitlist-preview-note">
+            Dev preview — no endpoint set, so nothing is sent. Add VITE_WAITLIST_ENDPOINT to
+            site/.env to post for real.
           </p>
         )}
       </form>

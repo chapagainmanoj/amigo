@@ -15,6 +15,13 @@ export default function Reveal({ as: Component = 'div', className = '', children
     const node = ref.current
     if (!node) return
 
+    // If already in view or scrolled past (e.g. reload at scrolled position), reveal immediately
+    const rect = node.getBoundingClientRect()
+    if ((rect.top < window.innerHeight && rect.bottom > 0) || rect.bottom <= 0) {
+      setRevealed(true)
+      return
+    }
+
     if (!('IntersectionObserver' in window)) {
       setRevealed(true)
       return

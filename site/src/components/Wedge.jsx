@@ -1,4 +1,5 @@
 import Reveal from './Reveal'
+import DayLine from './DayLine'
 
 export default function Wedge() {
   return (
@@ -23,6 +24,7 @@ export default function Wedge() {
           </p>
         </div>
       </Reveal>
+      <DayLine />
     </section>
   )
 }

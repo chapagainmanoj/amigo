@@ -14,14 +14,32 @@ const GENERIC_ERROR = "That didn't go through — try again in a moment."
 // address is on the list.
 const ALREADY_SUBSCRIBED = new Set([409, 422])
 
+// Providers disagree on what to call the field: Loops and Formspark take `email`, Buttondown's
+// API takes `email_address`. One env var beats editing this file when the provider is chosen.
+const FIELD = import.meta.env.VITE_WAITLIST_FIELD?.trim() || 'email'
+
+const endpointOf = () => import.meta.env.VITE_WAITLIST_ENDPOINT?.trim()
+
 export function isWaitlistConfigured() {
-  return Boolean(import.meta.env.VITE_WAITLIST_ENDPOINT?.trim())
+  return Boolean(endpointOf())
+}
+
+// With no endpoint, a production build shows the honest fallback — but hiding the form in `npm run
+// dev` too meant the page's primary CTA was invisible to the person building it. In dev the form
+// renders and submits to nothing, labelled so it is never mistaken for a working signup.
+export function isWaitlistPreview() {
+  return !endpointOf() && import.meta.env.DEV
 }
 
 export async function submitWaitlist(email) {
-  const endpoint = import.meta.env.VITE_WAITLIST_ENDPOINT?.trim()
+  const endpoint = endpointOf()
 
   if (!endpoint) {
+    if (import.meta.env.DEV) {
+      console.warn(`[waitlist] preview only — "${email}" was not sent. Set VITE_WAITLIST_ENDPOINT in site/.env to post for real.`)
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      return { ok: true, preview: true }
+    }
     throw new Error(CONFIG_ERROR)
   }
 
@@ -33,7 +51,7 @@ export async function submitWaitlist(email) {
     response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ [FIELD]: email }),
       signal: controller.signal,
     })
   } catch (err) {

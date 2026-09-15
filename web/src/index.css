@@ -124,7 +124,7 @@ a:focus-visible {
 }
 
 .btn-primary:hover {
-  background-color: #352D28;
+  background-color: color-mix(in srgb, var(--ink) 90%, var(--sand));
   transform: translateY(-1px);
 }
 
@@ -508,11 +508,19 @@ input:focus {
 
 /* Accessible reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+  html {
+    scroll-behavior: auto;
+  }
+
+  .animate-slide-in,
+  .animate-pop {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+
+  .btn-primary:hover {
+    transform: none !important;
   }
 }
 
@@ -609,7 +617,7 @@ input:focus {
   text-align: left;
   background: transparent;
   color: var(--ink-2);
-  transition: all 0.2s ease;
+  transition: color 150ms ease, background-color 150ms ease;
 }
 
 .nav-item:hover {
@@ -619,9 +627,7 @@ input:focus {
 .nav-item--active {
   background: var(--sand);
   color: var(--signal-deep);
-  border-radius: 0 8px 8px 0;
-  border-left: 2px solid var(--signal-deep);
-  padding-left: 10px; /* offset border-left width */
+  font-weight: 600;
 }
 
 @media (max-width: 860px) {
@@ -654,5 +660,89 @@ input:focus {
   .mode-chip {
     padding: 6px 10px;
     font-size: 12px;
+  }
+}
+
+/* ── App Shell Layout ────────────────────────────── */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+  background-color: var(--oat);
+}
+
+.app-mobile-header {
+  display: none;
+}
+
+.app-sidebar {
+  width: 240px;
+  border-right: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 16px;
+  background-color: var(--oat);
+  flex-shrink: 0;
+}
+
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  background-color: var(--oat);
+}
+
+.app-main-content {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+
+@media (max-width: 767px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .app-mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background-color: var(--oat);
+    border-bottom: 1px solid var(--rule);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+
+  .app-mobile-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 6px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .app-sidebar {
+    display: none;
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+    padding: 16px;
+  }
+
+  .app-sidebar.app-sidebar--open {
+    display: flex;
+  }
+
+  .app-sidebar-logo {
+    display: none;
+  }
+
+  .app-main-content {
+    padding: 20px 16px;
   }
 }

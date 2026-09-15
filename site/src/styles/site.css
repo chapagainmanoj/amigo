@@ -322,13 +322,7 @@ a {
   max-width: 42ch;
 }
 
-.telegram-demo-caption p {
-  font-size: clamp(1.0625rem, 1.5vw, 1.1875rem);
-  line-height: 1.55;
-  color: var(--ink-2);
-}
-
-.telegram-demo-caption strong {
+.telegram-demo-heading {
   display: block;
   margin-bottom: 10px;
   color: var(--ink);
@@ -338,6 +332,12 @@ a {
   font-weight: 400;
   letter-spacing: -0.02em;
   line-height: 1.15;
+}
+
+.telegram-demo-text {
+  font-size: clamp(1.0625rem, 1.5vw, 1.1875rem);
+  line-height: 1.55;
+  color: var(--ink-2);
 }
 
 .telegram-phone-card {
@@ -451,7 +451,7 @@ a {
   padding: 3px 10px;
   border-radius: 999px;
   background: var(--rule);
-  color: var(--ink-2);
+  color: var(--ink);
   font-size: 0.6875rem;
 }
 
@@ -806,7 +806,7 @@ a {
   min-width: 0;
   min-height: 48px;
   padding: 12px 15px;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--ink-2);
   border-radius: 6px;
   background: var(--oat);
   color: var(--ink);
@@ -817,7 +817,7 @@ a {
 
 .waitlist-input::placeholder {
   color: var(--ink-2);
-  opacity: 0.75;
+  opacity: 1;
 }
 
 .waitlist-input:focus {
@@ -848,7 +848,19 @@ a {
 }
 
 .waitlist-button:hover:not(:disabled) {
-  background: #352D28;
+  background: color-mix(in srgb, var(--ink) 90%, var(--sand));
+}
+
+.waitlist-fallback-link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 500;
+  transition: color 150ms ease;
+}
+
+.waitlist-fallback-link:hover {
+  color: var(--ink-2);
 }
 
 .waitlist-button:disabled {
@@ -906,6 +918,17 @@ a {
 
 .waitlist-notice {
   color: var(--ink-2);
+}
+
+/* Dev-only affordance; never rendered by a production build. */
+.waitlist-preview-note {
+  max-width: 52ch;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--rule);
+  color: var(--ink-2);
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .waitlist-success {
@@ -994,6 +1017,10 @@ a {
 }
 
 .site-footer-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding-block: 2px;
   color: var(--ink-2);
   font-size: 0.8125rem;
   text-decoration: none;
@@ -1002,6 +1029,360 @@ a {
 
 .site-footer-link:hover {
   color: var(--ink);
+}
+
+/* Modes page ------------------------------------------------------------- */
+
+.modes-header {
+  padding-block: clamp(56px, 10vh, 104px) clamp(28px, 5vh, 52px);
+}
+
+.modes-title {
+  font-size: clamp(2.5rem, 5.4vw, 4rem);
+  letter-spacing: -0.03em;
+  line-height: 1.04;
+  max-width: 16ch;
+  margin-bottom: 24px;
+}
+
+.modes-title em {
+  font-style: italic;
+  font-variation-settings: 'SOFT' 40;
+}
+
+.modes-lead {
+  max-width: 58ch;
+  color: var(--ink-2);
+  font-size: clamp(1.0625rem, 1.6vw, 1.1875rem);
+  line-height: 1.6;
+}
+
+.mode-list {
+  border-top: 1px solid var(--rule);
+}
+
+.mode-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  padding-block: clamp(34px, 5vh, 52px);
+  border-bottom: 1px solid var(--rule);
+}
+
+.mode-name {
+  font-size: clamp(1.75rem, 3.2vw, 2.375rem);
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.mode-status {
+  margin-top: 8px;
+  color: var(--ink-2);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Daily is the only Mode in the shipped column of the capability matrix, so it is the only one
+ * that gets colour. --signal-deep, not the --signal fill: the fill stays reserved for a live
+ * Reminder on the home page. */
+.mode-status--shipped {
+  color: var(--signal-deep);
+}
+
+.mode-job {
+  max-width: 34ch;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-variation-settings: 'SOFT' 40;
+  font-size: clamp(1.25rem, 2.1vw, 1.5rem);
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+
+.mode-body {
+  max-width: 62ch;
+  margin-top: 16px;
+  color: var(--ink-2);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.mode-bounds {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  margin-top: 28px;
+}
+
+.mode-bound-heading {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.mode-listing {
+  padding: 0;
+  list-style: none;
+}
+
+.mode-listing-item {
+  max-width: 44ch;
+  padding-block: 10px;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.mode-listing-item + .mode-listing-item {
+  border-top: 1px solid var(--rule);
+}
+
+.mode-listing--limits .mode-listing-item {
+  color: var(--ink-2);
+}
+
+.mode-gate {
+  max-width: 64ch;
+  margin-top: 26px;
+  padding: 14px 18px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--sand);
+  color: var(--ink-2);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+/* Shared rules ------------------------------------------------------------ */
+
+.mode-rules-section {
+  padding-block: var(--rhythm);
+}
+
+.mode-rules {
+  margin-top: 36px;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+  list-style: none;
+}
+
+.mode-rule {
+  max-width: 76ch;
+  padding-block: 18px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+/* Gate band — reuses the home page's single inversion treatment ----------- */
+
+.gate-lead {
+  max-width: 58ch;
+  margin-top: 24px;
+  color: var(--band-soft);
+  font-size: clamp(1.0625rem, 1.5vw, 1.1875rem);
+  line-height: 1.6;
+}
+
+
+
+
+.gate-close {
+  max-width: 56ch;
+  margin-top: 22px;
+  color: var(--oat);
+  font-size: clamp(1.0625rem, 1.5vw, 1.1875rem);
+  line-height: 1.55;
+}
+
+.gate-track-section {
+  padding-block: var(--rhythm) 0;
+}
+
+/* Day line — the wedge, drawn ------------------------------------------- */
+
+.day-line {
+  margin: 44px 0 0;
+}
+
+.day-line-track {
+  position: relative;
+  height: 96px;
+  border-bottom: 1px solid var(--ink);
+}
+
+.day-tick {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  height: 8px;
+  background: var(--rule);
+  transform: translateX(-0.5px);
+}
+
+.day-tick:first-child {
+  background: transparent;
+}
+
+.day-tick-label {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  transform: translateX(-50%);
+  color: var(--ink-2);
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* The marks sit above the rule so the long empty stretches stay the loudest thing here. */
+.day-tick-label--first {
+  transform: none;
+}
+
+.day-tick-label--last {
+  transform: translateX(-100%);
+}
+
+.day-mark {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  height: 46px;
+  background: var(--ink);
+  transform: translateX(-0.5px);
+}
+
+.day-mark::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -2.5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.day-mark-label {
+  position: absolute;
+  top: -26px;
+  left: 0;
+  transform: translateX(-50%);
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.day-line-caption {
+  max-width: 58ch;
+  margin-top: 38px;
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+/* Gate track — the release gate, drawn ---------------------------------- */
+
+.gate-track {
+  margin: 44px 0 0;
+  padding-top: 28px;
+  border-top: 1px solid var(--rule);
+}
+
+.gate-track-caption {
+  margin-bottom: 24px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.gate-track-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 28px;
+}
+
+.gate-waiting-label,
+.gate-stage-n {
+  color: var(--ink-2);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.gate-waiting-list {
+  margin-top: 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.gate-waiting-item {
+  display: grid;
+  gap: 2px;
+  padding-block: 11px;
+  border-top: 1px solid var(--rule);
+}
+
+.gate-waiting-name {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 20;
+  font-size: 1.125rem;
+  letter-spacing: -0.01em;
+}
+
+.gate-waiting-why {
+  max-width: 34ch;
+  color: var(--ink-2);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.gate-stages {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+
+.gate-stage {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding-block: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+.gate-stage-label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.gate-stage-note {
+  max-width: 38ch;
+  color: var(--ink-2);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.gate-track-foot {
+  max-width: 62ch;
+  margin-top: 24px;
+  color: var(--ink-2);
+  font-size: 0.875rem;
+  line-height: 1.55;
 }
 
 /* Responsive -------------------------------------------------------------- */
@@ -1041,6 +1422,32 @@ a {
 
   .honesty-col:not(:first-child) {
     padding-left: 24px;
+  }
+
+  .mode-bounds {
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+  }
+
+  .gate-track-grid {
+    grid-template-columns: 250px 1fr;
+    gap: 48px;
+  }
+
+  .gate-stages {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+
+  .gate-stage {
+    padding-block: 14px 0;
+  }
+}
+
+@media (min-width: 900px) {
+  .mode-row {
+    grid-template-columns: 230px 1fr;
+    gap: 48px;
   }
 }
 
