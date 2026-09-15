@@ -11,12 +11,12 @@ import { SITE } from './meta'
 import { RETENTION_PROMISE } from './shared'
 
 /**
- * The email provider has not been chosen yet. Until it is, this page says so rather than naming a
- * placeholder — decision 04 requires every processor to be disclosed, and an address cannot be
- * collected before the disclosure is true. tests/test_privacy_page.py holds the two in step:
- * naming a provider here is what unblocks the waitlist going live.
+ * The provider that holds the list. Decision 04 requires every processor to be disclosed before
+ * it receives anything, so this is named here before the form accepts an address rather than
+ * after. tests/test_privacy_page.py holds the two in step: setting this back to null while an
+ * endpoint ships is what the guard catches.
  */
-export const WAITLIST_PROCESSOR = null
+export const WAITLIST_PROCESSOR = 'Loops'
 
 const CONTACT = SITE.contactEmail
 
