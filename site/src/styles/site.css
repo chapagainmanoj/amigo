@@ -1491,6 +1491,32 @@ a {
   border-bottom-color: var(--ink);
 }
 
+/* Contact ----------------------------------------------------------------- */
+
+/* The address is the page, so it gets the weight a heading would. No --signal here: the accent
+   is spent once, on the reminder bubble, and this page does not contain it. */
+.contact-address {
+  display: block;
+  /* No border-top and no margin: .legal-lead already closes with a rule, and adding another
+     drew two hairlines a few pixels apart. */
+  padding-block: 26px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+  font-family: var(--font-display);
+  /* Sized to fit amigo@manojc.link on a 375px screen without breaking the word. */
+  font-size: clamp(1.5rem, 6.4vw, 2.5rem);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.contact-address:hover {
+  background-color: var(--sand);
+  color: var(--ink);
+}
+
 /* Responsive -------------------------------------------------------------- */
 
 @media (min-width: 768px) {

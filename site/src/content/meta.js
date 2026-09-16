@@ -56,6 +56,16 @@ export const PAGES = {
         'has to prove.',
     },
   },
+  contact: {
+    path: '/contact/',
+    html: 'contact/index.html',
+    title: 'Contact — Amigo',
+    description:
+      'One address, read by a person. What to write to Amigo about, when you will hear back, ' +
+      'and what this address is not for.',
+    image: '/og.png',
+    imageAlt: 'Amigo — accountability that lives in your chat',
+  },
   privacy: {
     path: '/privacy/',
     html: 'privacy/index.html',

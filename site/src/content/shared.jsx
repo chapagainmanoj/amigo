@@ -28,6 +28,7 @@ export const FOOTER = {
   links: [
     { label: 'Products', href: '/products/' },
     { label: 'Privacy', href: '/privacy/' },
+    { label: 'Contact', href: '/contact/' },
     { label: 'GitHub', href: SITE.repo, external: true },
     { label: 'Capability matrix', href: SITE.capabilityMatrix, external: true },
   ],

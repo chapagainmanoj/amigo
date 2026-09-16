@@ -169,7 +169,11 @@ export const PRIVACY = {
       heading: 'Contact',
       body: (
         <p>
-          <ContactLink />
+          <ContactLink /> reaches us, and{' '}
+          <a href="/contact/" className="legal-link">
+            the contact page
+          </a>{' '}
+          says what else that address is and is not for.
         </p>
       ),
     },
