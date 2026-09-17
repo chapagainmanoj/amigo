@@ -174,7 +174,7 @@ async def _setup_case(case, suite: GateASuite, repetition: int):
         )
         task = result["task"]
         if setup_task.status != "pending":
-            task = await store.update_task_status(
+            task = await store.seed_task_status(
                 task["task_id"], setup_task.status, user["user_id"]
             )
         aliases[setup_task.alias] = task["task_id"]

@@ -493,7 +493,9 @@ class FakeStore:
             and t["status"] == "pending"
         ]
 
-    async def update_task_status(self, task_id: str, status: str, user_id: str) -> dict:
+    async def seed_task_status(self, task_id: str, status: str, user_id: str) -> dict:
+        """Fixture-setup status write. See MemoryStore.seed_task_status — resolving a Task
+        goes through ResolveTaskCommand, not here."""
         validate_task_status(status)
         for t in self.tasks:
             if t["task_id"] == task_id and t["user_id"] == user_id:

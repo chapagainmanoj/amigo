@@ -42,7 +42,7 @@ async def test_supabase_task_status_update_filters_by_user_id():
     store.db = _Database()
 
     with pytest.raises(ValueError, match="Task not found"):
-        await store.update_task_status("task-1", "completed", "intruder-1")
+        await store.seed_task_status("task-1", "completed", "intruder-1")
 
     assert ("task_id", "task-1") in store.db.query.filters
     assert ("user_id", "intruder-1") in store.db.query.filters

@@ -139,7 +139,7 @@ async def test_create_task_after_done_creates_new(store):
     task1 = await store.create_task(
         user_id=user["user_id"], title="Go for a walk", timezone="UTC"
     )
-    await store.update_task_status(task1["task_id"], "completed", user["user_id"])
+    await store.seed_task_status(task1["task_id"], "completed", user["user_id"])
 
     task2 = await store.create_task(
         user_id=user["user_id"], title="Go for a walk", timezone="UTC"

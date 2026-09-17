@@ -460,8 +460,17 @@ class MemoryStore:
         return result.data
 
     @_observe_database_call
-    async def update_task_status(self, task_id: str, status: str, user_id: str) -> dict:
-        """Update an owned Task to a canonical lifecycle state."""
+    async def seed_task_status(self, task_id: str, status: str, user_id: str) -> dict:
+        """Put a Task into a starting state for a fixture. Never resolves one.
+
+        A bare UPDATE: no Reminder cancellation, no terminal monotonicity, no outbox cancel
+        effects — so a Task marked terminal here keeps firing reminders, and a terminal Task can
+        be dragged back to pending.
+
+        Resolving a Task goes through ResolveTaskCommand, which calls migration 007's
+        resolve_task_command and does all three (issue 06). Named `seed_` so nothing reaches for
+        it by mistake; test_resolve_task_command.py fails the build if production code calls it.
+        """
         validate_task_status(status)
         updates: dict = {"status": status}
         if status == "completed":

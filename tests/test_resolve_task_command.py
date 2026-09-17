@@ -1,5 +1,8 @@
 """Shared Task/Reminder terminal-resolution contract tests."""
 
+import re
+from pathlib import Path
+
 import httpx
 import pytest
 from fastapi import FastAPI
@@ -192,3 +195,41 @@ async def test_dashboard_and_telegram_use_the_same_resolution_contract():
     assert telegram_task["status"] == "completed"
     assert telegram_reminder["status"] == "acknowledged"
     assert len(_outbox(store)) == 2
+
+
+# MemoryStore.seed_task_status is a bare UPDATE: no Reminder cancellation, no terminal
+# monotonicity, no outbox effects. It exists so fixtures can put a Task into a starting state.
+# The name says so; this guard is what happens when someone ignores the name. Only this file is
+# allowed to grow the exemption below, and only with a reason.
+BYPASS_CALL = re.compile(r"\.seed_task_status\(")
+BYPASS_ALLOWED = {
+    # Seeds a Task into its case's starting state before the turn under evaluation runs.
+    # Resolving it properly here would emit cancel effects the eval is not measuring.
+    "scripts/run_gate_a_eval.py",
+}
+
+
+def test_no_production_code_resolves_a_task_outside_the_shared_command():
+    """Issue 06's guarantee is only as good as the number of ways around it.
+
+    Every terminal Task outcome has to cancel that Task's active Reminders, or a cancelled task
+    keeps nudging someone. The shared command does that; the raw store setter does not. This
+    fails when a new surface reaches for the setter because its name reads like the operation.
+    """
+    root = Path(__file__).resolve().parents[1]
+    offenders = []
+
+    for source in sorted(root.glob("src/**/*.py")) + sorted(root.glob("scripts/**/*.py")):
+        relative = source.relative_to(root).as_posix()
+        if relative in BYPASS_ALLOWED:
+            continue
+        for number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), start=1):
+            if BYPASS_CALL.search(line):
+                offenders.append(f"{relative}:{number}")
+
+    assert not offenders, (
+        "These call store.seed_task_status, which marks a Task terminal without cancelling "
+        "its active Reminders or enforcing terminal monotonicity:\n  "
+        + "\n  ".join(offenders)
+        + "\nUse ResolveTaskCommand instead, or add the path to BYPASS_ALLOWED with a reason."
+    )

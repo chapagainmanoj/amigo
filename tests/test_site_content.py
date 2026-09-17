@@ -15,9 +15,10 @@ CONTENT = SITE / "src" / "content"
 META = CONTENT / "meta.js"
 COMPONENTS = SITE / "src" / "components"
 
-# Wrappers with no copy of their own. A component here renders whatever it is handed; everything
-# else has to take its words from src/content/.
-STRUCTURAL = {"Reveal.jsx"}
+# Files with no copy of their own: wrappers that render whatever they are handed, and App.jsx,
+# which is pure composition — every section it places owns its own words. Everything else has to
+# take its words from src/content/.
+STRUCTURAL = {"Reveal.jsx", "App.jsx"}
 
 
 def _entry_html_files() -> list[Path]:
@@ -98,8 +99,12 @@ def test_seo_text_fits_where_it_is_displayed():
 
 def test_components_take_their_words_from_the_content_module():
     """One place to edit the copy only holds if components stop carrying their own."""
+    # The page shells live a directory up from components/ and render copy of their own, so they
+    # are held to the same rule — leaving them out is how a heading quietly lands back in JSX.
+    sources = sorted(COMPONENTS.glob("*.jsx")) + sorted(SITE.glob("src/*App.jsx"))
+
     offenders = []
-    for component in sorted(COMPONENTS.glob("*.jsx")):
+    for component in sources:
         if component.name in STRUCTURAL:
             continue
         if "content/" not in component.read_text(encoding="utf-8"):

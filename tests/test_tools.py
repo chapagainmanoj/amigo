@@ -104,7 +104,7 @@ async def test_store_task_status_update_is_tenant_owned(store_factory):
     task = await store.create_task(owner["user_id"], "private task")
 
     with pytest.raises(ValueError, match="Task not found"):
-        await store.update_task_status(task["task_id"], "completed", intruder["user_id"])
+        await store.seed_task_status(task["task_id"], "completed", intruder["user_id"])
 
     owner_tasks = await store.get_today_tasks(owner["user_id"])
     assert owner_tasks[0]["status"] == "pending"

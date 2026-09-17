@@ -479,7 +479,9 @@ class InMemoryStore:
             and t["status"] == "pending"
         ]
 
-    async def update_task_status(self, task_id: str, status: str, user_id: str) -> dict:
+    async def seed_task_status(self, task_id: str, status: str, user_id: str) -> dict:
+        """Fixture-setup status write. See MemoryStore.seed_task_status — resolving a Task
+        goes through ResolveTaskCommand, not here."""
         validate_task_status(status)
         task = self._tasks.get(task_id)
         if not task or task["user_id"] != user_id:

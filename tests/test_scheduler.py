@@ -136,7 +136,7 @@ async def test_send_reminder_cannot_claim_resolved_tasks():
         store = FakeStore()
         channel = FakeChannel()
         _, task, reminder = await _create_user_task_reminder(store)
-        await store.update_task_status(task["task_id"], status, task["user_id"])
+        await store.seed_task_status(task["task_id"], status, task["user_id"])
         scheduler = ReminderScheduler(channel=channel, store=store)
 
         await scheduler._send_reminder(
