@@ -3,6 +3,10 @@
 Status: adopted in the repository after owner approval and independent review; not deployed
 Prepared: 2026-10-03
 
+Current state: the exact reviewed SQL/assertion hashes recorded below are now present in
+`migrations/` and `tests/sql/`. Historical pre-adoption statements remain below as review history;
+no production deployment occurred.
+
 The old temp directory and its SQL/assertion artifacts are missing. These are newly reconstructed
 bytes based on migration 003 and the documented corrections in the old review record. Original
 hashes, approval, and old concurrency/mutation results do not certify these files.

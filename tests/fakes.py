@@ -24,6 +24,7 @@ from src.memory.activation import (
     update_profile,
 )
 from src.memory.later import apply_later_transition
+from src.memory.modes import LocalModeState, ModeGrant, ModeGrantResult, ModeResult
 from src.memory.pairing import (
     PAIRING_TOKEN_LIMIT,
     PAIRING_TOKEN_WINDOW,
@@ -97,6 +98,7 @@ class FakeStore:
         self.scheduler_runtime: dict | None = None
         self.activation_journeys: dict[str, dict] = {}
         self.schema_version = EXPECTED_SCHEMA_VERSION
+        self._mode_state = LocalModeState()
         # Fake Supabase client for direct queries (used by SessionManager)
         self.db = FakeDB(self)
 
@@ -181,6 +183,7 @@ class FakeStore:
             "ended_at": None,
             "message_count": 0,
             "context_summary": None,
+            "active_mode_id": None,
         }
         self.sessions.append(session)
         return session
@@ -208,6 +211,58 @@ class FakeStore:
         }
         self.messages.append(msg)
         return msg
+
+# ── Session Modes, trial grants, and confirmed handoffs ──
+
+    async def get_active_mode(self, user_id: str, session_id: str) -> str | None:
+        sessions = {row["session_id"]: row for row in self.sessions}
+        return await self._mode_state.get_mode(sessions, user_id, session_id)
+
+    async def set_active_mode(
+        self, user_id: str, session_id: str, mode_id: str | None, *, grant_required: bool = True,
+    ) -> ModeResult:
+        """grant_required is derived by trusted registry code, never by model arguments."""
+        sessions = {row["session_id"]: row for row in self.sessions}
+        return await self._mode_state.set_mode(
+            sessions, user_id, session_id, mode_id, grant_required,
+        )
+
+    async def grant_mode(
+        self, user_id: str, mode_id: str, operator: str, reason: str,
+        expires_at: datetime | None = None,
+    ) -> ModeGrantResult:
+        return await self._mode_state.grant(
+            self.users.values(), user_id, mode_id, operator, reason, expires_at,
+        )
+
+    async def revoke_mode_grant(
+        self, user_id: str, mode_id: str, operator: str, reason: str,
+    ) -> ModeGrantResult:
+        return await self._mode_state.revoke(user_id, mode_id, operator, reason)
+
+    async def get_active_mode_grant(self, user_id: str, mode_id: str) -> ModeGrant | None:
+        return await self._mode_state.get_active_grant(user_id, mode_id)
+
+    async def create_handoff(
+        self, user_id: str, session_id: str, source_mode_id: str, target_mode_id: str,
+        carried_request: str, *, source_grant_required: bool = True,
+        target_grant_required: bool = True,
+    ) -> ModeResult:
+        """Flags come from trusted registry definitions and persist for later resolution."""
+        sessions = {row["session_id"]: row for row in self.sessions}
+        return await self._mode_state.create_handoff(
+            sessions, user_id, session_id, source_mode_id, target_mode_id,
+            carried_request, source_grant_required, target_grant_required,
+        )
+
+    async def resolve_handoff(
+        self, user_id: str, session_id: str, handoff_id: str, confirm: bool,
+    ) -> ModeResult:
+        """Return a carried request only after atomic confirmation; never execute it here."""
+        sessions = {row["session_id"]: row for row in self.sessions}
+        return await self._mode_state.resolve_handoff(
+            sessions, user_id, session_id, handoff_id, confirm,
+        )
 
     async def get_session_messages(self, session_id: str) -> list[dict]:
         return [m for m in self.messages if m["session_id"] == session_id]

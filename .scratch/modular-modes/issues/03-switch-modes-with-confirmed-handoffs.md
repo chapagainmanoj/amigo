@@ -155,6 +155,25 @@ This issue ships no specialized Mode. Coach stays `planned` until
 
 ## Comments
 
+### 2026-10-03 — Store-contract slice implemented; application controls remain unavailable
+
+- Following approved schema 016 repository adoption, added asynchronous active-Mode, grant,
+  and handoff Store APIs in `MemoryStore`, `InMemoryStore`, and `FakeStore`, with typed result/row
+  DTOs and an atomic serialized local mirror of the actual RPC semantics.
+- All Supabase access remains inside `MemoryStore`; grant/set/create/resolve mutations use the
+  adopted service-role RPCs. Trusted registry-derived grant-required flags are retained on
+  handoffs and rechecked during resolution. Only confirmed resolution returns carried content;
+  the Store never executes it.
+- 67 focused no-network contract cases pass across both local Stores and the Supabase adapter
+  with a query/RPC double. These adapter tests do not execute PostgreSQL; the separately reviewed
+  migration assertions/concurrency probes remain the evidence for actual SQL behavior.
+- Coverage includes owned/open Sessions, atomic grant checks, cap/duplicate/audit/renewal,
+  expiry after serialization waits, detached results, grant flags, decline/expiry priority,
+  single-use concurrent confirmation, closed/changed Sessions, and revoked/expired grants.
+- Independent Store review and full backend regression verification are pending. No bot commands,
+  routing, Handoffs Tool, callback execution, grant operator script, or specialized Mode has been
+  wired by this slice. Issue 03 remains open; Daily remains the only live experience.
+
 ### 2026-10-03 — Human approval for migrations 015/016
 
 The owner explicitly approved migrations 015/016. Repository adoption is authorized after the

@@ -1,7 +1,7 @@
 """Supabase CRUD operations for all entities."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import wraps
 from time import perf_counter
 
@@ -11,6 +11,7 @@ from src.commands.base import (
     PairingChangedError,
     StaleVersionError,
 )
+from src.memory.modes import ModeGrant, ModeGrantResult, ModeResult
 from src.memory.pairing import ActivationTermsRequiredError, PairingTokenRateLimitError
 from src.memory.reminders import validate_reminder_updates
 from src.memory.tasks import validate_task_status
@@ -210,6 +211,89 @@ class MemoryStore:
             "last_activity_at": utc_now().isoformat(),
             "message_count": (session.data["message_count"] or 0) + 1,
         }).eq("session_id", session_id).execute()
+
+    # ── Session Modes, trial grants, and confirmed handoffs ──
+
+    @_observe_database_call
+    async def get_active_mode(self, user_id: str, session_id: str) -> str | None:
+        result = await (
+            self.db.table("sessions").select("active_mode_id")
+            .eq("user_id", user_id).eq("session_id", session_id)
+            .is_("ended_at", "null").maybe_single().execute()
+        )
+        return result.data.get("active_mode_id") if result and result.data else None
+
+    @_observe_database_call
+    async def set_active_mode(
+        self, user_id: str, session_id: str, mode_id: str | None, *, grant_required: bool = True,
+    ) -> ModeResult:
+        """Atomically check grant + owned open Session; flags come from trusted registry code."""
+        result = await self.db.rpc("set_active_mode", {
+            "p_user_id": user_id, "p_session_id": session_id, "p_mode_id": mode_id,
+            "p_grant_required": grant_required,
+        }).execute()
+        return result.data
+
+    @_observe_database_call
+    async def grant_mode(
+        self, user_id: str, mode_id: str, operator: str, reason: str,
+        expires_at: datetime | None = None,
+    ) -> ModeGrantResult:
+        params = {"p_user_id": user_id, "p_mode_id": mode_id,
+                  "p_operator": operator, "p_reason": reason}
+        if expires_at is not None:
+            expiry = expires_at.replace(tzinfo=UTC) if expires_at.tzinfo is None else expires_at
+            params["p_expires_at"] = expiry.isoformat()
+        # Omitting expiry uses the SQL default; sending JSON null would be an invalid grant.
+        result = await self.db.rpc("grant_mode", params).execute()
+        return result.data
+
+    @_observe_database_call
+    async def revoke_mode_grant(
+        self, user_id: str, mode_id: str, operator: str, reason: str,
+    ) -> ModeGrantResult:
+        result = await self.db.rpc("revoke_mode_grant", {
+            "p_user_id": user_id, "p_mode_id": mode_id,
+            "p_operator": operator, "p_reason": reason,
+        }).execute()
+        return result.data
+
+    @_observe_database_call
+    async def get_active_mode_grant(self, user_id: str, mode_id: str) -> ModeGrant | None:
+        result = await (
+            self.db.table("mode_grants").select("*").eq("user_id", user_id)
+            .eq("mode_id", mode_id).is_("revoked_at", "null")
+            .gt("expires_at", utc_now().replace(tzinfo=UTC).isoformat())
+            .maybe_single().execute()
+        )
+        return result.data if result and result.data else None
+
+    @_observe_database_call
+    async def create_handoff(
+        self, user_id: str, session_id: str, source_mode_id: str, target_mode_id: str,
+        carried_request: str, *, source_grant_required: bool = True,
+        target_grant_required: bool = True,
+    ) -> ModeResult:
+        """Trusted adapter checks live registry/declared target before invoking this Store API."""
+        result = await self.db.rpc("create_mode_handoff", {
+            "p_user_id": user_id, "p_session_id": session_id,
+            "p_source_mode_id": source_mode_id, "p_target_mode_id": target_mode_id,
+            "p_carried_request": carried_request,
+            "p_source_grant_required": source_grant_required,
+            "p_target_grant_required": target_grant_required,
+        }).execute()
+        return result.data
+
+    @_observe_database_call
+    async def resolve_handoff(
+        self, user_id: str, session_id: str, handoff_id: str, confirm: bool,
+    ) -> ModeResult:
+        """Resolve only; the Store never executes a callback's carried request."""
+        result = await self.db.rpc("resolve_mode_handoff", {
+            "p_user_id": user_id, "p_session_id": session_id,
+            "p_handoff_id": handoff_id, "p_confirm": confirm,
+        }).execute()
+        return result.data
 
     # ── Messages ──
 

@@ -1,5 +1,19 @@
 # Approve CBT Research Audience and Protocol
 
+### 2026-10-03 — Bounded fictional Gemini batch approved
+
+The owner approved using the existing project account for at most eight requests, zero retries,
+fictional fixtures only, no personal input, and no saved model transcripts. Verify the exact
+model, account/processing settings, and adapter boundaries before execution. This approval does
+not enable personal use, expert-validation claims, other participants, or production registration.
+Offline engineering tests are not evidence of provider retention or actual SDK behavior.
+
+The owner reported a free account or unknown billing/logging settings. Treat processing as
+unpaid, with unknown optional logging/sharing; do not claim account settings were independently
+verified or provider-side zero retention. Google's unpaid terms permit improvement and human
+review. Only original non-sensitive fictional fixtures may be sent; account settings are not
+changed. [Current Google terms](https://ai.google.dev/gemini-api/terms), checked 2026-10-03.
+
 Parent: [Mode Expansion Planning](../MAP.md)
 Status: open
 Label: `wayfinder:grilling`, `ready-for-human`

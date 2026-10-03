@@ -3,6 +3,10 @@
 Status: adopted in the repository after owner approval and independent review; not deployed
 Prepared: 2026-10-03
 
+Current state: the exact independently passing SQL/assertion hashes recorded below are now present
+in `migrations/` and `tests/sql/`. Historical proposal-only statements remain below as review
+history; no production deployment occurred and the Issue 03 application slice remains open.
+
 These files are proposals only. Nothing has been added to `migrations/`, no Store or runtime
 path depends on them, and the production schema/defaults remain unchanged.
 
