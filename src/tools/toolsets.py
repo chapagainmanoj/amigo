@@ -1,147 +1,34 @@
-"""Pydantic AI agent — single tool-calling loop replaces classify→extract→resolve pipeline.
+"""Reusable Toolsets: every side effect a Mode can cause, grouped by domain.
 
-The agent sees the user message, decides which tools to call, observes results,
-and produces a final reply — all in one turn. Side effects execute through injected
-services (store, scheduler), keeping testability via fakes.
+A Mode receives only the Toolsets it declares, so a Tool outside them cannot be called. Each Tool
+builds a CommandContext from the Tool Context and goes through the shared Commands, so Telegram,
+the dashboard, and every Mode apply one set of ownership, idempotency, and version rules.
 
-See ADR 0002 for rationale.
+Tool names, docstrings, and signatures are the schema the model sees and a Gate A invalidating
+input. Change them deliberately.
 """
 
 import hashlib
-import logging
-from dataclasses import dataclass
 from datetime import date
-from typing import Any
 
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import FunctionToolset, RunContext
 
-from src.agent.prompts import build_system_prompt
-from src.channels.base import MessageChannel
 from src.commands.base import CommandContext, StaleVersionError
 from src.commands.later import ApplyLaterCommand, LaterPolicy
 from src.commands.reminders import ReminderScheduleInput, RescheduleReminderCommand
 from src.commands.tasks import MoveTaskPlanningDayCommand
-from src.memory.context import ContextBuilder
-from src.memory.store import MemoryStore
-from src.scheduler.reminders import ReminderScheduler
 from src.time_resolution import TimeResolution, resolve_reminder_time
+from src.tools.context import ToolContext
 from src.tools.reminders import CancelRemindersTool, ScheduleReminderTool
 from src.tools.tasks import CreateTaskTool, UpdateTaskStatusTool
-from src.utils import Clock, default_clock
 
-logger = logging.getLogger(__name__)
+# Retries match the single retry the Daily agent always allowed its Tools.
+TASKS: FunctionToolset[ToolContext] = FunctionToolset(max_retries=1)
+REMINDERS: FunctionToolset[ToolContext] = FunctionToolset(max_retries=1)
 
-
-@dataclass
-class AgentDeps:
-    """Per-request dependencies injected into every tool call."""
-
-    store: MemoryStore
-    scheduler: ReminderScheduler
-    channel: MessageChannel
-    user: dict
-    session_id: str
-    chat_id: int
-    timezone: str
-    turn_id: str
-    clock: Clock = default_clock
-
-
-def _get_model_name() -> str:
-    """Resolve model name from settings, lazy to avoid import-time settings access."""
-    from src.config import settings
-    model = settings.default_model
-    # Pydantic AI uses provider-prefixed names for Google models
-    if model.startswith("gemini-"):
-        return f"google:{model}"
-    return model
-
-
-# ── Agent definition ──
-# Constructed once at module level. Per-request state goes through AgentDeps.
-# model=None so importing this module never triggers settings/API key resolution.
-# The model is provided at run() time via _get_model_name().
-amigo_agent = Agent(
-    deps_type=AgentDeps,
-    output_type=str,
-    retries=1,
-)
-
-
-@amigo_agent.system_prompt
-async def _build_system_prompt(ctx: RunContext[AgentDeps]) -> str:
-    """Dynamic system prompt with user context, tasks, and time."""
-    deps = ctx.deps
-    user = deps.user
-    name = user.get("name") or "friend"
-    tz = user.get("timezone") or "UTC"
-    local_time = deps.clock.now_in_tz(tz).strftime("%Y-%m-%d %H:%M %A")
-
-    base_prompt = build_system_prompt(name, current_time=local_time)
-
-    # Build task context
-    context_builder = ContextBuilder(deps.store)
-    tasks_block = await context_builder._build_tasks_block(user["user_id"], tz)
-    yesterday_summary = await context_builder._get_yesterday_summary(user["user_id"], tz)
-
-    # Pending tasks with IDs for status update tool
-    today_tasks = await deps.store.get_today_tasks(user["user_id"], tz)
-    inbox_tasks = await deps.store.get_inbox_tasks(user["user_id"])
-    carried_tasks = await deps.store.get_yesterday_pending(user["user_id"], tz)
-    pending_tasks = {
-        task["task_id"]: task
-        for task in [*today_tasks, *inbox_tasks, *carried_tasks]
-        if task["status"] == "pending"
-    }
-    pending_reminders = await deps.store.get_pending_reminders(user["user_id"])
-
-    sections = [base_prompt]
-
-    if yesterday_summary:
-        sections.append(f"\n<yesterday_summary>\n{yesterday_summary}\n</yesterday_summary>")
-
-    if tasks_block:
-        sections.append(f"\n<todays_tasks>\n{tasks_block}\n</todays_tasks>")
-
-    if pending_tasks:
-        task_lines = "\n".join(
-            (
-                f"- task_id={t['task_id']}: {t['title']} "
-                f"(status: {t['status']}, version: {t.get('version', 1)})"
-            )
-            for t in pending_tasks.values()
-        )
-        sections.append(
-            f"\n<pending_task_ids>\n"
-            f"Use these task_id values when calling update_task_status:\n"
-            f"{task_lines}\n"
-            f"</pending_task_ids>"
-        )
-
-    if pending_reminders:
-        reminder_lines = "\n".join(
-            (
-                f"- reminder_id={r['reminder_id']}: task_id={r['task_id']}, "
-                f"{r['tasks']['title']} at {r['scheduled_time']}"
-            )
-            for r in pending_reminders
-        )
-        sections.append(
-            "\n<active_reminder_ids>\n"
-            "Use these owned reminder_id values for Reminder lifecycle actions:\n"
-            f"{reminder_lines}\n"
-            "</active_reminder_ids>"
-        )
-
-    return "\n".join(sections)
-
-
-# ── Tools ──
-
-
-@amigo_agent.tool
+@TASKS.tool
 async def create_task(
-    ctx: RunContext[AgentDeps],
+    ctx: RunContext[ToolContext],
     title: str,
     category: str = "other",
     reminder_time: str | None = None,
@@ -198,9 +85,9 @@ async def create_task(
     return f"Created task '{title}'."
 
 
-@amigo_agent.tool
+@TASKS.tool
 async def update_task_status(
-    ctx: RunContext[AgentDeps],
+    ctx: RunContext[ToolContext],
     task_id: str,
     status: str,
 ) -> str:
@@ -225,9 +112,9 @@ async def update_task_status(
     return f"Updated '{task_title}' to {status}."
 
 
-@amigo_agent.tool
+@REMINDERS.tool
 async def schedule_reminder(
-    ctx: RunContext[AgentDeps],
+    ctx: RunContext[ToolContext],
     task_id: str,
     time_expression: str,
     confirmed_time: str | None = None,
@@ -266,9 +153,9 @@ async def schedule_reminder(
     return f"Reminder scheduled for '{task['title']}' on {exact}."
 
 
-@amigo_agent.tool
+@REMINDERS.tool
 async def apply_later(
-    ctx: RunContext[AgentDeps],
+    ctx: RunContext[ToolContext],
     reminder_id: str,
 ) -> str:
     """Apply the canonical Later policy to one active owned Reminder.
@@ -296,9 +183,9 @@ async def apply_later(
     )
 
 
-@amigo_agent.tool
+@TASKS.tool
 async def move_task_planning_day(
-    ctx: RunContext[AgentDeps],
+    ctx: RunContext[ToolContext],
     task_id: str,
     planning_day: date,
     expected_version: int,
@@ -329,9 +216,9 @@ async def move_task_planning_day(
     return f"Moved '{result['task']['title']}' to {planning_day.isoformat()}."
 
 
-@amigo_agent.tool
+@REMINDERS.tool
 async def cancel_reminders(
-    ctx: RunContext[AgentDeps],
+    ctx: RunContext[ToolContext],
     task_id: str,
 ) -> str:
     """Cancel all pending reminders for a task.
@@ -354,7 +241,7 @@ def parse_time_expression(time_expr: str, timezone: str) -> TimeResolution:
     return resolve_reminder_time(time_expr, timezone)
 
 
-def _resolve_time(deps: AgentDeps, expression: str) -> TimeResolution:
+def _resolve_time(deps: ToolContext, expression: str) -> TimeResolution:
     return resolve_reminder_time(
         expression,
         deps.timezone,
@@ -383,7 +270,7 @@ def _resolution_block_message(
 
 
 async def _schedule_resolved_reminder(
-    deps: AgentDeps,
+    deps: ToolContext,
     task: dict,
     resolution: TimeResolution,
 ) -> str:
@@ -424,79 +311,3 @@ async def _schedule_resolved_reminder(
             timezone=resolution.timezone,
         )
     return resolution.exact_label
-
-
-# ── Entry point ──
-
-
-async def run_agent_turn(
-    deps: AgentDeps,
-    user_message: str,
-    *,
-    model: Any | None = None,
-):
-    """Run and persist one successful agent turn, returning its trace-bearing result.
-
-    1. Store user message
-    2. Build message history from session
-    3. Run agent (model decides tools + reply)
-    4. Store assistant response
-    5. Return the Pydantic AI result
-    """
-    user_id = deps.user["user_id"]
-
-    # Store user message
-    await deps.store.add_message(deps.session_id, user_id, "user", user_message)
-
-    # Build message history for context
-    context_builder = ContextBuilder(deps.store)
-    history = await context_builder._get_truncated_messages(deps.session_id)
-
-    # Convert to pydantic-ai message format
-    from pydantic_ai.messages import (
-        ModelRequest,
-        ModelResponse,
-        TextPart,
-        UserPromptPart,
-    )
-
-    message_history: list[ModelRequest | ModelResponse] = []
-    for msg in history[:-1]:  # Exclude the message we just stored (it goes as user_prompt)
-        if msg["role"] == "user":
-            message_history.append(
-                ModelRequest(parts=[UserPromptPart(content=msg["content"])])
-            )
-        else:
-            message_history.append(
-                ModelResponse(parts=[TextPart(content=msg["content"])])
-            )
-
-    result = await amigo_agent.run(
-        user_message,
-        model=model or _get_model_name(),
-        deps=deps,
-        message_history=message_history if message_history else None,
-    )
-
-    # Store assistant response
-    await deps.store.add_message(deps.session_id, user_id, "assistant", result.output)
-
-    return result
-
-
-async def handle_message(deps: AgentDeps, user_message: str) -> str:
-    """Handle one user message and preserve the friendly production failure response."""
-    try:
-        result = await run_agent_turn(deps, user_message)
-        return result.output
-    except Exception:
-        logger.exception("Agent run failed")
-        response = "Sorry, having trouble thinking right now. Try again in a minute? 🙏"
-        await deps.store.add_message(
-            deps.session_id,
-            deps.user["user_id"],
-            "assistant",
-            response,
-        )
-
-    return response

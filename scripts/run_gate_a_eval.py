@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 import uuid
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -23,14 +24,14 @@ from pydantic_ai.exceptions import ModelHTTPError  # noqa: E402
 from pydantic_ai.models.google import GoogleModel  # noqa: E402
 from pydantic_ai.providers.google import GoogleProvider  # noqa: E402
 
-from src.agent.agent import AgentDeps, run_agent_turn  # noqa: E402
+from src.agent.catalogue import build_registry  # noqa: E402
+from src.agent.modes import PLACEHOLDER_FACTS  # noqa: E402
 from src.commands.base import CommandContext  # noqa: E402
 from src.commands.tasks import CreateTaskCommand, CreateTaskInput  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.evaluation.gate_a import (  # noqa: E402
     GATE_A_ENVIRONMENT,
     GATE_A_POLICY,
-    GATE_A_PRICING,
     PROMPT_SOURCE,
     TIME_BEHAVIOR_SOURCES,
     TURN_CONTEXT_SOURCES,
@@ -44,18 +45,24 @@ from src.evaluation.gate_a import (  # noqa: E402
     extract_trace,
     file_set_hash,
     invalidating_inputs,
-    load_suite,
+    load_mode_suite,
     observed_model_names,
     score_turn,
     summarize_scores,
     tool_schema,
 )
+from src.evaluation.model_policy import fallback_currency  # noqa: E402
 from src.memory.memory_store import InMemoryStore  # noqa: E402
 from src.scheduler.reminders import ReminderScheduler  # noqa: E402
+from src.telemetry import estimated_cost  # noqa: E402
+from src.tools.context import ToolContext  # noqa: E402
+from src.turns import default_turn_orchestrator  # noqa: E402
 from src.utils import Clock  # noqa: E402
 
 DEFAULT_SUITE = ROOT / "evals/gate_a/v1/cases.json"
 INVALIDATING_INPUTS = invalidating_inputs(ROOT)
+
+
 class FixedClock(Clock):
     """Evaluation clock shared by prompt and time interpretation."""
 
@@ -104,26 +111,30 @@ def _git(*args: str) -> str:
     ).stdout.strip()
 
 
-def _release_inputs(suite_path: Path, suite: GateASuite) -> dict:
+def _release_inputs(suite_path: Path, suite: GateASuite, mode_id="daily", model_name=None) -> dict:
     status = _git("status", "--porcelain=v1")
     diff = subprocess.run(
         ["git", "diff", "--binary"], cwd=ROOT, check=True, capture_output=True
     ).stdout
-    schema = tool_schema()
+    mode = build_registry()[mode_id]
+    selected_model = model_name or mode.model.primary or settings.default_model
+    schema = tool_schema(mode_id)
     return {
         "git_revision": _git("rev-parse", "HEAD"),
         "working_tree_dirty": bool(status),
         "working_tree_diff_sha256": hashlib.sha256(diff).hexdigest(),
         # The configured alias, which is a request, not an identity.
-        "model": settings.default_model,
+        "mode_id": mode_id,
+        "model_policy": asdict(mode.model),
+        "mode_instructions_sha256": canonical_hash(mode.instructions(PLACEHOLDER_FACTS)),
+        "fallback_currency": fallback_currency(mode, ROOT),
+        "model": selected_model,
         "provider_model": (
-            f"google:{settings.default_model}"
-            if settings.default_model.startswith("gemini-")
-            else settings.default_model
+            f"google:{selected_model}" if selected_model.startswith("gemini-") else selected_model
         ),
         # Filled in from what the provider reported once the run has actually spoken to it.
         "observed_model_names": [],
-        "model_settings": {},
+        "model_settings": mode.model.settings or {},
         "dependency_versions": dependency_versions(),
         "prompt_source_sha256": hashlib.sha256((ROOT / PROMPT_SOURCE).read_bytes()).hexdigest(),
         "tool_schema_sha256": canonical_hash(schema),
@@ -134,7 +145,7 @@ def _release_inputs(suite_path: Path, suite: GateASuite) -> dict:
         "time_behavior_source_sha256": file_set_hash(
             [ROOT / relative for relative in TIME_BEHAVIOR_SOURCES], ROOT
         ),
-        "all_invalidating_inputs_sha256": file_set_hash(INVALIDATING_INPUTS, ROOT),
+        "all_invalidating_inputs_sha256": file_set_hash(invalidating_inputs(ROOT, mode), ROOT),
         "case_set_sha256": hashlib.sha256(suite_path.read_bytes()).hexdigest(),
         "case_set_version": suite.version,
         "fixed_utc": suite.fixed_utc,
@@ -174,20 +185,16 @@ async def _setup_case(case, suite: GateASuite, repetition: int):
         )
         task = result["task"]
         if setup_task.status != "pending":
-            task = await store.seed_task_status(
-                task["task_id"], setup_task.status, user["user_id"]
-            )
+            task = await store.seed_task_status(task["task_id"], setup_task.status, user["user_id"])
         aliases[setup_task.alias] = task["task_id"]
         if setup_task.reminder_at:
-            await store.create_reminder(
-                task["task_id"], user["user_id"], setup_task.reminder_at
-            )
+            await store.create_reminder(task["task_id"], user["user_id"], setup_task.reminder_at)
     for item in case.setup.history:
         await store.add_message(
             session["session_id"], user["user_id"], item["role"], item["content"]
         )
     clock = FixedClock(datetime.fromisoformat(suite.fixed_utc.replace("Z", "+00:00")))
-    deps = AgentDeps(
+    deps = ToolContext(
         store=store,
         scheduler=scheduler,
         channel=channel,
@@ -207,7 +214,9 @@ def _state(store: InMemoryStore, aliases: dict[str, str]) -> dict:
     )
 
 
-async def _run_execution(case, suite: GateASuite, repetition: int, provider_model) -> dict:
+async def _run_execution(
+    case, suite: GateASuite, repetition: int, provider_model, mode_id="daily"
+) -> dict:
     store, deps, aliases = await _setup_case(case, suite, repetition)
     observed_models: set[str] = set()
     turn_evidence = []
@@ -218,9 +227,11 @@ async def _run_execution(case, suite: GateASuite, repetition: int, provider_mode
         deps.turn_id = f"{case.id}:{repetition}:{turn_index}"
         before = _state(store, aliases)
         turn_started = time.perf_counter()
-        result = await run_agent_turn(deps, turn.message, model=provider_model)
+        result = await default_turn_orchestrator.run_turn(
+            deps, turn.message, model=provider_model, requested_mode=mode_id
+        )
         latency_ms = round((time.perf_counter() - turn_started) * 1_000, 2)
-        messages = result.new_messages()
+        messages = result.messages
         trace, response = extract_trace(messages)
         observed_models.update(observed_model_names(messages))
         usage = result.usage
@@ -234,6 +245,8 @@ async def _run_execution(case, suite: GateASuite, repetition: int, provider_mode
             state=after,
             before_state_hash=before["state_hash"],
         )
+        turn_models = observed_model_names(messages)
+        turn_cost = estimated_cost(usage, turn_models[0] if len(turn_models) == 1 else None)
         turn_evidence.append(
             {
                 "turn": turn_index,
@@ -253,13 +266,12 @@ async def _run_execution(case, suite: GateASuite, repetition: int, provider_mode
                     "details": usage.details,
                 },
                 "score": score,
+                "estimated_cost_usd": turn_cost,
             }
         )
     turn_scores = [item["score"] for item in turn_evidence]
-    cost = (
-        total_input * GATE_A_PRICING["input_per_million_tokens"]
-        + total_output * GATE_A_PRICING["output_per_million_tokens"]
-    ) / 1_000_000
+    costs = [turn["estimated_cost_usd"] for turn in turn_evidence]
+    cost = None if any(value is None for value in costs) else round(sum(costs), 8)
     metric_results = execution_metric_results(case, turn_scores)
     return {
         "case_id": case.id,
@@ -274,7 +286,7 @@ async def _run_execution(case, suite: GateASuite, repetition: int, provider_mode
         "turns": turn_evidence,
         "latency_ms": round((time.perf_counter() - started) * 1_000, 2),
         "usage": {"input_tokens": total_input, "output_tokens": total_output},
-        "estimated_cost_usd": round(cost, 8),
+        "estimated_cost_usd": cost,
     }
 
 
@@ -292,8 +304,14 @@ def _write_evidence(path: Path, evidence: dict) -> None:
 
 
 async def run(args) -> int:
-    suite_path = args.suite.resolve()
-    suite = load_suite(suite_path)
+    mode_id = getattr(args, "mode", "daily")
+    mode = await build_registry().get(mode_id)
+    if mode.status != "live":
+        raise SystemExit(f"Mode {mode_id!r} is not live")
+    suite_path = (args.suite or ROOT / mode.eval_suite).resolve()
+    if suite_path != (ROOT / mode.eval_suite).resolve():
+        raise SystemExit("--suite must name the Mode's declared suite")
+    suite = load_mode_suite(suite_path, mode_id)
     print(f"validated {suite.suite_id}: {len(suite.cases)} cases, {suite.repetitions} repetitions")
     if args.validate_only:
         return 0
@@ -334,12 +352,13 @@ async def run(args) -> int:
             root=ROOT,
             suite_path=suite_path,
             _historical_baseline=True,
+            mode_id=mode_id,
         )
         if baseline_errors:
             formatted = "\n".join(f"- {error}" for error in baseline_errors)
             raise SystemExit(f"the supplied Gate A baseline is not passing:\n{formatted}")
         baseline_sha256 = hashlib.sha256(baseline_bytes).hexdigest()
-    release_inputs = _release_inputs(suite_path, suite)
+    release_inputs = _release_inputs(suite_path, suite, mode_id, getattr(args, "model", None))
     evidence = {
         "run_id": str(uuid.uuid4()),
         "suite_id": suite.suite_id,
@@ -358,7 +377,7 @@ async def run(args) -> int:
         "repetitions": args.repetitions,
         "selected_cases": [case.id for case in selected],
         "release_inputs": release_inputs,
-        "pricing": GATE_A_PRICING,
+        "pricing": {"source": "genai-prices", "version": dependency_versions()["genai-prices"]},
         "executions": [],
         "scores": None,
         "passed": False,
@@ -366,9 +385,10 @@ async def run(args) -> int:
     }
     _write_evidence(args.output, evidence)
 
-    if settings.default_model.startswith("gemini-"):
+    selected_model = release_inputs["model"].removeprefix("google:")
+    if selected_model.startswith("gemini-"):
         provider_model = RateLimitedGoogleModel(
-            settings.default_model,
+            selected_model,
             provider=GoogleProvider(api_key=settings.google_api_key),
             minimum_interval_seconds=args.request_interval_seconds,
         )
@@ -378,13 +398,9 @@ async def run(args) -> int:
         for repetition in range(1, args.repetitions + 1):
             print(f"running {case.id} repetition {repetition}/{args.repetitions}", flush=True)
             try:
-                execution = await _run_execution(case, suite, repetition, provider_model)
+                execution = await _run_execution(case, suite, repetition, provider_model, mode_id)
             except Exception as error:
-                if (
-                    not args.case
-                    and isinstance(error, ModelHTTPError)
-                    and error.status_code == 429
-                ):
+                if not args.case and isinstance(error, ModelHTTPError) and error.status_code == 429:
                     evidence["status"] = "aborted_provider_incident"
                     evidence["completed_at"] = datetime.now(UTC).isoformat()
                     evidence.setdefault("provider_incidents", []).append(
@@ -411,7 +427,7 @@ async def run(args) -> int:
                     "turns": [],
                     "latency_ms": None,
                     "usage": {"input_tokens": 0, "output_tokens": 0},
-                    "estimated_cost_usd": 0.0,
+                    "estimated_cost_usd": None,
                     "observed_model_names": [],
                 }
             evidence["executions"].append(execution)
@@ -433,11 +449,11 @@ async def run(args) -> int:
     evidence["totals"] = {
         "executions": len(evidence["executions"]),
         "input_tokens": sum(item["usage"]["input_tokens"] for item in evidence["executions"]),
-        "output_tokens": sum(
-            item["usage"]["output_tokens"] for item in evidence["executions"]
-        ),
-        "estimated_cost_usd": round(
-            sum(item["estimated_cost_usd"] for item in evidence["executions"]), 8
+        "output_tokens": sum(item["usage"]["output_tokens"] for item in evidence["executions"]),
+        "estimated_cost_usd": (
+            None
+            if any(item["estimated_cost_usd"] is None for item in evidence["executions"])
+            else round(sum(item["estimated_cost_usd"] for item in evidence["executions"]), 8)
         ),
     }
     _write_evidence(args.output, evidence)
@@ -462,7 +478,9 @@ async def run(args) -> int:
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", type=Path, default=DEFAULT_SUITE)
+    parser.add_argument("--mode", default="daily", help="Registered live Mode identifier")
+    parser.add_argument("--model", help="Model candidate, including a proposed fallback")
+    parser.add_argument("--suite", type=Path, help="Optional assertion of the declared suite path")
     parser.add_argument("--output", type=Path, default=ROOT / "evidence/gate-a/latest.json")
     parser.add_argument(
         "--baseline",

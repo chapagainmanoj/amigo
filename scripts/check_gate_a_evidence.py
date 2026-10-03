@@ -34,7 +34,6 @@ from src.evaluation.gate_a import (  # noqa: E402
     GATE_A_POLICY,
     GATE_A_PRICING,
     PROMPT_SOURCE,
-    THRESHOLDS,
     TIME_BEHAVIOR_SOURCES,
     TURN_CONTEXT_SOURCES,
     VALIDATOR_SOURCE,
@@ -45,11 +44,11 @@ from src.evaluation.gate_a import (  # noqa: E402
     file_set_hash,
     gate_a_state_errors,
     invalidating_inputs,
-    load_suite,
     score_turn,
     summarize_scores,
     tool_schema,
 )
+from src.telemetry import estimated_cost  # noqa: E402
 
 DEFAULT_SUITE = ROOT / "evals/gate_a/v1/cases.json"
 DEFAULT_EVIDENCE = ROOT / "evidence/gate-a/latest.json"
@@ -77,8 +76,14 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def current_fingerprints(root: Path, suite_path: Path) -> dict[str, str]:
+def current_fingerprints(
+    root: Path, suite_path: Path, mode_id="daily", *, mode_definition=None
+) -> dict[str, str]:
     """Recompute every invalidating fingerprint from the tree as it stands now."""
+    if mode_definition is None:
+        from src.agent.catalogue import build_registry
+
+        mode_definition = build_registry()[mode_id]
     return {
         "prompt_source_sha256": _sha256(root / PROMPT_SOURCE),
         "validator_source_sha256": _sha256(root / VALIDATOR_SOURCE),
@@ -88,9 +93,11 @@ def current_fingerprints(root: Path, suite_path: Path) -> dict[str, str]:
         "time_behavior_source_sha256": file_set_hash(
             [root / relative for relative in TIME_BEHAVIOR_SOURCES], root
         ),
-        "all_invalidating_inputs_sha256": file_set_hash(invalidating_inputs(root), root),
+        "all_invalidating_inputs_sha256": file_set_hash(
+            invalidating_inputs(root, mode_definition), root
+        ),
         "case_set_sha256": _sha256(suite_path),
-        "tool_schema_sha256": canonical_hash(tool_schema()),
+        "tool_schema_sha256": canonical_hash(tool_schema(mode_id, mode_definition=mode_definition)),
     }
 
 
@@ -121,9 +128,7 @@ def _validate_comparison(
     """Validate a separately hashed comparison against both run artifacts."""
     if not isinstance(comparison, dict):
         return ["Gate A baseline comparison must be a JSON object"]
-    if not isinstance(baseline_sha256, str) or not ARTIFACT_SHA_PATTERN.fullmatch(
-        baseline_sha256
-    ):
+    if not isinstance(baseline_sha256, str) or not ARTIFACT_SHA_PATTERN.fullmatch(baseline_sha256):
         return ["Gate A baseline artifact SHA-256 is required"]
     if not isinstance(candidate_sha256, str) or not ARTIFACT_SHA_PATTERN.fullmatch(
         candidate_sha256
@@ -182,9 +187,7 @@ def _validate_comparison(
         errors.append("human review must confirm the selected baseline is the last passing run")
     if review.get("tone_reviewed") is not True:
         errors.append("human review must explicitly review the subjective tone results")
-    expected_new_ids = [
-        pattern["id"] for pattern in expected["failure_patterns"]["new"]
-    ]
+    expected_new_ids = [pattern["id"] for pattern in expected["failure_patterns"]["new"]]
     if review.get("reviewed_new_failure_pattern_ids") != expected_new_ids:
         errors.append("human review must enumerate every new failure pattern exactly")
     if not isinstance(review.get("notes"), str) or not review["notes"].strip():
@@ -199,9 +202,7 @@ def comparison_reviewed_at(comparison: object) -> datetime | None:
     return _utc_timestamp(comparison["human_review"].get("reviewed_at"))
 
 
-def _validate_trace(
-    trace: object, *, known_tools: set[str], label: str, errors: list[str]
-) -> bool:
+def _validate_trace(trace: object, *, known_tools: set[str], label: str, errors: list[str]) -> bool:
     """Validate the ordered call/result stream emitted by pydantic-ai."""
     if not isinstance(trace, list):
         errors.append(f"{label}.trace must be a list of trace objects")
@@ -220,9 +221,7 @@ def _validate_trace(
             valid = False
             continue
         tool = part.get("tool")
-        tool_valid = (
-            isinstance(tool, str) and bool(tool.strip()) and tool in known_tools
-        )
+        tool_valid = isinstance(tool, str) and bool(tool.strip()) and tool in known_tools
         if not tool_valid:
             errors.append(f"{part_label}.tool must name a known Gate A Tool")
             valid = False
@@ -271,7 +270,7 @@ def _validate_trace(
 
 
 def _validate_execution_aggregates(
-    item: dict, *, label: str, errors: list[str]
+    item: dict, *, label: str, errors: list[str], genai_pricing=False
 ) -> dict | None:
     """Recompute execution usage and cost from its retained turn records."""
     turns = item.get("turns")
@@ -281,6 +280,7 @@ def _validate_execution_aggregates(
     output_tokens = 0
     turn_latency = 0.0
     valid = True
+    costs = []
     for index, turn in enumerate(turns, start=1):
         turn_label = f"{label} turn {index}"
         if not isinstance(turn, dict):
@@ -315,10 +315,7 @@ def _validate_execution_aggregates(
             continue
         trace = turn.get("trace")
         trace_call_count = (
-            sum(
-                isinstance(part, dict) and part.get("kind") == "tool_call"
-                for part in trace
-            )
+            sum(isinstance(part, dict) and part.get("kind") == "tool_call" for part in trace)
             if isinstance(trace, list)
             else None
         )
@@ -327,6 +324,29 @@ def _validate_execution_aggregates(
             valid = False
         input_tokens += usage["input_tokens"]
         output_tokens += usage["output_tokens"]
+        if genai_pricing:
+            model_names = item.get("observed_model_names")
+            model = (
+                model_names[0] if isinstance(model_names, list) and len(model_names) == 1 else None
+            )
+            # The same framework usage object used by the runner, including cache token usage.
+            from pydantic_ai.usage import RunUsage
+
+            turn_cost = estimated_cost(
+                RunUsage(
+                    input_tokens=usage["input_tokens"],
+                    output_tokens=usage["output_tokens"],
+                    cache_read_tokens=usage["cache_read_tokens"],
+                    cache_write_tokens=usage["cache_write_tokens"],
+                ),
+                model,
+            )
+            if turn.get("estimated_cost_usd") != turn_cost:
+                errors.append(
+                    f"{turn_label}.estimated_cost_usd does not match observed model/usage"
+                )
+                valid = False
+            costs.append(turn_cost)
 
     aggregate_latency = item.get("latency_ms")
     if (
@@ -358,7 +378,9 @@ def _validate_execution_aggregates(
         8,
     )
     cost = item.get("estimated_cost_usd")
-    if not isinstance(cost, (int, float)) or isinstance(cost, bool) or cost != expected_cost:
+    if genai_pricing:
+        expected_cost = None if any(value is None for value in costs) else round(sum(costs), 8)
+    if isinstance(cost, bool) or cost != expected_cost:
         errors.append(f"{label}.estimated_cost_usd does not match its turn usage")
         valid = False
     if not valid:
@@ -395,9 +417,8 @@ def _derive_execution_metrics(
         if recorded.get("message") != authored.message:
             errors.append(f"{turn_label}.message does not match the authored case")
         before_state_hash = recorded.get("before_state_hash")
-        before_state_valid = (
-            isinstance(before_state_hash, str)
-            and bool(ARTIFACT_SHA_PATTERN.fullmatch(before_state_hash))
+        before_state_valid = isinstance(before_state_hash, str) and bool(
+            ARTIFACT_SHA_PATTERN.fullmatch(before_state_hash)
         )
         if not before_state_valid:
             errors.append(f"{turn_label}.before_state_hash must be a lowercase SHA-256 digest")
@@ -425,24 +446,18 @@ def _derive_execution_metrics(
         if not score_valid:
             errors.append(f"{turn_label}.score does not match the scorer contract")
         elif any(
-            not isinstance(recorded_score.get(field), bool)
-            for field in TURN_SCORE_BOOLEAN_FIELDS
+            not isinstance(recorded_score.get(field), bool) for field in TURN_SCORE_BOOLEAN_FIELDS
         ):
             errors.append(f"{turn_label}.score boolean results are invalid")
             score_valid = False
         elif (
             not isinstance(recorded_score.get("tool_calls"), dict)
             or any(
-                not isinstance(tool, str)
-                or type(count) is not int
-                or count < 0
+                not isinstance(tool, str) or type(count) is not int or count < 0
                 for tool, count in recorded_score.get("tool_calls", {}).items()
             )
             or not isinstance(recorded_score.get("failures"), list)
-            or any(
-                not isinstance(failure, str)
-                for failure in recorded_score.get("failures", [])
-            )
+            or any(not isinstance(failure, str) for failure in recorded_score.get("failures", []))
         ):
             errors.append(f"{turn_label}.score trace summary is invalid")
             score_valid = False
@@ -483,6 +498,9 @@ def check_evidence(
     review_window_end: datetime | None = None,
     now: datetime | None = None,
     _historical_baseline: bool = False,
+    mode_id: str = "daily",
+    model_name: str | None = None,
+    mode_definition=None,
 ) -> list[str]:
     """Return every reason this evidence cannot stand for ``revision``; empty means it can."""
     errors: list[str] = []
@@ -491,9 +509,15 @@ def check_evidence(
     if not isinstance(revision, str) or not REVISION_PATTERN.fullmatch(revision):
         errors.append("revision must be a full lowercase Git commit SHA")
 
-    suite = load_suite(suite_path)
+    from dataclasses import asdict
+
+    from src.agent.catalogue import build_registry
+    from src.evaluation.gate_a import load_mode_suite
+
+    mode = mode_definition if mode_definition is not None else build_registry()[mode_id]
+    suite = load_mode_suite(suite_path, mode_id)
     cases_by_id = {case.id: case for case in suite.cases}
-    current_tool_schema = tool_schema()
+    current_tool_schema = tool_schema(mode_id, mode_definition=mode)
     known_tools = {item["name"] for item in current_tool_schema}
     if evidence.get("suite_id") != suite.suite_id:
         errors.append(f"evidence.suite_id must be {suite.suite_id}")
@@ -513,8 +537,17 @@ def check_evidence(
         or request_interval < 0
     ):
         errors.append("evidence.minimum_provider_request_interval_seconds is invalid")
-    if evidence.get("pricing") != GATE_A_PRICING:
-        errors.append("evidence.pricing does not match the approved pricing snapshot")
+    pricing = evidence.get("pricing")
+    genai_pricing = isinstance(pricing, dict) and pricing.get("source") == "genai-prices"
+    if genai_pricing:
+        if not isinstance(pricing.get("version"), str) or not pricing["version"]:
+            errors.append("evidence.pricing must record genai-prices version")
+        elif (
+            not _historical_baseline and pricing["version"] != dependency_versions()["genai-prices"]
+        ):
+            errors.append("evidence pricing dependency changed")
+    elif mode_id != "daily" or pricing != GATE_A_PRICING:
+        errors.append("evidence.pricing requires observed-model genai-prices accounting")
     if evidence.get("policy") != GATE_A_POLICY:
         errors.append("evidence.policy does not match the declared-run retry policy")
     if evidence.get("repetitions") is not REQUIRED_REPETITIONS:
@@ -547,9 +580,7 @@ def check_evidence(
         executions = []
     expected_executions = len(expected_ids) * REQUIRED_REPETITIONS
     if len(executions) != expected_executions:
-        errors.append(
-            f"expected {expected_executions} executions, found {len(executions)}"
-        )
+        errors.append(f"expected {expected_executions} executions, found {len(executions)}")
     # Repetitions are checked by identity, not by count: three records of repetition 1 is not
     # "every case three times", and a count alone cannot tell the difference.
     repetitions_by_case: dict[object, set] = defaultdict(set)
@@ -566,9 +597,7 @@ def check_evidence(
             errors.append("every execution must record a string case_id")
         repetition = item.get("repetition")
         if type(repetition) is not int or repetition not in range(1, REQUIRED_REPETITIONS + 1):
-            errors.append(
-                f"{case_id} repetition must be a non-boolean integer from 1 through 3"
-            )
+            errors.append(f"{case_id} repetition must be a non-boolean integer from 1 through 3")
         elif isinstance(case_id, str):
             execution_key = (case_id, repetition)
             if execution_key in execution_keys:
@@ -578,8 +607,7 @@ def check_evidence(
         # An allowlist, not a denylist: an unrecognised or absent status is not a success.
         if item.get("status") != "completed":
             errors.append(
-                f"{item.get('case_id')} repetition {item.get('repetition')} "
-                "did not complete"
+                f"{item.get('case_id')} repetition {item.get('repetition')} did not complete"
             )
         if not isinstance(item.get("passed"), bool):
             errors.append(
@@ -618,16 +646,14 @@ def check_evidence(
                 if isinstance(item.get("passed"), bool) and item["passed"] is not all(
                     derived_metrics.values()
                 ):
-                    errors.append(
-                        f"{label} passed result contradicts its derived metric results"
-                    )
+                    errors.append(f"{label} passed result contradicts its derived metric results")
             elif isinstance(item.get("passed"), bool) and item["passed"] is not all(
                 metric_results.values() if isinstance(metric_results, dict) else ()
             ):
-                errors.append(
-                    f"{label} passed result contradicts its recorded metric results"
-                )
-        aggregate = _validate_execution_aggregates(item, label=label, errors=errors)
+                errors.append(f"{label} passed result contradicts its recorded metric results")
+        aggregate = _validate_execution_aggregates(
+            item, label=label, errors=errors, genai_pricing=genai_pricing
+        )
         if aggregate is not None:
             run_aggregates.append(aggregate)
         model_names = item.get("observed_model_names")
@@ -653,6 +679,21 @@ def check_evidence(
     if not isinstance(release_inputs, dict):
         errors.append("evidence.release_inputs is required")
         release_inputs = {}
+    if release_inputs.get("mode_id", "daily") != mode_id:
+        errors.append("evidence.release_inputs.mode_id does not match the evaluated Mode")
+    if not _historical_baseline and (
+        "model_policy" in release_inputs and release_inputs["model_policy"] != asdict(mode.model)
+    ):
+        errors.append("evidence.release_inputs.model_policy does not match the declared policy")
+    if mode_id != "daily" and "model_policy" not in release_inputs:
+        errors.append("per-Mode evidence must record model_policy")
+    if not _historical_baseline and "mode_instructions_sha256" in release_inputs:
+        from src.agent.modes import PLACEHOLDER_FACTS
+
+        if release_inputs["mode_instructions_sha256"] != canonical_hash(
+            mode.instructions(PLACEHOLDER_FACTS)
+        ):
+            errors.append("evidence Mode instructions changed since the declared run")
     if release_inputs.get("git_revision") != revision:
         errors.append(
             "the declared run was executed against "
@@ -663,20 +704,18 @@ def check_evidence(
     empty_diff_sha256 = hashlib.sha256(b"").hexdigest()
     if release_inputs.get("working_tree_diff_sha256") != empty_diff_sha256:
         errors.append("evidence.release_inputs.working_tree_diff_sha256 must prove a clean tree")
-    if not _historical_baseline and release_inputs.get("model") != settings.default_model:
+    expected_model = model_name or mode.model.primary or settings.default_model
+    if not _historical_baseline and release_inputs.get("model") != expected_model:
         errors.append(
             f"the declared run used model {release_inputs.get('model')!r}, "
-            f"not the configured {settings.default_model!r}"
+            f"not the evaluated {expected_model!r}"
         )
     elif _historical_baseline and (
-        not isinstance(release_inputs.get("model"), str)
-        or not release_inputs["model"].strip()
+        not isinstance(release_inputs.get("model"), str) or not release_inputs["model"].strip()
     ):
         errors.append("historical baseline release_inputs.model is required")
     expected_provider_model = (
-        f"google:{settings.default_model}"
-        if settings.default_model.startswith("gemini-")
-        else settings.default_model
+        f"google:{expected_model}" if expected_model.startswith("gemini-") else expected_model
     )
     provider_model = release_inputs.get("provider_model")
     if _historical_baseline:
@@ -684,7 +723,9 @@ def check_evidence(
             errors.append("historical baseline release_inputs.provider_model is required")
     elif provider_model != expected_provider_model:
         errors.append("evidence.release_inputs.provider_model does not match the release model")
-    if release_inputs.get("model_settings") != {}:
+    if not _historical_baseline and release_inputs.get("model_settings") != (
+        mode.model.settings or {}
+    ):
         errors.append("evidence.release_inputs.model_settings must match the runner settings")
     if (
         type(release_inputs.get("case_set_version")) is not int
@@ -710,10 +751,7 @@ def check_evidence(
     observed = release_inputs.get("observed_model_names")
     if not isinstance(observed, list) or not observed:
         errors.append("evidence.release_inputs.observed_model_names is required")
-    elif any(
-        not isinstance(name, str) or not name or name != name.strip()
-        for name in observed
-    ):
+    elif any(not isinstance(name, str) or not name or name != name.strip() for name in observed):
         errors.append(
             "evidence.release_inputs.observed_model_names must contain only "
             "nonempty trimmed strings"
@@ -746,7 +784,7 @@ def check_evidence(
                 "Gate A must run again"
             )
 
-    fingerprints = current_fingerprints(root, suite_path)
+    fingerprints = current_fingerprints(root, suite_path, mode_id, mode_definition=mode)
     for name, expected in fingerprints.items():
         recorded = release_inputs.get(name)
         if _historical_baseline:
@@ -763,8 +801,10 @@ def check_evidence(
         "executions": len(executions),
         "input_tokens": sum(item["input_tokens"] for item in run_aggregates),
         "output_tokens": sum(item["output_tokens"] for item in run_aggregates),
-        "estimated_cost_usd": round(
-            sum(item["estimated_cost_usd"] for item in run_aggregates), 8
+        "estimated_cost_usd": (
+            None
+            if any(item["estimated_cost_usd"] is None for item in run_aggregates)
+            else round(sum(item["estimated_cost_usd"] for item in run_aggregates), 8)
         ),
     }
     totals_valid = (
@@ -774,22 +814,23 @@ def check_evidence(
             type(totals.get(field)) is int and totals[field] >= 0
             for field in ("executions", "input_tokens", "output_tokens")
         )
-        and isinstance(totals.get("estimated_cost_usd"), (int, float))
-        and not isinstance(totals.get("estimated_cost_usd"), bool)
-        and totals["estimated_cost_usd"] >= 0
+        and (
+            (genai_pricing and totals.get("estimated_cost_usd") is None)
+            or (
+                isinstance(totals.get("estimated_cost_usd"), (int, float))
+                and not isinstance(totals.get("estimated_cost_usd"), bool)
+                and totals["estimated_cost_usd"] >= 0
+            )
+        )
     )
-    if (
-        len(run_aggregates) != len(executions)
-        or not totals_valid
-        or totals != expected_totals
-    ):
+    if len(run_aggregates) != len(executions) or not totals_valid or totals != expected_totals:
         errors.append("evidence.totals does not match the retained executions")
 
     scores = evidence.get("scores")
     if not isinstance(scores, dict):
         errors.append("evidence.scores is required")
         scores = {}
-    for metric in set(scores) - set(THRESHOLDS):
+    for metric in set(scores) - set(suite.thresholds):
         errors.append(f"scores.{metric} is not an approved Gate A metric")
 
     # The recorded summary is derived, not trusted: a `passed` flag someone typed is no evidence.
@@ -798,12 +839,12 @@ def check_evidence(
         metric
         for item in scored
         for metric in item["metric_results"]
-        if metric not in THRESHOLDS
+        if metric not in suite.thresholds
     }
     if unknown:
         errors.append(f"executions record unapproved metrics: {sorted(unknown)}")
     elif not errors or scored:
-        recomputed = summarize_scores(scored, THRESHOLDS)
+        recomputed = summarize_scores(scored, suite.thresholds)
         if scores != recomputed:
             errors.append("evidence.scores does not match the recorded executions")
         derived_pass = all(result["passed"] for result in recomputed.values())
@@ -811,14 +852,13 @@ def check_evidence(
             "passed" if derived_pass else "failed"
         ):
             errors.append("evidence status does not match the recomputed category scores")
-        for metric, threshold in THRESHOLDS.items():
+        for metric, threshold in suite.thresholds.items():
             result = recomputed[metric]
             if not result["observations"]:
                 errors.append(f"scores.{metric} has no observations")
             elif result["score"] < threshold:
                 errors.append(
-                    f"scores.{metric} scored {result['score']} "
-                    f"below the approved {threshold}"
+                    f"scores.{metric} scored {result['score']} below the approved {threshold}"
                 )
             if not result["passed"]:
                 errors.append(f"scores.{metric} did not meet its approved threshold")
@@ -843,6 +883,8 @@ def check_evidence(
                 revision=baseline_revision,
                 root=root,
                 suite_path=suite_path,
+                mode_id=mode_id,
+                mode_definition=mode,
                 now=now,
                 _historical_baseline=True,
             ):
@@ -887,6 +929,8 @@ def main() -> int:
         help="Generated candidate/baseline comparison with completed human review",
     )
     parser.add_argument("--revision", required=True, help="The exact release Git SHA")
+    parser.add_argument("--mode", default="daily")
+    parser.add_argument("--model", help="Evaluated candidate model; defaults to the Mode primary")
     parser.add_argument("--suite", type=Path, default=DEFAULT_SUITE)
     args = parser.parse_args()
 
@@ -925,6 +969,8 @@ def main() -> int:
         candidate_sha256=hashlib.sha256(evidence_bytes).hexdigest(),
         baseline_sha256=hashlib.sha256(baseline_bytes).hexdigest(),
         comparison=comparison,
+        mode_id=args.mode,
+        model_name=args.model,
     )
     if errors:
         print(f"FAIL: the declared Gate A run cannot stand for {args.revision}")

@@ -3,13 +3,13 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from src.agent.agent import (
-    AgentDeps,
+from src.memory.memory_store import InMemoryStore
+from src.tools.context import ToolContext
+from src.tools.toolsets import (
     apply_later,
     create_task,
     schedule_reminder,
 )
-from src.memory.memory_store import InMemoryStore
 from src.utils import Clock
 from tests.fakes import FakeChannel, FakeScheduler
 
@@ -36,7 +36,7 @@ async def _deps():
         },
     )
     session = await store.create_session(user["user_id"])
-    deps = AgentDeps(
+    deps = ToolContext(
         store=store,
         scheduler=FakeScheduler(),
         channel=FakeChannel(),

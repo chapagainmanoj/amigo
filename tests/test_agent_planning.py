@@ -8,8 +8,10 @@ from datetime import timedelta
 
 from pydantic_ai.models.test import TestModel
 
-from src.agent.agent import AgentDeps, amigo_agent, handle_message
+from src.agent.runtime import default_runtime
 from src.commands.base import CommandContext
+from src.tools.context import ToolContext
+from src.turns import default_turn_orchestrator
 from src.utils import now_in_tz
 from tests.fakes import FakeChannel, FakeScheduler, FakeStore
 
@@ -20,7 +22,7 @@ def _future_hhmm(timezone: str) -> str:
 
 
 def _make_deps(store, scheduler, channel, user, session_id="session-1"):
-    return AgentDeps(
+    return ToolContext(
         store=store,
         scheduler=scheduler,
         channel=channel,
@@ -47,8 +49,8 @@ async def test_handle_message_stores_user_and_assistant_messages():
 
     deps = _make_deps(store, scheduler, channel, user, session["session_id"])
 
-    with amigo_agent.override(model=TestModel()):
-        response = await handle_message(deps, "hello")
+    async with default_runtime.override(model=TestModel()):
+        response = await default_turn_orchestrator.handle_turn(deps, "hello")
 
     assert isinstance(response, str)
     assert len(response) > 0
@@ -80,8 +82,8 @@ async def test_handle_message_returns_error_on_failure():
         async def request(self, *args, **kwargs):
             raise RuntimeError("LLM down")
 
-    with amigo_agent.override(model=FailingModel()):
-        response = await handle_message(deps, "hello")
+    async with default_runtime.override(model=FailingModel()):
+        response = await default_turn_orchestrator.handle_turn(deps, "hello")
 
     assert "trouble" in response.lower() or "sorry" in response.lower()
 

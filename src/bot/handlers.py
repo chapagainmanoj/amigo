@@ -2,6 +2,7 @@
 
 import logging
 
+from src.agent.runtime import ModeRuntime
 from src.bot.reminder_actions import ReminderActions
 from src.bot.turns import TurnProcessor
 from src.channels.base import MessageChannel
@@ -22,6 +23,7 @@ class BotHandlers:
         store: MemoryStore,
         session_mgr: SessionManager,
         reminder_scheduler: ReminderScheduler,
+        mode_runtime: ModeRuntime | None = None,
     ):
         self.channel = channel
         self.store = store
@@ -33,6 +35,7 @@ class BotHandlers:
             store=store,
             session_mgr=session_mgr,
             scheduler=reminder_scheduler,
+            mode_runtime=mode_runtime,
         )
 
     async def handle_message(self, chat_id: int, text: str, *, update_id: int = 0) -> None:

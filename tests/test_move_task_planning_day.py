@@ -5,10 +5,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agent.agent import move_task_planning_day
 from src.commands.base import CommandContext, IdempotencyConflictError, StaleVersionError
 from src.commands.tasks import MoveTaskPlanningDayCommand
 from src.memory.memory_store import InMemoryStore
+from src.tools.toolsets import move_task_planning_day
 from tests.fakes import FakeStore
 from tests.test_agent_lifecycle_tools import _deps
 

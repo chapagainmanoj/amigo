@@ -20,6 +20,33 @@ timezone are part of the suite.
 
 ## Commands
 
+The runner accepts `--mode <registered-live-id>` and loads that Mode's declared suite. `--model`
+selects an explicit candidate (including a proposed fallback), without runtime fallback. Evidence
+records the Mode id, declared model policy, selected model, observed model names, settings, and
+dependency versions. Daily still has no fallback and keeps its existing 60-case contract. Other
+Modes use the shared case/scoring format with their own coverage and thresholds.
+
+Run every live Mode's scripted regression subset, without credentials or provider calls:
+
+```bash
+python scripts/run_mode_deterministic_eval.py
+```
+
+Each suite has a neighboring `deterministic.json` linking authored case ids to scripted responses.
+CI runs all live subsets on every pull request (a superset of each Mode's invalidating-input paths).
+Scripted passage never counts as a full Gate A/provider run. Every live fallback must link a
+complete passing artifact for the same Mode/model in `evals/fallback-evidence.json`, with its
+SHA-256. Registration verifies the artifact and re-scores retained cases/usage/aggregates; a bare
+`passed` flag is insufficient. It also checks current source and SDK fingerprints, instructions,
+Tool order/schema, and context-provider order. Only declaration catalogue/manifest bytes are
+excluded from the fallback source fingerprint so adding the approved fallback can activate it.
+No Daily fallback is declared in the manifest.
+
+New run artifacts price provider-reported models with `genai-prices`; an unknown price is `null`
+at Turn, execution, and run levels. The checker independently recomputes prices including cache
+token usage and verifies the pricing dependency version. Legacy Daily artifacts with the approved
+fixed pricing snapshot remain readable; that snapshot cannot price another Mode's evidence.
+
 Validate the fixture schema, composition, and thresholds without contacting Gemini:
 
 ```bash

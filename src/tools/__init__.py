@@ -1,7 +1,7 @@
-"""Application tools that execute side effects for the agent.
+"""Application Tools: every side effect an agent or button callback can cause.
 
-Individual tool classes are kept for ReminderActions callback handling.
-The agent calls tools via Pydantic AI's native tool dispatch (ADR 0002).
+Modes call Tools through the Toolsets in `src.tools.toolsets`. The individual Tool classes remain
+for the Telegram Reminder button callbacks in ReminderActions.
 """
 
 from src.tools.reminders import CancelRemindersTool, ScheduleReminderTool

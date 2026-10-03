@@ -44,6 +44,10 @@ clarification, resulting state, factual behavior, and response properties rather
 
 ## Comments
 
+- 2026-10-03 — Deterministic CI criterion implemented with modular-modes issue 02: the shared
+  `scripts/run_mode_deterministic_eval.py` runs all live Modes' declared scripted subsets in CI.
+  This is regression coverage only; the full release-model/provider run remains separate evidence.
+
 ### 2026-08-31 — Claimed
 
 Implementation started after the declared dependencies closed. The work uses the approved

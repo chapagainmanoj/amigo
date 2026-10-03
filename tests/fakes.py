@@ -810,10 +810,24 @@ class FakeStore:
         raise ValueError("Reminder not found")
 
     async def get_pending_reminders(self, user_id: str) -> list[dict]:
-        return [
-            r for r in self.reminders
-            if r["user_id"] == user_id and r["status"] == "pending"
-        ]
+        # Mirrors the production `tasks(title, category)` join; the agent's Turn Context reads it.
+        results = []
+        for reminder in self.reminders:
+            if reminder["user_id"] == user_id and reminder["status"] == "pending":
+                task = next(
+                    (t for t in self.tasks if t["task_id"] == reminder["task_id"]), {}
+                )
+                results.append(
+                    {
+                        **reminder,
+                        "tasks": {
+                            "title": task.get("title", ""),
+                            "category": task.get("category", ""),
+                        },
+                    }
+                )
+        results.sort(key=lambda item: item["scheduled_time"])
+        return results
 
     async def get_reminder_with_task(self, reminder_id: str, user_id: str) -> dict | None:
         for reminder in self.reminders:

@@ -30,7 +30,13 @@ CATEGORY_COUNTS = {
 # presented as evidence for a tree it did not execute against.
 PROMPT_SOURCE = "src/agent/prompts.py"
 VALIDATOR_SOURCE = "src/evaluation/gate_a.py"
-TURN_CONTEXT_SOURCES = ("src/agent/agent.py", "src/memory/context.py")
+TURN_CONTEXT_SOURCES = (
+    "src/agent/catalogue.py",
+    "src/agent/context.py",
+    "src/agent/runtime.py",
+    "src/agent/safety.py",
+    "src/memory/context.py",
+)
 TIME_BEHAVIOR_SOURCES = (
     "src/commands/later.py",
     "src/commands/reminders.py",
@@ -41,18 +47,24 @@ TIME_BEHAVIOR_SOURCES = (
 # transitive `src` import closure and requires it to equal the listed paths below, so a new import
 # cannot quietly escape the fingerprint the way delegated validators once did.
 GATE_A_ENTRY_MODULES = (
-    "src.agent.agent",
     "src.commands.base",
     "src.commands.tasks",
     "src.evaluation.gate_a",
     "src.memory.memory_store",
     "src.scheduler.reminders",
+    "src.turns",
 )
 INVALIDATING_INPUT_PATHS = (
     "scripts/run_gate_a_eval.py",
     "src/activation.py",
-    "src/agent/agent.py",
+    "src/agent/catalogue.py",
+    "src/agent/context.py",
+    "src/agent/modes.py",
+    "src/agent/policies.py",
     "src/agent/prompts.py",
+    "src/agent/registry.py",
+    "src/agent/runtime.py",
+    "src/agent/safety.py",
     "src/bot/keyboards.py",
     "src/channels/base.py",
     "src/commands/base.py",
@@ -63,6 +75,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/dashboard_snapshot.py",
     "src/db/supabase.py",
     "src/evaluation/gate_a.py",
+    "src/evaluation/model_policy.py",
     "src/memory/activation.py",
     "src/memory/context.py",
     "src/memory/later.py",
@@ -74,16 +87,23 @@ INVALIDATING_INPUT_PATHS = (
     "src/schema.py",
     "src/scheduler/reminders.py",
     "src/time_resolution.py",
+    "src/tools/context.py",
     "src/tools/reminders.py",
     "src/tools/tasks.py",
+    "src/tools/toolsets.py",
+    "src/tools/observed.py",
+    "src/telemetry.py",
+    "src/turns.py",
     "src/utils/__init__.py",
 )
 
 
-def tool_schema() -> list[dict]:
-    """The Tool name, description, parameters, and return schema the model is given."""
-    from src.agent.agent import amigo_agent
+def tool_schema(mode_id: str = "daily", *, mode_definition=None) -> list[dict]:
+    """The Tool name, description, parameters, and return schema the Daily Mode offers the model."""
+    from src.agent.catalogue import build_registry
 
+    mode = mode_definition if mode_definition is not None else build_registry()[mode_id]
+    tools = {name: tool for toolset in mode.toolsets for name, tool in toolset.tools.items()}
     return [
         {
             "name": name,
@@ -91,7 +111,7 @@ def tool_schema() -> list[dict]:
             "parameters": tool.function_schema.json_schema,
             "return_schema": tool.function_schema.return_schema,
         }
-        for name, tool in sorted(amigo_agent._function_toolset.tools.items())
+        for name, tool in sorted(tools.items())
     ]
 
 
@@ -101,15 +121,26 @@ INVALIDATING_DISTRIBUTIONS = (
     "pydantic-ai-slim",
     "google-genai",
     "pydantic",
+    "genai-prices",
 )
 
 
-def invalidating_inputs(root: Path) -> list[Path]:
+def invalidating_inputs(root: Path, mode_definition=None) -> list[Path]:
     """Every file whose contents invalidate a previously declared Gate A run."""
-    return [
+    paths = [
         *sorted((root / "migrations").glob("*.sql")),
         *(root / relative for relative in INVALIDATING_INPUT_PATHS),
     ]
+    if mode_definition is not None:
+        paths.extend(root / path for path in mode_definition.invalidating_inputs)
+        paths.extend(
+            [
+                root / mode_definition.eval_suite,
+                (root / mode_definition.eval_suite).with_name("deterministic.json"),
+                root / "evals/fallback-evidence.json",
+            ]
+        )
+    return sorted(set(paths))
 
 
 # Acceptance criterion 1 of issue 14 names the behaviour families the non-sensitive suite must
@@ -190,8 +221,8 @@ class ExpectedState(BaseModel):
 
     task_count: int | None = Field(default=None, ge=0)
     task_titles_contain: list[str] = Field(default_factory=list)
-    task_statuses: dict[str, Literal["pending", "completed", "skipped", "cancelled"]] = (
-        Field(default_factory=dict)
+    task_statuses: dict[str, Literal["pending", "completed", "skipped", "cancelled"]] = Field(
+        default_factory=dict
     )
     task_due_dates: dict[str, str | None] = Field(default_factory=dict)
     pending_reminder_count: int | None = Field(default=None, ge=0)
@@ -310,6 +341,37 @@ def load_suite(path: Path) -> GateASuite:
     return GateASuite.model_validate_json(path.read_text())
 
 
+class ModeEvalSuite(BaseModel):
+    """Shared case/scoring format; each Mode authors its own coverage and thresholds."""
+
+    model_config = ConfigDict(extra="forbid")
+    suite_id: str = Field(min_length=1)
+    version: int = Field(ge=1)
+    fixed_utc: str
+    timezone: str
+    repetitions: Literal[3]
+    thresholds: dict[str, float]
+    cases: list[EvalCase] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_contract(self):
+        ids = [case.id for case in self.cases]
+        if len(set(ids)) != len(ids):
+            raise ValueError("Mode evaluation case IDs must be unique")
+        if not self.thresholds or any(not 0 < value <= 1 for value in self.thresholds.values()):
+            raise ValueError("Mode thresholds must be nonempty probabilities")
+        if any(set(case.metrics) - set(self.thresholds) for case in self.cases):
+            raise ValueError("Mode cases name metrics with no declared threshold")
+        return self
+
+
+def load_mode_suite(path: Path, mode_id: str) -> GateASuite | ModeEvalSuite:
+    """Daily keeps its exact approved contract; other Modes use their declared contract."""
+    if mode_id == "daily":
+        return load_suite(path)
+    return ModeEvalSuite.model_validate_json(path.read_text())
+
+
 def canonical_hash(value) -> str:
     """Return a stable SHA-256 for JSON-compatible evidence inputs."""
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
@@ -322,12 +384,8 @@ def gate_a_state_hash(
     """Hash every retained domain field, including identity and alias relationships."""
     stable = {
         "tasks": sorted(tasks, key=lambda item: item["task_id"]),
-        "pending_reminders": sorted(
-            pending_reminders, key=lambda item: item["reminder_id"]
-        ),
-        "aliases": {
-            alias: task["task_id"] for alias, task in sorted(aliases.items())
-        },
+        "pending_reminders": sorted(pending_reminders, key=lambda item: item["reminder_id"]),
+        "aliases": {alias: task["task_id"] for alias, task in sorted(aliases.items())},
     }
     return canonical_hash(stable)
 
@@ -359,9 +417,7 @@ def build_gate_a_state_snapshot(
         if reminder["status"] in STATE_REMINDER_STATUSES
     ]
     aliases = {
-        alias: next(
-            task for task in retained_tasks if task["task_id"] == task_id
-        )
+        alias: next(task for task in retained_tasks if task["task_id"] == task_id)
         for alias, task_id in alias_task_ids.items()
     }
     return {
@@ -396,10 +452,7 @@ def gate_a_state_errors(state: object) -> list[str]:
         if not isinstance(task.get("title"), str) or not task["title"].strip():
             errors.append(f"tasks[{index}].title must be nonempty")
             valid_tasks = False
-        if (
-            not isinstance(task.get("status"), str)
-            or task["status"] not in STATE_TASK_STATUSES
-        ):
+        if not isinstance(task.get("status"), str) or task["status"] not in STATE_TASK_STATUSES:
             errors.append(f"tasks[{index}].status is invalid")
             valid_tasks = False
         if task.get("due_date") is not None and not isinstance(task.get("due_date"), str):
@@ -426,9 +479,7 @@ def gate_a_state_errors(state: object) -> list[str]:
             errors.append(f"pending_reminders[{index}] has an invalid shape")
             valid_reminders = False
             continue
-        if not isinstance(reminder.get("reminder_id"), str) or not reminder[
-            "reminder_id"
-        ].strip():
+        if not isinstance(reminder.get("reminder_id"), str) or not reminder["reminder_id"].strip():
             errors.append(f"pending_reminders[{index}].reminder_id must be nonempty")
             valid_reminders = False
         if not isinstance(reminder.get("task_id"), str) or not reminder["task_id"].strip():
@@ -443,9 +494,10 @@ def gate_a_state_errors(state: object) -> list[str]:
         ):
             errors.append(f"pending_reminders[{index}].status is invalid")
             valid_reminders = False
-        if not isinstance(reminder.get("scheduled_time"), str) or not reminder[
-            "scheduled_time"
-        ].strip():
+        if (
+            not isinstance(reminder.get("scheduled_time"), str)
+            or not reminder["scheduled_time"].strip()
+        ):
             errors.append(f"pending_reminders[{index}].scheduled_time must be nonempty")
             valid_reminders = False
     reminder_ids = [
@@ -512,8 +564,10 @@ def observed_model_names(messages) -> list[str]:
 
     seen = []
     for message in messages:
-        if isinstance(message, ModelResponse) and message.model_name and (
-            message.model_name not in seen
+        if (
+            isinstance(message, ModelResponse)
+            and message.model_name
+            and (message.model_name not in seen)
         ):
             seen.append(message.model_name)
     return seen
@@ -612,9 +666,7 @@ def score_turn(
     for tool, expectation in turn.expected_tools.items():
         if isinstance(expectation, int):
             if calls[tool] != expectation:
-                tool_failures.append(
-                    f"expected {tool} x{expectation}, observed x{calls[tool]}"
-                )
+                tool_failures.append(f"expected {tool} x{expectation}, observed x{calls[tool]}")
         elif not expectation.minimum <= calls[tool] <= expectation.maximum:
             tool_failures.append(
                 f"expected {tool} x{expectation.minimum}..{expectation.maximum}, "
@@ -639,9 +691,7 @@ def score_turn(
     for alias, expected_status in state_expectation.task_statuses.items():
         actual = aliases.get(alias, {}).get("status")
         if actual != expected_status:
-            state_failures.append(
-                f"{alias} status expected {expected_status}, observed {actual}"
-            )
+            state_failures.append(f"{alias} status expected {expected_status}, observed {actual}")
     for alias, expected_due_date in state_expectation.task_due_dates.items():
         actual = aliases.get(alias, {}).get("due_date")
         if actual != expected_due_date:
@@ -690,9 +740,7 @@ def score_turn(
     ]
     no_unnecessary_mutation_passed = not any(
         calls[tool] for tool in turn.prohibited_tools if tool in MUTATING_TOOLS
-    ) and not (
-        state_expectation.unchanged and state["state_hash"] != before_state_hash
-    )
+    ) and not (state_expectation.unchanged and state["state_hash"] != before_state_hash)
 
     return {
         "passed": not failures,
@@ -711,6 +759,7 @@ def score_turn(
 
 def execution_metric_results(case: EvalCase, turn_scores: list[dict]) -> dict[str, bool]:
     """Derive one execution's approved metrics from its complete per-turn score evidence."""
+
     def all_turns(key: str) -> bool:
         return all(result[key] for result in turn_scores)
 
@@ -826,9 +875,7 @@ def build_baseline_comparison(
         candidate_score = (
             candidate_metric.get("score") if isinstance(candidate_metric, dict) else None
         )
-        baseline_score = (
-            baseline_metric.get("score") if isinstance(baseline_metric, dict) else None
-        )
+        baseline_score = baseline_metric.get("score") if isinstance(baseline_metric, dict) else None
         delta = (
             candidate_score - baseline_score
             if isinstance(candidate_score, (int, float))
@@ -848,9 +895,7 @@ def build_baseline_comparison(
     candidate_patterns = execution_failure_patterns(candidate.get("executions") or [])
     baseline_ids = {pattern["id"] for pattern in baseline_patterns}
     candidate_ids = {pattern["id"] for pattern in candidate_patterns}
-    new_patterns = [
-        pattern for pattern in candidate_patterns if pattern["id"] not in baseline_ids
-    ]
+    new_patterns = [pattern for pattern in candidate_patterns if pattern["id"] not in baseline_ids]
     resolved_patterns = [
         pattern for pattern in baseline_patterns if pattern["id"] not in candidate_ids
     ]

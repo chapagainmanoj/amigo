@@ -4,12 +4,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from src.agent.agent import (
-    AgentDeps,
+from src.time_resolution import resolve_reminder_time
+from src.tools.context import ToolContext
+from src.tools.toolsets import (
     _resolution_block_message,
     _schedule_resolved_reminder,
 )
-from src.time_resolution import resolve_reminder_time
 from src.utils import Clock
 from tests.fakes import FakeChannel, FakeScheduler, FakeStore
 
@@ -165,7 +165,7 @@ async def test_confirmation_boundary_prevents_mutation_and_saved_utc_stays_ancho
         "Asia/Kathmandu",
         clock=FixedClock(datetime(2026, 8, 31, 12, 0)),
     )
-    deps = AgentDeps(
+    deps = ToolContext(
         store=store,
         scheduler=FakeScheduler(),
         channel=FakeChannel(),

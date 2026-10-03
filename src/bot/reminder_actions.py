@@ -2,7 +2,6 @@
 
 import logging
 
-from src.agent.agent import parse_time_expression
 from src.channels.base import MessageChannel
 from src.commands.base import CommandContext, InvalidTransitionError
 from src.commands.later import ApplyLaterCommand
@@ -10,6 +9,7 @@ from src.memory.store import MemoryStore
 from src.scheduler.reminders import ReminderScheduler
 from src.tools.reminders import CancelRemindersTool, ScheduleReminderTool
 from src.tools.tasks import UpdateTaskStatusTool
+from src.tools.toolsets import parse_time_expression
 
 logger = logging.getLogger(__name__)
 

@@ -7,6 +7,7 @@ amigo/
 ├── src/                    # Application source code
 │   ├── main.py             # FastAPI app, Telegram webhook, lifecycle
 │   ├── cli.py              # CLI entrypoint for local dev (no Telegram)
+│   ├── turns.py            # Session transcript + Mode execution orchestration
 │   ├── config.py           # Pydantic Settings from .env
 │   ├── __main__.py         # python -m src.cli module entrypoint
 │   ├── agent/              # Pydantic AI agent with tool-calling loop
@@ -38,12 +39,18 @@ amigo/
 
 ## Key Modules
 
-- `src/agent/` — Pydantic AI agent with native tool-calling loop
-  (see [ADR 0002](adr/0002-agentic-tool-calling-loop.md)). A single
-  `Agent` object handles the entire user turn: the model sees the
-  message, decides which tools to call, observes results, and produces
-  a reply. Tools execute side effects through injected services.
-  `AgentDeps` carries per-request context (store, scheduler, user).
+- `src/agent/` — Modes, with no direct side effects. Each Mode is a declared `ModeDefinition`
+  (instructions, Toolsets, Turn Context providers, entitlement, model, handoffs, evaluation suite)
+  registered in `catalogue.py`. `ModeRuntime` is the one entry point that runs a Turn in any Mode:
+  it resolves and authorizes the Mode before anything is written, prepends the Safety Core to any
+  Mode that does not state it, runs Pydantic AI's native tool-calling loop with only that Mode's
+  Toolsets (see [ADR 0002](adr/0002-agentic-tool-calling-loop.md)). Routing and entitlement are
+  replaceable async policies. Daily is live; Coach, Reflect, and Recommender are registered as
+  planned and refused.
+- `src/turns.py` — Application boundary around `ModeRuntime`. `SessionTurnOrchestrator` resolves
+  the Mode before any write, loads and persists Session Messages, and maps model failures to the
+  friendly participant reply. The model framework remains behind the runtime's owned result and
+  history types; this layer does not import it.
 - `src/bot/` — Telegram-specific glue. `BotHandlers` routes Pairing deep links first, permits
   Reminder callbacks needed by the Activation test, and requires canonical Activation completion
   before ordinary text reaches Turn processing. Legacy Telegram-only onboarding is unreachable.
@@ -61,19 +68,24 @@ amigo/
   restart or scheduler failure. Each delivery uses an atomic claim and immutable attempt outcome;
   reconciliation records a scheduler heartbeat and content-free drift counts. Later uses the
   shared immutable replacement command.
-- `src/tools/` — Side-effect service classes. Called by agent tools and
-  `ReminderActions` callback handlers. `CreateTaskTool`,
-  `UpdateTaskStatusTool`, `ScheduleReminderTool`, `CancelRemindersTool`.
+- `src/tools/` — Every side effect. `toolsets.py` groups the model-callable Tools into reusable
+  `TASKS` and `REMINDERS` Toolsets; `ToolContext` carries the per-Turn dependencies they receive.
+  The Tool classes (`CreateTaskTool`, `UpdateTaskStatusTool`, `ScheduleReminderTool`,
+  `CancelRemindersTool`) also serve the `ReminderActions` button callbacks.
 
 ## Patterns
 
 - **Protocol-based abstraction**: `MessageChannel` is a `typing.Protocol`
   class. Implementations are swappable without touching consumer code.
-- **Dependency injection**: Per-request state flows through `AgentDeps`
+- **Dependency injection**: Per-Turn state flows through the `ToolContext`
   dataclass. Major classes accept dependencies in `__init__`.
 - **Async everywhere**: All store, channel, and agent methods are
   `async def`. Supabase network operations use its native `AsyncClient` and are explicitly
-  awaited, so concurrent Turns and due Reminders yield to the event loop.
+  awaited, so concurrent Turns and due Reminders yield to the event loop. Constructors and
+  dataclass validation remain synchronous Python protocols; `ModeRegistry.__getitem__` and
+  `__iter__` are the deliberate synchronous magic-method exceptions used by import-time catalogue
+  construction and synchronous Gate A schema capture. All ordinary Mode policy, registry,
+  runtime, and Turn-orchestrator methods are asynchronous.
 - **Fail-closed startup**: The Supabase Store must report the exact application schema version
   before the scheduler, durable-outbox drain, Reminder reload, or Telegram webhook starts.
 - **Canonical Activation**: Normal dashboard APIs and Telegram Turns remain locked until durable
@@ -121,11 +133,12 @@ graph TD
         BH["BotHandlers"]
         AG["Activation Gate"]
         TP["TurnProcessor"]
+        STO["SessionTurnOrchestrator"]
         RA["ReminderActions"]
     end
 
-    subgraph Agent["Pydantic AI Agent"]
-        HM["handle_message"]
+    subgraph Agent["Mode Runtime"]
+        MR["resolve + execute Mode"]
         CB["ContextBuilder"]
         T_CT["create_task tool"]
         T_US["update_task_status tool"]
@@ -151,15 +164,16 @@ graph TD
     BH --> TP
     BH --> RA
 
-    TP --> HM
-    HM --> CB
+    TP --> STO
+    STO --> MR
+    STO --> CB
     CB --> MS
     CB --> IMS
 
-    HM --> T_CT
-    HM --> T_US
-    HM --> T_SR
-    HM --> T_CR
+    MR --> T_CT
+    MR --> T_US
+    MR --> T_SR
+    MR --> T_CR
     T_CT --> MS
     T_CT --> IMS
     T_SR --> RS
@@ -178,12 +192,13 @@ graph TD
 2. **Routing**: `BotHandlers` checks allowlist → linked identity → canonical Activation
    completion before delegating ordinary text to `TurnProcessor`. Pairing and Reminder callbacks
    retain their dedicated pre-Activation paths.
-3. **Turn processing**: `TurnProcessor` builds `AgentDeps` with per-request
-   context (user, session, timezone) and calls `handle_message`.
-4. **Agent**: `handle_message` stores the user message, builds context
-   via `ContextBuilder`, runs the Pydantic AI agent. The agent decides
-   which tools to call (create task, update status, schedule reminder)
-   and produces a natural language reply.
+3. **Turn processing**: `TurnProcessor` builds a `ToolContext` (user, session, timezone) and hands
+   the Turn to `SessionTurnOrchestrator`.
+4. **Mode**: the orchestrator resolves the Mode before any transcript write, persists the user
+   Message, and supplies bounded Session history to `ModeRuntime`. The runtime sends the Mode's
+   instructions and Turn Context on every model request and runs the model with only that Mode's
+   Toolsets. The orchestrator persists the resulting assistant Message, including the friendly
+   failure reply when model execution fails.
 5. **Outbound**: Response sent via `MessageChannel.send_message()`.
 6. **Reminders**: Reminder tools resolve a typed full instant before invoking the shared durable
    schedule command. Relative expressions can schedule directly; interpretations requiring
@@ -196,9 +211,12 @@ graph TD
 | Abstraction | Location | Purpose |
 |-------------|----------|---------|
 | `MessageChannel` | `channels/base.py` | Protocol for sending messages (Telegram, CLI) |
-| `AgentDeps` | `agent/agent.py` | Per-request dependency injection for agent tools |
+| `ToolContext` | `tools/context.py` | Per-Turn dependency injection for Tools |
 | Store (duck-typed) | `memory/store.py` | `MemoryStore`, `InMemoryStore` |
-| `amigo_agent` | `agent/agent.py` | Pydantic AI Agent with registered tools |
+| `ModeDefinition` | `agent/modes.py` | A Mode declared as data |
+| `ModeRuntime` | `agent/runtime.py` | Resolves and executes any registered Mode without transcript writes |
+| `SessionTurnOrchestrator` | `turns.py` | Owns Session history, persistence, and friendly failure mapping |
+| `TASKS`, `REMINDERS` | `tools/toolsets.py` | Reusable Toolsets a Mode can declare |
 
 ## Extensibility
 
@@ -223,15 +241,58 @@ applicable model-evaluation gate before release.
 
 ### Adding a new tool
 
-1. Add a function decorated with `@amigo_agent.tool` in `src/agent/agent.py`.
-2. The function receives `RunContext[AgentDeps]` for access to store,
-   scheduler, user, etc. Docstring becomes the tool description for the LLM.
+1. Add a function decorated with a Toolset's `.tool` (for example `@TASKS.tool`) in
+   `src/tools/toolsets.py`, or create a new `FunctionToolset` for a new domain.
+2. The function receives `RunContext[ToolContext]` and performs side effects through a Command.
+   Its name, docstring, and signature become the schema the model sees, and changing Daily's is
+   a Gate A invalidating change.
+
+### Adding a new Mode
+
+Every live Mode declares a `ModelPolicy` (primary, at most one fallback, optional settings) and
+an existing evaluation suite. Daily retains the configured primary with no settings or fallback.
+Fallbacks require a hash-linked, complete passing run for the same Mode/model in
+`evals/fallback-evidence.json`; startup independently re-scores that artifact and checks current
+execution source/SDK fingerprints, instructions, Tool order/schema, and ordered context providers.
+The declaration catalogue and manifest are excluded from the source digest to permit activation;
+the evaluated Mode's behavior declarations are pinned separately. The runtime retries primary
+provider unavailability once before any Tool dispatch, then only
+uses a fallback after transport/provider unavailability and before any Tool dispatch. A fallback
+gets no validation/output retry, and explicit evaluation model overrides disable production
+fallbacks. No new credentials or runtime defaults are introduced.
+
+Each execution emits one content-free `TurnRecord` through `src/telemetry.py`: pseudonymous user
+and Turn identifiers, Mode and model identifiers, Tool names, outcome/error class, latency, usage,
+and estimated USD cost. Unknown pricing is `null`. There are no instructions, Messages, Tool
+arguments/results, names, chat identifiers, or timezones. Pydantic AI instrumentation has content
+capture disabled and a strict operational-attribute allowlist; exception messages and status
+descriptions are stripped. Spans use the global OpenTelemetry provider; no exporter is installed.
+Refusals and failures before execution are recorded by the application orchestrator.
+
+`scripts/run_gate_a_eval.py --mode <id>` resolves the registered Mode's suite and policy and records
+observed provider identities and dependency versions. Daily keeps its approved 60×3 contract;
+other Modes author their own coverage/thresholds using the shared case format. Beside each suite,
+`deterministic.json` declares scripted cases. `scripts/run_mode_deterministic_eval.py` runs every
+live Mode's subset in CI, including PRs affecting their invalidating inputs, without provider calls.
+These scripted results are regression checks and cannot serve as passing provider-run evidence.
+New provider-run evidence estimates costs with `genai-prices` using observed model identities;
+unknown prices propagate as `null` through Turn, execution, and run totals. The checker recomputes
+those costs. Existing Daily artifacts retain support for their approved legacy pricing snapshot;
+other Modes cannot use Daily's fixed price.
+
+1. Declare a `ModeDefinition` in `src/agent/catalogue.py` with its instructions, Toolsets, and
+   Turn Context providers, and add it to `build_registry()`. Start it as `planned`.
+2. The runtime supplies the Safety Core and capability boundary; the shared Turn orchestrator
+   supplies history, persistence, and failure handling. A Mode can only call Tools in the Toolsets
+   it declares, and may pin the order they are presented in with `tool_order`. Registration fails
+   if its instructions cannot render or its `tool_order` names a Tool it does not have.
+3. Give it its own evaluation suite before switching it to `live`.
 
 ## Testing
 
 - **Framework**: pytest + pytest-asyncio (auto mode).
 - **Agent testing**: Pydantic AI's `TestModel` replaces the LLM in tests.
-  Use `amigo_agent.override(model=TestModel())` to run deterministic tests.
+  Use `async with default_runtime.override(model=TestModel())` to run deterministic tests.
 - **Fakes**: External dependencies replaced with in-memory fakes from
   `tests/fakes.py` — `FakeChannel`, `FakeStore`, `FakeScheduler`.
   No network calls, no database.

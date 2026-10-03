@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case_id": "ga-task-01",
+      "responses": [
+        {"tool": "create_task", "args": {"title": "Buy oat milk"}},
+        {"text": "Created buy oat milk."}
+      ]
+    },
+    {
+      "case_id": "ga-life-01",
+      "responses": [
+        {"tool": "update_task_status", "args": {"task_id": "$task:report", "status": "completed"}},
+        {"text": "Completed finish report."}
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-01",
+      "responses": [{"text": "Hey, hello!"}]
+    }
+  ]
+}
