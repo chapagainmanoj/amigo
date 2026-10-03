@@ -10,9 +10,11 @@ the current repository; it does not mean production reliability, security, or us
 have passed. A beta experiment must be presented as experimental. A roadmap item must never be
 described in the present tense.
 
-The schema chain is complete through migration 014, so the worktree is bootable. The Activation
-application code is still not in the “shipped” column: it has no clean-account staging evidence,
-which is a separate gate from having the schema.
+The schema chain is complete through migration 016, so the worktree is bootable. Migration 016's
+Session Mode, grant, and handoff primitives are dormant until the application slice is implemented
+and reviewed; they do not make Mode switching a shipped capability. The Activation application
+code is still not in the “shipped” column: it has no clean-account staging evidence, which is a
+separate gate from having the schema.
 
 | Shipped in the current prototype | Beta experiment or release-gated | Roadmap, not available |
 |---|---|---|

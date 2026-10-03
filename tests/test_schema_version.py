@@ -32,7 +32,13 @@ class _SchemaDatabase:
 
 def test_schema_version_requires_an_exact_integer():
     assert require_schema_version(EXPECTED_SCHEMA_VERSION) == EXPECTED_SCHEMA_VERSION
-    for invalid in (EXPECTED_SCHEMA_VERSION - 1, EXPECTED_SCHEMA_VERSION + 1, "14", True, None):
+    for invalid in (
+        EXPECTED_SCHEMA_VERSION - 1,
+        EXPECTED_SCHEMA_VERSION + 1,
+        str(EXPECTED_SCHEMA_VERSION),
+        True,
+        None,
+    ):
         with pytest.raises(SchemaVersionMismatchError):
             require_schema_version(invalid)
 

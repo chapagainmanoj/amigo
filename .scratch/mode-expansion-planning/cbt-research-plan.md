@@ -7,6 +7,13 @@ Human decisions: [Approve CBT Research Audience and Protocol](decisions/05-cbt-r
 Synthetic control-flow preview: [Run instructions](cbt-research-prototype/README.md).
 Independently reviewed for fictional-only scope; not a personal-use or live-model version.
 
+Research MVP engineering slice: [Run instructions](cbt-research-mvp/README.md).
+Built before practitioner recruitment as requested. Independent synthetic-only software review
+passed on 2026-10-03: 18 tests, Ruff, fixed/adaptive demos, interactive start/skip/stop, and
+isolation inspection. Scripted fictional branching only; no live AI, personal input, persistence,
+production Mode registration, or expert-validation claim. Real-model comparison is the next
+proposed slice and requires its own processing/boundary decision.
+
 ## Placement
 
 The commercial candidate portfolio remains Daily, Coach, Reflect, and Recommender. The owner
@@ -28,11 +35,12 @@ Actual clinical CBT research is not authorized by this request or the current pr
 The owner confirmed the focus as **CBT-informed thought examination** and plans to involve a
 qualified practitioner; no practitioner or expert-reviewed protocol exists yet.
 
-Revised research question: can bounded AI-adaptive questioning stay within a practitioner-defined
+Initial engineering question: can bounded adaptive questioning stay within an explicit provisional
 non-clinical thought-examination contract, without inventing facts, pressuring disclosure, imposing
 conclusions, or widening Tools? Compare against a fixed sequence on synthetic cases. The fixed
-version is a baseline, not an assumed best fit for every scenario. Exact adaptation rules and the
-method itself require practitioner review; this is not an approved clinical protocol.
+version is a baseline, not an assumed best fit for every scenario. Build the small research MVP
+first; practitioner collaboration follows to revise the method and assess CBT-informed adherence.
+The initial method is provisional and not expert-validated or an approved clinical protocol.
 
 Measure practitioner-rated question appropriateness, adherence to reviewed methods, boundary
 violations, stop compliance, privacy, latency, and cost—not symptom improvement, therapeutic
@@ -63,7 +71,7 @@ of applicable ethics/institutional/regulatory requirements before recruitment.
   nothing. Explain and approve provider processing/retention before the first personal run. Raw
   founder transcripts are not saved under the selected initial contract; any future retention
   needs a new explicit decision. Do not treat founder ownership as consent to all processing.
-- Versioned practitioner-reviewed question patterns and adaptation rules, explicit start/stop,
+- Versioned provisional question patterns and adaptation rules, explicit start/stop,
   bounded Steps and budget, static model-independent refusal/referral fallback, and an immediate
   experiment kill switch. Unrestricted generated exercises or unreviewed clinical methods are out
   of scope; broader adaptation would require a deliberate review of the existing fixed-template
@@ -111,15 +119,31 @@ Exact templates, exclusions, wording, and source/licensing remain to be reviewed
 
 ## Proposed sequence and gates
 
+### MVP scope clarified — 2026-10-03
+
+The owner corrected the sequence: build a small research MVP first, then recruit a qualified
+practitioner and pursue further research together. The destination is a separate thought-examination
+research harness. Founder-only access, one everyday situation per run, optional questions/takeaway,
+immediate stop, and no saved personal transcripts remain the selected boundaries.
+
+The proposed first MVP compares a fixed baseline with bounded adaptive questioning on synthetic
+cases using explicitly provisional patterns and an engineering rubric. No production catalogue registration,
+other-Mode history, side-effect Tools, commercial rollout, or therapy-equivalence claims are in
+scope. Practitioner recruitment is not a prerequisite for building the initial MVP. Practitioner
+review is required before claiming expert validation; explicit privacy/provider/safety approval is required before
+founder personal use. The existing fictional terminal preview is not that completed research MVP.
+
 1. Founder-only audience is selected; approve one non-clinical research question and the exact
    personal-data/provider-processing contract. Keep all other questions out of scope.
-2. Obtain review of the exact template/claims and inspect source licensing before reproducing it.
-3. Build an isolated synthetic harness and versioned ordinary/adversarial/crisis/privacy fixtures.
+2. Define provisional non-clinical patterns and inspect source licensing; make no expert-validation
+   claim and do not reproduce proprietary instruments.
+3. Build the small isolated MVP and versioned synthetic ordinary/adversarial/privacy fixtures.
 4. Prove access isolation, no side effects, stop behavior, template adherence, content-free telemetry,
    truthful uncertainty, and static fallback. Any clinical claim, sensitive leakage, or unauthorized
    side effect fails the run. Do not average a hard violation into a passing score.
-5. Run reproducible model comparisons with blinded scoring where feasible; record model/template
-   versions and all failures. Small simulated samples cannot establish efficacy or human safety.
+5. Bring in a qualified practitioner to revise the method/rubric and conduct further research
+   together. Run model comparisons only with approved provider handling; record versions and
+   failures. Small simulated samples cannot establish efficacy or human safety.
 6. Permit founder-only personal runs only after the isolation, template, stop, and privacy checks
    pass; identify the founder through trusted harness access, not a model-supplied user identifier.
 7. Decide stop, revise, or propose a separately governed study with other people. No automatic

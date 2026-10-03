@@ -3,6 +3,11 @@
 Status: proposed scope for a prospective collaborator; nobody appointed; no clinical endorsement
 Prepared: 2026-10-03
 
+The founder is still looking for a practitioner and corrected the sequence: build a small research
+MVP first, then recruit a practitioner and develop further research together. The initial MVP uses
+provisional patterns, with no expert-validation claim; recruitment is not a prerequisite to its
+engineering. This does not approve personal input or model-provider processing.
+
 ## Research goal
 
 Study whether bounded AI-adaptive questioning can follow an explicitly reviewed CBT-informed

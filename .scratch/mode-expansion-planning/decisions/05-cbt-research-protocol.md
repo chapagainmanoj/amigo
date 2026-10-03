@@ -71,3 +71,20 @@ AI follows expert practice or provides therapy because its language sounds plaus
 
 See [Practitioner Collaboration Brief](../cbt-expert-brief.md). Founder-only access, one everyday
 situation, optional steps/takeaway, immediate stop, and no saved personal transcripts still apply.
+
+### 2026-10-03 — MVP destination and next phase clarified
+
+The owner is still looking for a qualified practitioner and identified recruitment/method review
+as the next CBT phase. The desired destination is an MVP-sized research mode, not a commercial
+therapy feature. The proposed MVP is a separate synthetic comparison harness for a fixed baseline
+and bounded adaptive questioning; method/rubric review remains required. Personal use and provider
+processing are not approved by this scope clarification. This protocol decision remains open.
+
+### 2026-10-03 — Owner correction: MVP before practitioner collaboration
+
+This supersedes the preceding sequence: build a small research MVP first, then involve a qualified
+practitioner and pursue further research together. Do not block engineering on recruitment or
+describe the initial patterns as practitioner-reviewed. The initial synthetic comparison uses
+provisional patterns and an engineering rubric; expert validation and clinical efficacy are not
+claimed. Founder-only/no-saved-transcript boundaries remain. Personal-input/provider processing
+still needs explicit approval of the actual implementation and data contract.

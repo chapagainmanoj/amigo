@@ -1,14 +1,17 @@
 """Prove the schema-version gate is real, in both directions.
 
-Two failures are invisible to the in-database assertions, because those only ever run
+Three failures are invisible to the in-database assertions, because those only ever run
 against a complete chain:
 
-1. Migration 014 could blind-seed the ledger instead of verifying the chain. Then a
-   database missing a migration still reports revision 14. This builds deliberately
-   incomplete chains and requires 014 to refuse each one.
+1. Migration 014 could blind-seed the ledger instead of verifying the chain. Then later
+   migrations could extend an incomplete ledger to the current revision. This builds
+   deliberately incomplete pre-014 chains and requires 014 to refuse each one.
 2. A migration could be applied without recording its ledger row. `max(version)` then
    reports a LOWER revision than the database actually is and the startup gate passes.
    That direction fails open, so the ledger head is compared with the code's constant.
+3. A post-gate migration could stop checking its direct predecessor. The script removes
+   ledger 014 before applying 015, then removes ledger 015 before applying 016, and requires
+   each migration to refuse with its own prerequisite error.
 
 Connection comes from the standard libpq environment (PGHOST, PGPORT, PGUSER,
 PGPASSWORD); PGDATABASE names the already-built complete database.
@@ -37,6 +40,7 @@ CONSTRUCTIBLE_SKIPS = ("003", "004", "007", "008", "009", "010", "012", "013")
 # incomplete chains, and only migrations before it can appear in CONSTRUCTIBLE_SKIPS — a
 # later one is applied after the gate and so can never be missing when the gate runs.
 GATE_MIGRATION = 14
+PREDECESSOR_GATES = (15, 16)
 
 
 def _psql(database: str, *args: str, owner: bool = False) -> subprocess.CompletedProcess:
@@ -92,7 +96,7 @@ def _ledger_head_matches() -> bool:
 
 
 def _refuses_incomplete_chain(skip: str, scratch: str) -> bool | None:
-    """Return True if 014 refused, False if it certified, None if unbuildable."""
+    """Return True if the 014 gate refused, False if it certified, or None if unbuildable."""
     _maintenance(f"DROP DATABASE IF EXISTS {scratch};")
     _maintenance(f"CREATE DATABASE {scratch};")
 
@@ -126,6 +130,50 @@ def _refuses_incomplete_chain(skip: str, scratch: str) -> bool | None:
     return True
 
 
+def _refuses_missing_predecessor(migration_number: int, scratch: str) -> bool:
+    """Prove a post-014 migration refuses when its direct ledger predecessor is absent."""
+    _maintenance(f"DROP DATABASE IF EXISTS {scratch};")
+    _maintenance(f"CREATE DATABASE {scratch};")
+    files = [BOOTSTRAP] + [
+        path
+        for path in sorted(MIGRATIONS.glob("[0-9][0-9][0-9]_*.sql"))
+        if int(path.name[:3]) < migration_number
+    ]
+    args: list[str] = []
+    for path in files:
+        args += ["-f", str(path)]
+    if _psql(scratch, *args, owner=True).returncode != 0:
+        _maintenance(f"DROP DATABASE IF EXISTS {scratch};")
+        print(f"FAIL: the chain before migration {migration_number:03d} could not be built")
+        return False
+
+    predecessor = migration_number - 1
+    removed = _psql(
+        scratch,
+        "-c",
+        f"DELETE FROM public.schema_migrations WHERE version = {predecessor};",
+        owner=True,
+    )
+    if removed.returncode != 0:
+        _maintenance(f"DROP DATABASE IF EXISTS {scratch};")
+        print(f"FAIL: could not remove ledger {predecessor} for the refusal probe")
+        return False
+
+    migration = next(MIGRATIONS.glob(f"{migration_number:03d}_*.sql"))
+    applied = _psql(scratch, "-f", str(migration), owner=True)
+    _maintenance(f"DROP DATABASE IF EXISTS {scratch};")
+    expected = f"{migration_number:03d} requires the complete approved 001-{predecessor:03d} chain"
+    if applied.returncode == 0:
+        print(f"FAIL: migration {migration_number:03d} accepted a missing ledger {predecessor}")
+        return False
+    if expected not in applied.stderr:
+        print(f"FAIL: migration {migration_number:03d} refused for another reason:")
+        print(applied.stderr.strip())
+        return False
+    print(f"ok: migration {migration_number:03d} refused a missing ledger {predecessor}")
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--scratch-db", default="amigo_chain_probe")
@@ -152,6 +200,13 @@ def main() -> int:
         else:
             print(f"FAIL: migration 014 certified a chain missing migration {skip}")
             ok = False
+
+    for migration_number in PREDECESSOR_GATES:
+        try:
+            ok = _refuses_missing_predecessor(migration_number, args.scratch_db) and ok
+        except ProbeSetupError as error:
+            print(f"FAIL: the schema chain probe could not run: {error}")
+            return 1
 
     return 0 if ok else 1
 

@@ -155,6 +155,12 @@ This issue ships no specialized Mode. Coach stays `planned` until
 
 ## Comments
 
+### 2026-10-03 — Human approval for migrations 015/016
+
+The owner explicitly approved migrations 015/016. Repository adoption is authorized after the
+current proposals pass independent verification; approval does not waive pending concurrency
+checks or authorize production deployment. Reviewer notified; implementation remains pending.
+
 ### 2026-10-03 — Schema proposals prepared; adoption not authorized
 
 - Issue 02 is closed after independent review; the backend suite remains green (558 tests).
@@ -169,3 +175,21 @@ This issue ships no specialized Mode. Coach stays `planned` until
   current evidence and hashes.
 - No protected migration has been adopted, no Store/runtime path depends on the proposals,
   and Daily remains the only live Mode. Human approval is required before schema adoption.
+
+### 2026-10-03 — Approved schema slice adopted; application slice remains open
+
+- After the recorded owner approval and independent concurrency PASS, the exact reviewed bytes
+  were adopted as migrations 015/016 and their SQL assertions. SHA-256 values remain
+  `55cac11a...6fdae` / `c5a3f8dd...e80e` for 015 and
+  `d08b4e28...c3df` / `b1f81a37...a72e` for 016.
+- The application startup contract, CI chain, SQL schema-version assertion, predecessor-refusal
+  guard, Activation-probe scope statement, README, architecture, capability matrix, and gap
+  analysis now consistently describe schema revision 16.
+- An independent fresh PostgreSQL 15 chain applied 35 SQL files through the adopted migrations
+  and assertions. Its schema-chain probe passed all eight pre-014 gap cases plus the 015/016
+  predecessor refusals; its Activation probe formed the forced interleave and found no deadlock
+  across 30 trials / 155 calls. The backend suite passes with 568 tests; Ruff, Gate A validation,
+  Daily's deterministic subset, focused schema guards, and whitespace checks pass.
+- This is repository adoption only, not production deployment. The Store, routing, commands,
+  handoff Tool/callback, grant operator script, and participant copy in this issue are still
+  unimplemented. Daily remains the only live Mode, so this issue stays open.

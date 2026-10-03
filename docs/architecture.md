@@ -87,7 +87,12 @@ amigo/
   construction and synchronous Gate A schema capture. All ordinary Mode policy, registry,
   runtime, and Turn-orchestrator methods are asynchronous.
 - **Fail-closed startup**: The Supabase Store must report the exact application schema version
-  before the scheduler, durable-outbox drain, Reminder reload, or Telegram webhook starts.
+  (currently 16) before the scheduler, durable-outbox drain, Reminder reload, or Telegram webhook
+  starts.
+- **Dormant Mode authority schema**: migrations 015–016 order crossed Pairing locks and add
+  Session-active-Mode, trial-grant, immutable grant-event, and confirmed-handoff primitives. The
+  schema is adopted, but participant-facing switching remains unavailable until its Store, policy,
+  command, Tool, and callback application slice is implemented and reviewed.
 - **Canonical Activation**: Normal dashboard APIs and Telegram Turns remain locked until durable
   acknowledgement, Pairing, validated profile, actual test-Reminder delivery, and Telegram
   Done/Skip/Later evidence produce a completed Activation state. The dashboard snapshot embeds
@@ -347,3 +352,7 @@ No Supabase writes. Safe for CI/CD.
   Visual architecture diagram.
 - [migrations/001_initial_schema.sql](../migrations/001_initial_schema.sql)
   — Database schema and table definitions.
+- [migrations/015_ordered_pairing_locks.sql](../migrations/015_ordered_pairing_locks.sql)
+  — Total-order identity locking for concurrent Pairing.
+- [migrations/016_session_modes_grants_handoffs.sql](../migrations/016_session_modes_grants_handoffs.sql)
+  — Dormant Session Mode, trial-grant, audit, and confirmed-handoff authority schema.

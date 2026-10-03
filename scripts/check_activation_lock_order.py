@@ -10,8 +10,9 @@ Scope, stated plainly, because a probe that overstates its coverage is worse tha
   `get_activation_state` with `supabase_auth_id` moving from NULL. An inversion that only
   appears while holding an `activation_journeys` lock, or between two other functions, is
   invisible to it.
-- It does NOT cover `complete_pairing`, which takes two `user_profiles` row locks by different
-  keys with no advisory lock and can deadlock against itself — see issue 16.
+- It invokes the live `complete_pairing` implementation while forcing the Activation interleave,
+  but does NOT prove pairing-against-pairing ordering. Migration 015's independently reviewed
+  crossed-pairing probe is the evidence for that separate shape.
 
 `tests/test_migration_lock_order.py` is the guard that covers the chain as a whole: it reads
 the migration text, so it needs no database, no timing, and no luck. This probe exists for the

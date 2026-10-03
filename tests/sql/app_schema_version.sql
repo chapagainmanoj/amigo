@@ -8,8 +8,8 @@ DECLARE
 BEGIN
   reported := public.get_app_schema_version();
 
-  IF reported <> 14 THEN
-    RAISE EXCEPTION 'Applied migration chain reported schema version %, expected 14', reported;
+  IF reported <> 16 THEN
+    RAISE EXCEPTION 'Applied migration chain reported schema version %, expected 16', reported;
   END IF;
 
   -- The application's require_schema_version refuses anything that is not an exact
@@ -18,14 +18,14 @@ BEGIN
     RAISE EXCEPTION 'Schema version is not an exact integer';
   END IF;
 
-  IF (SELECT count(*) FROM public.schema_migrations) <> 14
-    OR (SELECT count(*) FROM public.schema_migrations WHERE version BETWEEN 1 AND 14) <> 14
+  IF (SELECT count(*) FROM public.schema_migrations) <> 16
+    OR (SELECT count(*) FROM public.schema_migrations WHERE version BETWEEN 1 AND 16) <> 16
   THEN
     RAISE EXCEPTION 'Schema ledger does not record every migration in the chain exactly once';
   END IF;
 
   IF EXISTS (
-    SELECT 1 FROM generate_series(1, 14) AS expected(version)
+    SELECT 1 FROM generate_series(1, 16) AS expected(version)
     WHERE NOT EXISTS (
       SELECT 1 FROM public.schema_migrations AS applied
       WHERE applied.version = expected.version
@@ -67,11 +67,11 @@ DO $$
 BEGIN
   -- A later migration must move the reported revision, so a database ahead of the
   -- application also fails the exact-version startup gate.
-  INSERT INTO public.schema_migrations (version) VALUES (15);
-  IF public.get_app_schema_version() <> 15 THEN
+  INSERT INTO public.schema_migrations (version) VALUES (17);
+  IF public.get_app_schema_version() <> 17 THEN
     RAISE EXCEPTION 'Schema version did not follow the applied chain forward';
   END IF;
-  DELETE FROM public.schema_migrations WHERE version = 15;
+  DELETE FROM public.schema_migrations WHERE version = 17;
 
   -- The revision is the highest applied migration, not a count of rows: a database
   -- carrying a non-contiguous later migration must report that migration's number.
@@ -81,7 +81,7 @@ BEGIN
   END IF;
   DELETE FROM public.schema_migrations WHERE version = 20;
 
-  IF public.get_app_schema_version() <> 14 THEN
+  IF public.get_app_schema_version() <> 16 THEN
     RAISE EXCEPTION 'Schema version did not return to the real chain revision';
   END IF;
 END;
