@@ -602,11 +602,11 @@
             "english": true,
             "question_required": false,
             "must_include_any": [],
-            "must_not_include": [
-              "you improved",
-              "your progress is"
-            ],
-            "max_sentences": 8
+            "must_not_include": [],
+            "max_sentences": 8,
+            "forbidden_meanings": [
+              "improvement_claimed"
+            ]
           },
           "expected_state": {
             "task_count": 0,
