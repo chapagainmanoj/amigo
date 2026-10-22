@@ -5,10 +5,27 @@ from uuid import UUID
 from pydantic_ai import FunctionToolset, RunContext
 
 from src.coaching import CoachingCommands, CoachingController, command_hash
-from src.commands.base import CommandContext
+from src.commands.base import CommandContext, InvalidTransitionError, StaleVersionError
 from src.tools.context import ToolContext
 
 COACHING: FunctionToolset[ToolContext] = FunctionToolset(max_retries=0)
+
+
+_DRAFT_INCOMPLETE = (
+    "Draft not saved. It needs the participant's own goal, their own success measure, "
+    "check-in weekdays (Monday=1 to Sunday=7) and a local HH:MM time. Ask for anything "
+    "missing; never invent it."
+)
+_DRAFT_UNAVAILABLE = (
+    "Draft not saved: a Coaching Program already exists or changed. Refresh its current "
+    "state with /program before trying again."
+)
+
+
+def _draft_error(error: ValueError) -> str:
+    if isinstance(error, (InvalidTransitionError, StaleVersionError)):
+        return _DRAFT_UNAVAILABLE
+    return _DRAFT_INCOMPLETE
 
 
 def _context(deps, action, values):
@@ -40,7 +57,12 @@ async def draft_program(
         check_in_time=check_in_time,
         timezone=deps.timezone,
     )
-    result = await CoachingCommands(deps.store).draft(_context(deps, "draft", config), **config)
+    try:
+        result = await CoachingCommands(deps.store).draft(
+            _context(deps, "draft", config), **config
+        )
+    except ValueError as error:
+        return _draft_error(error)
     row = result["program"]
     return await CoachingController(deps.store, deps.channel).show_approval(
         deps.user["user_id"],
@@ -149,12 +171,17 @@ async def revise_program(
         check_in_time=check_in_time,
         timezone=deps.timezone,
     )
-    result = await CoachingCommands(deps.store).revise(
-        _context(deps, "revise", {"program_id": program_id, "version": expected_version, **config}),
-        program_id,
-        expected_version,
-        **config,
-    )
+    try:
+        result = await CoachingCommands(deps.store).revise(
+            _context(
+                deps, "revise", {"program_id": program_id, "version": expected_version, **config}
+            ),
+            program_id,
+            expected_version,
+            **config,
+        )
+    except ValueError as error:
+        return _draft_error(error)
     return await CoachingController(deps.store, deps.channel).show_approval(
         deps.user["user_id"],
         result["program"]["program_id"],

@@ -305,3 +305,27 @@ def test_program_tools_require_uuid_identifiers():
     assert owned
     for tool in owned:
         assert tool["parameters"]["properties"]["program_id"]["format"] == "uuid"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"check_in_time": "evening"},
+        {"check_in_days": [0, 9]},
+        {"goal": ""},
+    ],
+)
+async def test_invalid_model_draft_returns_guidance_instead_of_failing_turn(coach_app, bad):
+    await coach_app.send("/mode coach")
+    fields = {
+        "goal": "Take a fictional walk",
+        "success_measure": "I choose three walks",
+        "check_in_days": [1, 5],
+        "check_in_time": "18:00",
+        **bad,
+    }
+    coach_app.script.tool("draft_program", fields)
+    coach_app.script.text("Which days and time would you like?")
+    await coach_app.send("Yes, draft it.")
+    assert await coach_app.store.get_coaching_program(coach_app.owner["user_id"]) is None
+    assert coach_app.channel.last_text == "Which days and time would you like?"
