@@ -1,0 +1,245 @@
+{
+  "cluster": "/private/tmp/amigo-review-final-ednz234t",
+  "network": "unix-socket-only",
+  "files": [
+    {
+      "path": "tests/sql/bootstrap_supabase_roles.sql",
+      "sha256": "f88b83552514a6d3319c6aa942462037b8258f7d7598bbf81b38f7d3d1038b5f",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/001_initial_schema.sql",
+      "sha256": "834f903253748fb277b642e3707f9f78232f744ad787db2da75f6dbfc87c2889",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/002_auth_linking_and_rls.sql",
+      "sha256": "25a464c26ad82bf95d4771909878502a2bf7350780e1178e275abe31bd65b617",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/003_secure_pairing_tokens.sql",
+      "sha256": "b6add01a119478092426f7bb6fcdad123941a4f3dbf0a371ce43c5324bc5f38c",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/004_tenant_isolation_policies.sql",
+      "sha256": "6204836b6f6f65671f76c98acb55809606115ccab7cbd3234c57fb0dc5851e18",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/seed_legacy_task_states.sql",
+      "sha256": "18af3d78663ab0b717f2c16c818991592d9f686d7956b4cad460126790c3267c",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/005_canonical_task_command.sql",
+      "sha256": "df1c7c6250a9ef39f15e884c3021bdfc541e647a8520b0b69e770604a4adf84e",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/assert_canonical_task_backfill.sql",
+      "sha256": "244fcda61c968798a44964a45975dc79a546b17385aefc57891ba7b3d338cbc8",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/seed_legacy_reminders.sql",
+      "sha256": "183efd24736d58d1f8d425afb6745dd1b28733b67cbf5bc39d7b53dcc613ccde",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/006_durable_reminder_outbox.sql",
+      "sha256": "158fa283961bcaa843aac6bebe098e629eb8462aa455d71c3905b20c113836a2",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/assert_reminder_backfill.sql",
+      "sha256": "38ef5eee27684c83707ef0d1cb14de17806ffb72b5863ce6f04f0d00f8a67401",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/007_consistent_task_reminder_resolution.sql",
+      "sha256": "80806eb9783e7de111a911d7c1f9688b0cac1c10391eb8b58a7c4dae74864954",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/008_atomic_later_command.sql",
+      "sha256": "2a1c4bdb6acef70bbb8e5490475278abd47d19b3fcaf0f793857ecc8aae31825",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/009_telegram_update_claims.sql",
+      "sha256": "eedb8984f2aa06945ce47a99f2fc5a437532e9611ba0d1866274fdc1a44462b0",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/010_consistent_dashboard_snapshot.sql",
+      "sha256": "59c6e4e45c888a268719be793c0bee4ceeddc63a2e54af8dedd8cbcf26fa682b",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/tenant_isolation.sql",
+      "sha256": "496502e44a943c2edad31ab4f3c5a53a292abe89aee4d8a0a8fb777cafc21bcc",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/create_task_command.sql",
+      "sha256": "3d1944988e70e31e7ae862d8d6341187617a858d33b4659c3b1fda7b7ef984f8",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/reminder_outbox.sql",
+      "sha256": "b0faf52a2d0d6fb2ebc92beed8903b09d69d7e3efc43671337fd35b4c0ff731f",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/resolve_task_command.sql",
+      "sha256": "2bb2623e19c5799bddc4b0d906c98bb4b0d4b5013e68966ebca0aff1bd53b195",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/apply_later_command.sql",
+      "sha256": "270ca750541f0895c4d1ff7278d9cce3e7c87e72daffb5b8cc9513108d08cc44",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/telegram_update_claims.sql",
+      "sha256": "9f8175802012e6bc96a1d65f51f08df25ba49bc4a1fab9bd9a0f107f3150b55b",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/dashboard_snapshot.sql",
+      "sha256": "a9a49caf3a1d32425c586034b13bf6d6be941c4511ceac2709ea34d865416a7e",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/seed_legacy_reliability.sql",
+      "sha256": "d0ee352af830dfa6f1f9104b4fd532199f560abb6c1d621d91a747f972fa669f",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/011_reminder_reliability_instrumentation.sql",
+      "sha256": "ec743bedb76bcd8eacbf5993ba8b2a94ebfdd3f851a3cd1b6ad69ec5d1655b3e",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/reminder_reliability.sql",
+      "sha256": "eb83047dd8d8ae49246189afe970f00437be6dec256ea9a04ec3e030597dd68f",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/012_canonical_planning_day_move.sql",
+      "sha256": "f8a77b5db981b1f6e953bf40fc69c97cb2dc5007be9502e538b5a545ab7dc326",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/move_task_planning_day_command.sql",
+      "sha256": "fafdd3cdf27b64d01dd5bd0ebb56fe2f0a63a2c493437a3947362c133860ba8f",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/013_dashboard_first_activation.sql",
+      "sha256": "133c6b57c9c7d7aa05dd4a5b0b228c6e34b2ca34e945f13bc149a4b124a3d29b",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/activation_journey.sql",
+      "sha256": "82249742131a67293fa27c9066a12a6b0c61eb21f7b663da8d13b183d80a0a5d",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/014_application_schema_version.sql",
+      "sha256": "03e757c16e5ecbfd529fd446bc0bb293e8d5e7187308c47c750f790b2e3e7185",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/015_ordered_pairing_locks.sql",
+      "sha256": "55cac11a14e03a8be4cba13c107994a2fe17f6fb31e67bffb53028d5d676fdae",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/assert_015_ordered_pairing_locks.sql",
+      "sha256": "c5a3f8dd850bda1966df80ec17f11a8aca295fc218637b72aee0dc898f7ae80e",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/016_session_modes_grants_handoffs.sql",
+      "sha256": "d08b4e28366982d06e2e1c5de1aa8088d90b09bf505e515accf3a0615d70c3df",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/assert_016_session_modes_grants_handoffs.sql",
+      "sha256": "b1f81a37d440a81c22b14bcde246a57324cb7a6b89526bf8dbae0b1585c2a72e",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/017_mode_conversations.sql",
+      "sha256": "9aa3d1bc883d66bd004b051aa9e24e24a019ddbdd0aee6caa87a4f3642015dcb",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/assert_017_mode_conversations.sql",
+      "sha256": "eca92f54dae20c5f79b8b50d990a90974ce3eb8eb0b9b2cdb075d0722dd179ca",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/018_coaching_programs.sql",
+      "sha256": "ed445154f5492b5601953a764d70e365917e5c6162b8453cf00ca51dd2e33e4a",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/assert_018_coaching_programs.sql",
+      "sha256": "d59e843a161582a3288065cdb0123855acdf4aeea4dd98e3c8c68d6cd4f743cb",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/019_proactive_delivery_budget.sql",
+      "sha256": "5e3e6b30741f49cadfb1a17a7e2cd9e4b034404987a3cb164b82a73184c45254",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/assert_019_proactive_delivery_budget.sql",
+      "sha256": "e29fdbd5f873d5a40afe00062e89595e9b71e4b2ba5392e6de6654fc5e0015f3",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/020_durable_memory.sql",
+      "sha256": "e5e6a3958676ab862bed657a06a7bc637c1b4a8996ba8dda62fbbb30c6eed14b",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/assert_020_durable_memory.sql",
+      "sha256": "9f75904aeb703d6cfae150f57c3f0ba39a29f2fccc6785d16f58ee812305d9f4",
+      "result": "PASS"
+    },
+    {
+      "path": "migrations/021_confirmed_mode_suggestions.sql",
+      "sha256": "12d607bfda1f7eb1280c56c46156f0fb7c0a89bf06a0baa045b28c1b42b703a8",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/assert_021_confirmed_mode_suggestions.sql",
+      "sha256": "7ebdbf7dece23789ae46eb04a7330fa82ecc5cafb8bf8b110caf2e26c1d75e00",
+      "result": "PASS"
+    },
+    {
+      "path": "tests/sql/app_schema_version.sql",
+      "sha256": "263c1ecccf577caf3a628c9303bae5f28336af96a8d13bcc2bb5c244c4ec7957",
+      "result": "PASS"
+    }
+  ],
+  "checks": {
+    "check_schema_chain.py": {
+      "result": "PASS",
+      "output": "ok: database and code agree on schema revision 21\nok: migration 014 refused a chain missing migration 003\nok: migration 014 refused a chain missing migration 004\nok: migration 014 refused a chain missing migration 007\nok: migration 014 refused a chain missing migration 008\nok: migration 014 refused a chain missing migration 009\nok: migration 014 refused a chain missing migration 010\nok: migration 014 refused a chain missing migration 012\nok: migration 014 refused a chain missing migration 013\nok: migration 015 refused a missing ledger 14\nok: migration 016 refused a missing ledger 15\nok: migration 017 refused a missing ledger 16\nok: migration 018 refused a missing ledger 17\nok: migration 019 refused a missing ledger 18\nok: migration 020 refused a missing ledger 19\nok: migration 021 refused a missing ledger 20"
+    },
+    "check_activation_lock_order.py": {
+      "result": "PASS",
+      "output": "ok: the forced interleave held, and 30 trials (155 calls) found no deadlock. Only the forced interleave tests lock order; see this script's docstring for what it does not cover."
+    }
+  },
+  "schema_version": 21,
+  "revision": "82527387d61e989ddfcbb73fd7bc5c77734ca034",
+  "result": "PASS",
+  "cluster_stopped": true
+}

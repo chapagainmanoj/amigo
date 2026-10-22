@@ -1,0 +1,19 @@
+{
+  "disposition": "ship",
+  "reviewer": "independent impeccable_finish_reviewer",
+  "scope": "narrow opt-in preference extension",
+  "source_sha256": {
+    "web/src/components/ModeSuggestionPreference.jsx": "962e8f85e574acf1a0210c355d162e6d3c5b2d73a285ace4fcdd6f69306c9bfa",
+    "web/src/components/ModeSuggestionPreference.css": "26ca0c324377f153e07c283b25b586779fd84c18c4a70153ede2f05378c97ffd",
+    "web/src/components/DashboardView.jsx": "2bd3c4e4bfea8d06804ba072e10ca264b017c6db4d97a11118f3e34ecb7bc96e"
+  },
+  "fixtures": "fictional localhost only; requests blocked outside127.0.0.1; no production authorization claim",
+  "browser_evidence": "browser-evidence.json",
+  "captures": [
+    "desktop.png",
+    "mobile.png"
+  ],
+  "findings": [],
+  "root_visual_review": "desktop/mobile captures match incumbent identity, focus visible, no overflow",
+  "limits": "frontend stub/API behavior evidence; not production authorization or live release approval"
+}

@@ -907,3 +907,40 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Independent cbt_selector29handoffPASS2.88s +5maintenancePASS2.47s; no scoped blocker.
   Rootfull1522passed22.55s; Ruff/diffclean,111currency/Dailygolden included. No new SQL, models,
   production data, endpoint or privacy authorization. Gate A release certification remains absent.
+
+### Phases 4–6 review fixes — final verification / STOP owner review
+
+- Final implementation8252738 on develop. Actual commit/file/coauthor index:
+  proposals/review-fixes-commit-index.json (31commits since reviewed0be20bb, including previously
+  completed UI/provenance). Every repair integrated separately. This final evidence slice changes
+  only review records, local probe script and fictional browser captures.
+- Full1522passed22.55s; Ruff src/tests/scripts and diffcheckclean. Daily instructions,60case suite,
+  deterministic suite and currency checker byte-unchanged versus0be20bb;111currency tests and
+  Daily golden/Tool-schema checks included. Source fingerprints current; no release Gate A
+  certification. No new model requests; candidates remainPlanned, CBTpersonalinputoff.
+- Fresh Unix-socket-only PostgreSQL cluster: all45CI SQL files PASS001–021/assertions; schema21;
+  all missing-predecessor gates refuse; forced Activation interleave and30trials/155calls no
+  deadlock. Final complete proof+filehashes: proposals/review-fixes-final-sql-chain.json;
+  reproducible driver: proposals/probes/review-fixes-final-sql-chain.py. Cluster stopped.
+  First evidence driver's redundant final version query used wrong function name after its45SQL/
+  officialchecks passed; corrected and reran whole chain in another new cluster. Initial attempt
+  retained separately, explicitly DRIVER_ERROR. Final proof matches independently reviewed hashes:
+ 0179aa3d1bc…,0195e3e6b30…,020e5e6a395…,02112d607bf….018unchanged.
+- Each SQL edit independently reviewed before integration, including final concurrent FK deletion
+  tests for021; exact hashes and separate probes recorded above. Protected edits:017/019/020/021
+  only. No edits to.env/config/dbsingleton/smoke; no push/deploy/Supabase. Schema21 cutover remains
+  owner-run under docs/runbooks/mode-schema-21-cutover.md, allfive017→021 in one session.
+- Scheduler smokePASS. Frontend ESLint/buildPASS1992modules (existing>500kchunkwarning).
+  New preference UI: desktop1440/mobile390 fictional browserPASS defaultoff/keyboardoptin/out,
+  failedwrite lock+refresh/focus/nooverflow/runtimeerrors[]. Detector[]; root viewedboth captures;
+  fresh independent finish review disposition ship, no materialfixes. Evidence sourcehashes and
+  screenshots: .impeccable/review/mode-suggestions/. No production authorization claim.
+- Three managed review checkouts archived recoverably; earlier temporary database and preview
+  stopped. All independent reviewer clusters stopped. No active model jobs; no Issue09 repository
+  threat model/code. Android remains untested.
+- Provisional limits for owner review: explicit retained-version policy untilForget/off;7dayactive/
+ 30daybackup Forget propagation still needs operational verification. Qualified wellbeing/privacy
+  gates remain closed. Provider endpoint creation follows atomic logical opening via retry receipt;
+  failure notices offer at-most-one attempt, so crash/uncertain provider acceptance may lose notice.
+  No claim of exactly-once provider delivery or comprehensive crisis-language detection.
+- STOP here for owner review. No new Phase6/Issue09 work.

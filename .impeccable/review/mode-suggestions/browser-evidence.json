@@ -1,0 +1,24 @@
+[
+  {
+    "name": "desktop",
+    "defaultOff": true,
+    "keyboardOptIn": true,
+    "optOut": true,
+    "errorLocksWrite": true,
+    "refresh": true,
+    "visibleFocus": true,
+    "noOverflow": true,
+    "runtimeErrors": []
+  },
+  {
+    "name": "mobile",
+    "defaultOff": true,
+    "keyboardOptIn": true,
+    "optOut": true,
+    "errorLocksWrite": true,
+    "refresh": true,
+    "visibleFocus": true,
+    "noOverflow": true,
+    "runtimeErrors": []
+  }
+]

@@ -1,0 +1,493 @@
+{
+  "reviewed_baseline": "0be20bb",
+  "implementation_head": "82527387d61e989ddfcbb73fd7bc5c77734ca034",
+  "branch": "develop",
+  "commits": [
+    {
+      "commit": "20724b4ae1187df5cba07b8ad64d037221bfe78b",
+      "subject": "Add exact-preview Memory Inspector and owned rights controls",
+      "files": [
+        ".impeccable/review/memory-inspector/desktop-export.csv",
+        ".impeccable/review/memory-inspector/desktop-export.json",
+        ".impeccable/review/memory-inspector/desktop-first-opt-in.png",
+        ".impeccable/review/memory-inspector/desktop.png",
+        ".impeccable/review/memory-inspector/focus-verification.json",
+        ".impeccable/review/memory-inspector/mobile-export.csv",
+        ".impeccable/review/memory-inspector/mobile-export.json",
+        ".impeccable/review/memory-inspector/mobile-first-opt-in.png",
+        ".impeccable/review/memory-inspector/mobile.png",
+        ".impeccable/review/memory-inspector/verification.json",
+        ".scratch/modular-modes/proposals/memory-inspector-independent-probes/focus.cjs",
+        ".scratch/modular-modes/proposals/memory-inspector-independent-probes/preview.mjs",
+        ".scratch/modular-modes/proposals/memory-inspector-independent-probes/verify.cjs",
+        ".scratch/modular-modes/proposals/memory-inspector-independent-verification.md",
+        ".scratch/modular-modes/review-queue.md",
+        "web/src/components/AppShell.jsx",
+        "web/src/components/MemoryInspector.css",
+        "web/src/components/MemoryInspector.jsx"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "11e923d88f926b5b83dd970757dfffd92a01878c",
+      "subject": "Bind optional Memory previews to actual owned Message provenance",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "src/memory/memory_store.py",
+        "src/memory/store.py",
+        "src/tools/memory.py",
+        "tests/fakes.py",
+        "tests/test_memory_service.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "b2c824ff577c64a93db9cd18928f63d4e11aa816",
+      "subject": "Bound offline model iterations and correct observed Mode reply behavior",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "src/agent/coach.py",
+        "src/agent/reflect.py",
+        "src/agent/runtime.py",
+        "tests/test_dev_models.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "21e093b10658ad5433545e65f62b8bbf73b8750b",
+      "subject": "Archive interrupted model evidence and record owner review-fix scope",
+      "files": [
+        ".scratch/gemini-usage.jsonl",
+        ".scratch/modular-modes/evals/coach-claude-full.json",
+        ".scratch/modular-modes/evals/coach-claude-revision-ga-nonmut-03.json",
+        ".scratch/modular-modes/evals/coach-claude-revision-ga-nonmut-06.json",
+        ".scratch/modular-modes/evals/coach-gemini-final.json",
+        ".scratch/modular-modes/evals/coach-ollama-bounded-full.json",
+        ".scratch/modular-modes/evals/coach-ollama-full.json",
+        ".scratch/modular-modes/evals/gemini-final-coordinator.json",
+        ".scratch/modular-modes/evals/gemini-owner-stop.json",
+        ".scratch/modular-modes/evals/ollama-bounded-cancellation.json",
+        ".scratch/modular-modes/evals/ollama-unbounded-cancellation.json",
+        ".scratch/modular-modes/evals/recommender-claude-full.json",
+        ".scratch/modular-modes/evals/recommender-ollama-full.json",
+        ".scratch/modular-modes/evals/reflect-claude-full.json",
+        ".scratch/modular-modes/evals/reflect-claude-revision-ga-hard-06.json",
+        ".scratch/modular-modes/evals/reflect-claude-revision-ga-hard-08.json",
+        ".scratch/modular-modes/evals/reflect-claude-revision-ga-hard-10.json",
+        ".scratch/modular-modes/evals/reflect-ollama-full.json",
+        ".scratch/modular-modes/issues/05-suggest-modes-with-confirmed-routing.md",
+        ".scratch/modular-modes/issues/06-add-memory-service.md",
+        ".scratch/modular-modes/issues/08-run-durable-mode-workflows.md",
+        ".scratch/modular-modes/proposals/provider-iteration-failure-review.md",
+        ".scratch/modular-modes/review-queue.md"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "4e34f39c1d9621739ae819b1766bc0c81e0cd8f7",
+      "subject": "Allow production command routing with Telegram topics disabled",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "README.md",
+        "docs/adr/0003-mode-topics.md",
+        "docs/architecture.md",
+        "docs/capability-matrix.md",
+        "src/channels/telegram.py",
+        "tests/test_channel_conversations.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "d6c3c0f5c97f35c5e55a39fdf2bd6c3620788145",
+      "subject": "Fix proactive Reminder profile lock ordering",
+      "files": [
+        ".scratch/modular-modes/proposals/review-fix05-lock-order-verification.md",
+        ".scratch/modular-modes/review-queue.md",
+        "migrations/019_proactive_delivery_budget.sql",
+        "tests/test_migration_lock_order.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "d5a17395dc61a0f1bc3803481f81c59769cd6b45",
+      "subject": "Allow Memory consent withdrawal with complete record deletion",
+      "files": [
+        ".scratch/modular-modes/proposals/review-fix13-memory-withdrawal-verification.md",
+        ".scratch/modular-modes/review-queue.md",
+        "migrations/020_durable_memory.sql",
+        "src/api/memory.py",
+        "src/memory/durable.py",
+        "src/memory/memory_store.py",
+        "src/memory/store.py",
+        "src/memory_service.py",
+        "tests/fakes.py",
+        "tests/sql/assert_020_durable_memory.sql",
+        "tests/test_memory_service.py",
+        "tests/test_memory_store.py",
+        "web/src/components/MemoryInspector.css",
+        "web/src/components/MemoryInspector.jsx"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "2c11fa389f38c7bf4ea79846f3f5a29ba2fa191c",
+      "subject": "Align fake Session transcript DTO with production Stores",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "tests/fakes.py",
+        "tests/test_session_message_contract.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "aae1dd7094b1223c377a7de859659d56479103d8",
+      "subject": "fix: isolate mode maintenance failures",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "src/cli.py",
+        "src/conversations.py",
+        "src/evaluation/gate_a.py",
+        "src/main.py",
+        "src/maintenance.py",
+        "tests/test_mode_maintenance.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "9dbec28e3cbc471e2aed4d27dceec959510a2218",
+      "subject": "docs: cover full schema 21 cutover",
+      "files": [
+        ".scratch/modular-modes/proposals/topic-spike-runbook.md",
+        ".scratch/modular-modes/review-queue.md",
+        "README.md",
+        "docs/runbooks/mode-schema-21-cutover.md"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "5a45f2825d73151ade7010ba276fbf4cc35009fd",
+      "subject": "Make unavailable handoff recoveries terminal and fence failure outcomes",
+      "files": [
+        ".scratch/modular-modes/proposals/review-fix-04-handoff-terminal.md",
+        ".scratch/modular-modes/review-queue.md",
+        "migrations/017_mode_conversations.sql",
+        "src/memory/memory_store.py",
+        "src/memory/modes.py",
+        "src/memory/store.py",
+        "tests/fakes.py",
+        "tests/sql/assert_017_mode_conversations.sql",
+        "tests/test_handoff_terminal_execution.py",
+        "tests/test_mode_conversation_store.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "699fecdcf21561a90c341560fb79210e83d2be89",
+      "subject": "Remove forgotten Memory digests and purge stale confirmation claims",
+      "files": [
+        ".scratch/modular-modes/proposals/memory-retention-policy.md",
+        ".scratch/modular-modes/review-queue.md",
+        "migrations/020_durable_memory.sql",
+        "src/memory/durable.py",
+        "src/memory/memory_store.py",
+        "src/memory/store.py",
+        "src/memory_service.py",
+        "tests/fakes.py",
+        "tests/sql/assert_020_durable_memory.sql",
+        "tests/test_memory_service.py",
+        "tests/test_memory_store.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "5e6a6558d992a2137f628f22f2bda8c06b1f6229",
+      "subject": "Limit saved Memory context to escaped content category and purpose",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "src/memory_service.py",
+        "tests/test_memory_service.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "929df0da5cc97dbdddfbe5d7d495aa43ad021d80",
+      "subject": "Budget only Amigo initiated proactive deliveries",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "README.md",
+        "docs/architecture.md",
+        "docs/capability-matrix.md",
+        "docs/pre-launch-gap-analysis.md",
+        "evals/gate_a/v1/budget-regressions.json",
+        "migrations/019_proactive_delivery_budget.sql",
+        "scripts/run_gate_a_eval.py",
+        "src/evaluation/gate_a.py",
+        "src/memory/memory_store.py",
+        "src/memory/proactive.py",
+        "src/memory/store.py",
+        "src/scheduler/reminders.py",
+        "src/tools/toolsets.py",
+        "tests/fakes.py",
+        "tests/sql/assert_019_proactive_delivery_budget.sql",
+        "tests/test_budget_gate_a.py",
+        "tests/test_coaching_delivery.py",
+        "tests/test_migration_lock_order.py",
+        "tests/test_reminder_budget.py",
+        "tests/test_scheduler.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "7c92c38e09c0c558569ce082df794980696266f5",
+      "subject": "fix: avoid unchanged Mode selector writes",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "src/bot/modes.py",
+        "tests/test_mode_routing.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "4a7a426a5439a4fe5c8aeb51ae6b3c3762a89c8a",
+      "subject": "fix: persist pairing conversations without bootstrap topics",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "src/bot/handlers.py",
+        "src/bot/pairing.py",
+        "src/channels/telegram.py",
+        "src/conversations.py",
+        "tests/test_channel_conversations.py",
+        "tests/test_pairing.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "325dd65df8aa2e7b15d3f4dfe898db0df86b2c68",
+      "subject": "Order Memory locks and sanitize invalid inputs",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "migrations/020_durable_memory.sql",
+        "src/memory/durable.py",
+        "src/memory/store.py",
+        "tests/sql/assert_020_durable_memory.sql",
+        "tests/test_memory_lock_order.py",
+        "tests/test_memory_store.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "9367376aa825332d286d2f10d3ea653e97f0eeda",
+      "subject": "Bound handoff retries and persist one terminal failure notice",
+      "files": [
+        ".scratch/modular-modes/proposals/review-fix-03-bounded-handoffs.md",
+        ".scratch/modular-modes/review-queue.md",
+        "migrations/017_mode_conversations.sql",
+        "src/bot/handlers.py",
+        "src/handoffs.py",
+        "src/memory/context.py",
+        "src/memory/memory_store.py",
+        "src/memory/modes.py",
+        "src/memory/store.py",
+        "src/turns.py",
+        "tests/fakes.py",
+        "tests/sql/assert_017_mode_conversations.sql",
+        "tests/test_handoff_bounded_execution.py",
+        "tests/test_handoff_terminal_execution.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "582da5f81571d4ef0ed9e9e9e7644c2db3436c67",
+      "subject": "fix: route Reflect safety statements before model processing",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "evals/reflect/v1/deterministic.json",
+        "scripts/run_gate_a_eval.py",
+        "scripts/run_mode_deterministic_eval.py",
+        "src/bot/modes.py",
+        "src/turns.py",
+        "src/wellbeing.py",
+        "tests/test_reflect.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "8fe1256e3ab3449c63ff85b2c91d93074efdec72",
+      "subject": "Scope conversation serialization to each owner safely",
+      "files": [
+        ".scratch/modular-modes/proposals/probes/review-fix-11-conversation-isolation.py",
+        ".scratch/modular-modes/proposals/review-fix-11-conversation-isolation.md",
+        ".scratch/modular-modes/review-queue.md",
+        "migrations/017_mode_conversations.sql"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "629fff083850c9482c2af5764f97f4a2145de333",
+      "subject": "Handle stale Memory pause settings without running a Turn",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "src/bot/handlers.py",
+        "tests/test_memory_pause_conflict.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "a99122ac829d5eb3195d23cac5fe82f237502b43",
+      "subject": "Record explicit progress suppression for Coach check ins",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "migrations/019_proactive_delivery_budget.sql",
+        "src/memory/memory_store.py",
+        "src/memory/proactive.py",
+        "tests/fakes.py",
+        "tests/sql/assert_019_proactive_delivery_budget.sql",
+        "tests/test_coaching_delivery.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "98e8d662ed55ed803b72fe688973996b54adfc52",
+      "subject": "fix: scope crisis negation to each disclosure",
+      "files": [
+        "src/wellbeing.py",
+        "tests/test_reflect.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "509132119a29183813d9c9cc981a3fa617297f38",
+      "subject": "Require participant opt-in before Mode suggestions",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "migrations/021_confirmed_mode_suggestions.sql",
+        "src/api/mode_suggestions.py",
+        "src/main.py",
+        "src/memory/suggestions.py",
+        "tests/sql/assert_021_confirmed_mode_suggestions.sql",
+        "tests/test_mode_suggestion_preference_api.py",
+        "tests/test_mode_suggestions.py",
+        "web/src/components/DashboardView.jsx",
+        "web/src/components/ModeSuggestionPreference.css",
+        "web/src/components/ModeSuggestionPreference.jsx"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "8ae2f736ca0e48b8f22601951b702299009bc13f",
+      "subject": "Isolate Coach maintenance failures per Program and delivery",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "src/scheduler/coaching.py",
+        "tests/test_coaching_delivery.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "3811bc8c7ad1c894c624853b6732a1edd2bf9f06",
+      "subject": "fix: harden Mode application boundaries",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "scripts/grant_mode.py",
+        "src/api/coaching.py",
+        "src/bot/modes.py",
+        "src/channels/telegram.py",
+        "src/conversations.py",
+        "src/tools/coaching.py",
+        "tests/test_channel_conversations.py",
+        "tests/test_coaching_application.py",
+        "tests/test_grant_mode_script.py",
+        "tests/test_mode_conversation_store.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "1f1b8b5f42f99901d777d37f72a01fd4055878ad",
+      "subject": "Check Coach admission before creating conversations",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "src/memory/proactive.py",
+        "src/scheduler/coaching.py",
+        "tests/test_coaching_delivery.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "13f8b81daa02e6ee2f87d1dc3937b439ce6371b1",
+      "subject": "fix: enforce Coach approval boundary and semantic candidate evals",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "evals/coach/v1/cases.json",
+        "evals/coach/v1/deterministic.json",
+        "evals/recommender/v1/cases.json",
+        "evals/recommender/v1/deterministic.json",
+        "evals/reflect/v1/cases.json",
+        "evals/reflect/v1/deterministic.json",
+        "src/agent/coach.py",
+        "src/coaching.py",
+        "src/evaluation/gate_a.py",
+        "src/evaluation/meaning.py",
+        "src/tools/coaching.py",
+        "tests/test_candidate_meanings.py",
+        "tests/test_coaching_application.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "0e3aaf224023fc047711f0141d80e9923d7ae231",
+      "subject": "docs: clarify provisional Memory retention policy attribution",
+      "files": [
+        ".scratch/modular-modes/proposals/memory-retention-policy.md",
+        ".scratch/modular-modes/review-queue.md"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "3f9c97f2b6aec2e2564dfd126e16ca2a2c58d0e3",
+      "subject": "Open confirmed Mode suggestions atomically with fenced retry receipts",
+      "files": [
+        ".scratch/modular-modes/proposals/suggestion-opening-receipt.md",
+        ".scratch/modular-modes/review-queue.md",
+        "migrations/021_confirmed_mode_suggestions.sql",
+        "src/memory/memory_store.py",
+        "src/memory/store.py",
+        "src/memory/suggestions.py",
+        "src/mode_suggestions.py",
+        "tests/fakes.py",
+        "tests/sql/assert_021_confirmed_mode_suggestions.sql",
+        "tests/test_mode_suggestions.py"
+      ],
+      "required_coauthor_footer": true
+    },
+    {
+      "commit": "82527387d61e989ddfcbb73fd7bc5c77734ca034",
+      "subject": "fix: recover durable handoff notices in production maintenance",
+      "files": [
+        ".scratch/modular-modes/review-queue.md",
+        "src/handoffs.py",
+        "src/main.py",
+        "tests/test_handoff_production_recovery.py"
+      ],
+      "required_coauthor_footer": true
+    }
+  ],
+  "protected_sql_sha256": {
+    "migrations/017_mode_conversations.sql": "9aa3d1bc883d66bd004b051aa9e24e24a019ddbdd0aee6caa87a4f3642015dcb",
+    "migrations/019_proactive_delivery_budget.sql": "5e3e6b30741f49cadfb1a17a7e2cd9e4b034404987a3cb164b82a73184c45254",
+    "migrations/020_durable_memory.sql": "e5e6a3958676ab862bed657a06a7bc637c1b4a8996ba8dda62fbbb30c6eed14b",
+    "migrations/021_confirmed_mode_suggestions.sql": "12d607bfda1f7eb1280c56c46156f0fb7c0a89bf06a0baa045b28c1b42b703a8"
+  },
+  "unchanged_protected": [
+    ".env",
+    "src/config.py",
+    "src/db/supabase.py",
+    "scripts/smoke_check.py"
+  ],
+  "unchanged_daily": [
+    "evals/gate_a/v1/cases.json",
+    "evals/gate_a/v1/deterministic.json",
+    "tests/test_gate_a_currency.py",
+    "src/agent/prompts.py"
+  ],
+  "no_issue09_document": true
+}
