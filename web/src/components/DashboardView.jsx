@@ -30,6 +30,14 @@ function failureMessage(error, subject) {
 // alone, so it is the only action that clears those rows.
 const DUE_STATES = new Set(['delivered', 'overdue'])
 
+// scheduled_time is the UTC instant; render it in the viewer's browser timezone.
+const formatReminderTime = (iso) =>
+  new Date(iso).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZoneName: 'short',
+  })
+
 export default function DashboardView() {
   const [snapshot, setSnapshot] = useState({
     tasks: { today: [], inbox: [], carried_over: [] },
@@ -363,8 +371,7 @@ export default function DashboardView() {
                   >
                     <Clock size={14} color="var(--signal-deep)" />
                     <span style={{ fontSize: '0.85rem', color: 'var(--signal-deep)' }}>
-                      {rem.intended_local_date} {rem.intended_local_time.slice(0, 5)}{' '}
-                      {rem.intended_timezone} · {rem.delivery_state}
+                      {formatReminderTime(rem.scheduled_time)} · {rem.delivery_state}
                     </span>
                   </div>
                   <div style={{ fontSize: '0.95rem', marginBottom: '12px' }}>

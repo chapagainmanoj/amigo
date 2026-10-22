@@ -15,7 +15,7 @@ from src.memory.pairing import (
     ActivationTermsRequiredError,
     PairingTokenRateLimitError,
 )
-from src.utils import utc_now
+from src.utils import UTC, utc_now
 
 router = APIRouter()
 
@@ -56,5 +56,6 @@ async def get_pairing_token(
 
     return {
         "bot_link": f"https://t.me/{bot_username}?start=pair_{token}",
-        "expires_at": expires_at.isoformat(),
+        # utc_now() is naive; without an offset the browser parses it as local time.
+        "expires_at": expires_at.replace(tzinfo=UTC).isoformat(),
     }

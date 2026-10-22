@@ -105,6 +105,29 @@ def test_snapshot_populations_reminders_and_stale_sessions_are_consistent():
     assert snapshot["sessions"][0]["state"] == "inactive"
     assert snapshot["sessions"][0]["label"] == "Inactive conversation"
     assert snapshot["sessions"][0]["session_type_label"] == "Structured Problem Solving"
+    assert snapshot["sessions"][0]["duration_minutes"] == 30
+
+
+def test_lazily_closed_session_duration_ends_at_last_activity():
+    user = {"user_id": "u1", "timezone": "UTC", "session_timeout_minutes": 120}
+    sessions = [
+        {
+            "session_id": "s1",
+            "started_at": "2026-08-01T12:00:00+00:00",
+            "last_activity_at": "2026-08-01T12:20:00+00:00",
+            # Closed by the next message, three weeks later.
+            "ended_at": "2026-08-22T09:00:00+00:00",
+            "session_type": "casual",
+            "context_summary": None,
+        }
+    ]
+
+    snapshot = build_dashboard_snapshot(
+        user, [], [], sessions, generated_at=datetime(2026, 8, 22, 9, 0, tzinfo=UTC)
+    )
+
+    assert snapshot["sessions"][0]["state"] == "ended"
+    assert snapshot["sessions"][0]["duration_minutes"] == 20
 
 
 async def test_authenticated_snapshot_is_tenant_scoped_and_replaced_as_one_document():

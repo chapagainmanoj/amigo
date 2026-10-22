@@ -101,7 +101,9 @@ def build_dashboard_snapshot(
                 "ended": "Conversation",
             }[state],
             session_type_label=(session.get("session_type") or "casual").replace("_", " ").title(),
-            duration_minutes=max(0, round(((ended or now) - started).total_seconds() / 60)),
+            # Timeout and midnight closes are lazy: ended_at is stamped when the next message
+            # arrives, possibly weeks later. Last activity is when the conversation actually ended.
+            duration_minutes=max(0, round((last_activity - started).total_seconds() / 60)),
         )
         session_rows.append(row)
 
