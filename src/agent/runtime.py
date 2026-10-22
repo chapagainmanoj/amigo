@@ -114,7 +114,7 @@ class ModeRuntime:
         self.routing = routing or ExplicitThenDefault()
         self.entitlements = entitlements or ActivatedParticipants()
         self._agents: dict[str, Agent[ToolContext, str]] = {}
-        self._models: dict[str, Model] = {}
+        self._models: dict[tuple[str, bool], Model] = {}
         self._states_safety_core: dict[str, bool] = {}
         self._model_override: ContextVar[Any | None] = ContextVar(
             f"mode_runtime_model_{id(self)}", default=None
@@ -203,26 +203,32 @@ class ModeRuntime:
         from src.model_routing import normalize_model
 
         reference = normalize_model(reference)
-        if reference.startswith("claude-cli:"):
-            from src.config import settings
-            from src.runtime_config import is_production
+        from src.config import settings
+        from src.runtime_config import is_production
 
-            if is_production(settings):
-                raise ValueError("Claude CLI is development-only")
-        model = self._models.get(reference)
+        production = is_production(settings)
+        if reference.startswith("claude-cli:") and production:
+            raise ValueError("Claude CLI is development-only")
+        cache_key = (reference, production)
+        model = self._models.get(cache_key)
         if model is None:
             if reference.startswith("claude-cli:"):
                 from src.agent.claude_cli_model import claude_cli_model
 
                 model = claude_cli_model(reference.partition(":")[2])
             elif reference.partition(":")[0] in {"google", "google-gla"}:
-                from src.model_usage import LoggedGoogleModel
+                from pydantic_ai.models.google import GoogleModel
 
+                model_type = GoogleModel
+                if not production:
+                    from src.model_usage import LoggedGoogleModel
+
+                    model_type = LoggedGoogleModel
                 provider, _, model_name = reference.partition(":")
-                model = LoggedGoogleModel(model_name, provider=_provider_for(provider))
+                model = model_type(model_name, provider=_provider_for(provider))
             else:
                 model = infer_model(reference, _provider_for)
-            self._models[reference] = model
+            self._models[cache_key] = model
         return model
 
     async def agent_for(self, mode: ModeDefinition, *, fallback=False) -> Agent[ToolContext, str]:
