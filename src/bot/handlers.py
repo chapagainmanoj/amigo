@@ -7,6 +7,7 @@ from src.bot.reminder_actions import ReminderActions
 from src.bot.turns import TurnProcessor
 from src.channels.base import ConversationRef, MessageChannel
 from src.coaching import CoachingController
+from src.commands.base import StaleVersionError
 from src.handoffs import HandoffController
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
@@ -98,9 +99,19 @@ class BotHandlers:
             return
 
         if text.strip().split()[:1] == ["/memory"]:
-            if not await self.memory.handle(user, chat_id, text.strip(), conversation):
+            try:
+                handled = await self.memory.handle(user, chat_id, text.strip(), conversation)
+            except StaleVersionError:
                 await self.channel.send_message(
-                    chat_id, "Use /memory to inspect saved Memory and pause controls.",
+                    chat_id,
+                    "Memory settings changed. Open /memory again and review the current controls.",
+                    conversation=conversation,
+                )
+                return
+            if not handled:
+                await self.channel.send_message(
+                    chat_id,
+                    "Use /memory to inspect saved Memory and pause controls.",
                     conversation=conversation,
                 )
             return

@@ -791,3 +791,11 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   completed; forced two-owner absent-endpoint race rejected loser without foreign mutation;
   close/reopen/closed-owner probes PASS. Root303conversation/lock/currency passed11.32s;
   Ruff/diffclean. Latestfull1401passed; no Gate A release certification or live migration apply.
+
+### Review fix19 / pause — stale Memory state reply
+
+- Author6833721; handlers.py and MemoryService regression only; protected/SQL:none.
+- /memory pause catches stale-version conflict and asks participant to refresh current state;
+  keeps current conversation and never calls model or exposes RPC details.
+- Root67Memory/pairing passed2.45s; Ruff/diffclean. Latestfull1401passed; currency/source
+  certification remains absent. Atomic suggestion confirmation follows separately.
