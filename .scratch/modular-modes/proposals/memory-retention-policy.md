@@ -2,7 +2,8 @@
 
 Status: implementation policy, owner review; participant admission remains OFF.
 
-The owner chose the documented-policy option in review item 14. Expiry and supersession stop
+The implementation uses the documented-policy option permitted by review item 14; owner review
+is pending. Expiry and supersession stop
 retrieval immediately but do not start a new deletion timer: the exact versions remain visible
 in the Inspector until the participant chooses Forget or turns Memory off. This preserves the
 version-history contract. Active, inactive and needs-confirmation records follow the same

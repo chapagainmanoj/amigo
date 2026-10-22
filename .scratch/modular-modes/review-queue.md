@@ -872,3 +872,10 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   at earlier source, not passing certification. Partial cancelled Ollama/Gemini artifacts unchanged.
   No model calls during repair; Gemini total remains16requests/27,572knowninput/5,644knownoutput,
  15ok/1error,1unknownusage. All3Modes remainPlanned until fresh required Gemini suites pass.
+
+### Review fix14 / policy attribution clarification
+
+- Corrected retention policy attribution: implementation uses owner-permitted documented-policy
+  option, pending owner review; owner did not independently select this implementation policy.
+  Decision13 explicitly preserves superseded version history and applies7day/30day deletion windows
+  afterForget. No code, notice, production data or privacy promise changed. Diffcheckclean.
