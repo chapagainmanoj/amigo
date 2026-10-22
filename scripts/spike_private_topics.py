@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Owner-run private-topic probe. Requires an explicit disposable test-bot token.
+"""Owner-run private-topic probe. Reads a disposable token from TEST_BOT_TOKEN.
 
 No application settings or .env are loaded. Console evidence contains only stage
 names, booleans, update IDs and thread IDs; incoming text and API errors stay private.
@@ -157,20 +157,20 @@ async def main(argv: list[str] | None = None) -> int:
     logging.getLogger("httpx").disabled = True
     logging.getLogger("httpcore").disabled = True
     parser = SafeParser(description=__doc__)
-    parser.add_argument(
-        "--token", required=True, help="Disposable test bot token; never production"
-    )
     parser.add_argument("--test-bot", action="store_true", help="Acknowledge disposable test bot")
     parser.add_argument("--chat-id", required=True, type=int, help="Positive private test chat ID")
     parser.add_argument("--polls", type=int, default=6, help="10-second polls per client, 1–12")
     try:
         args = parser.parse_args(argv)
-        if not args.test_bot or not args.token or args.chat_id <= 0 or not 1 <= args.polls <= 12:
+        if not args.test_bot or args.chat_id <= 0 or not 1 <= args.polls <= 12:
             raise SpikeError("Test-bot acknowledgement and positive private chat required.")
-        if args.token == os.environ.get("TELEGRAM_BOT_TOKEN"):
+        token = os.environ.get("TEST_BOT_TOKEN", "")
+        if not token or not token.strip():
+            raise SpikeError("TEST_BOT_TOKEN is required in the process environment.")
+        if token == os.environ.get("TELEGRAM_BOT_TOKEN"):
             raise SpikeError("Refusing the configured application bot token.")
         async with httpx.AsyncClient(timeout=20, follow_redirects=False, trust_env=False) as client:
-            await run_spike(TestBotAPI(args.token, client), args.chat_id, polls=args.polls)
+            await run_spike(TestBotAPI(token, client), args.chat_id, polls=args.polls)
         return 0
     except SpikeError as error:
         print(str(error))

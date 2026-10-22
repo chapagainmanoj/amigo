@@ -160,20 +160,24 @@ async def test_network_failure_never_exposes_token_url():
 
 
 @pytest.mark.parametrize("args", [
-    ["--token", TOKEN, "--chat-id", "42"],
-    ["--token", TOKEN, "--test-bot", "--chat-id", "-42"],
-    ["--token", TOKEN, "--test-bot", "--chat-id", PRIVATE],
-    ["--token", TOKEN, "--test-bot", "--chat-id", "42", "--polls", "0"],
+    ["--chat-id", "42"],
+    ["--test-bot", "--chat-id", "-42"],
+    ["--test-bot", "--chat-id", PRIVATE],
+    ["--test-bot", "--chat-id", "42", "--polls", "0"],
+    ["--test-bot"],
+    ["--token", TOKEN, "--test-bot", "--chat-id", "42"],
 ])
-async def test_cli_validation_does_not_echo_private_arguments(args, capsys):
+async def test_cli_validation_does_not_echo_private_arguments(args, monkeypatch, capsys):
+    monkeypatch.setenv("TEST_BOT_TOKEN", TOKEN)
     assert await spike.main(args) == 1
     output = capsys.readouterr().out
     assert TOKEN not in output and PRIVATE not in output
 
 
 async def test_process_environment_production_token_is_refused(monkeypatch, capsys):
+    monkeypatch.setenv("TEST_BOT_TOKEN", TOKEN)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", TOKEN)
-    assert await spike.main(["--token", TOKEN, "--test-bot", "--chat-id", "42"]) == 1
+    assert await spike.main(["--test-bot", "--chat-id", "42"]) == 1
     assert capsys.readouterr().out == "Refusing the configured application bot token.\n"
 
 
@@ -219,3 +223,27 @@ async def test_deleted_topic_other_errors_cannot_pass(capsys):
             await spike.run_spike(spike.TestBotAPI(TOKEN, client), 42, prompt=_prompt, polls=1)
     output = capsys.readouterr().out
     assert "deleted_topic_rejected" not in output and PRIVATE not in output
+
+
+@pytest.mark.parametrize("token", [None, "", "   "])
+async def test_missing_or_blank_environment_token_refused(token, monkeypatch, capsys):
+    if token is None:
+        monkeypatch.delenv("TEST_BOT_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("TEST_BOT_TOKEN", token)
+    assert await spike.main(["--test-bot", "--chat-id", "42"]) == 1
+    assert capsys.readouterr().out == "TEST_BOT_TOKEN is required in the process environment.\n"
+
+
+async def test_cli_uses_only_test_bot_environment_token(monkeypatch, capsys):
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setenv("TEST_BOT_TOKEN", TOKEN)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "different-production-token")
+    run = AsyncMock()
+    monkeypatch.setattr(spike, "run_spike", run)
+    assert await spike.main(["--test-bot", "--chat-id", "42"]) == 0
+    api, chat_id = run.call_args.args
+    assert api._token == TOKEN and chat_id == 42
+    assert run.call_args.kwargs == {"polls": 6}
+    assert capsys.readouterr().out == ""

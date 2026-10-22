@@ -7,13 +7,17 @@ configured webhook. Open its private chat first. Have Telegram desktop, iOS and
 Android available. The script consumes polling updates on this test bot and
 creates a disposable topic; it never changes webhook configuration.
 
+Set `TEST_BOT_TOKEN` in the process environment using your secret manager or a
+hidden shell prompt; do not put its value in shell history or command arguments.
+
 ```sh
 .venv/bin/python scripts/spike_private_topics.py \
-  --test-bot --token "$TEST_BOT_TOKEN" --chat-id "$TEST_PRIVATE_CHAT_ID"
+  --test-bot --chat-id "$TEST_PRIVATE_CHAT_ID"
 ```
 
-Supply a positive numeric private-chat ID. The token is an explicit argument;
-the script never reads application Settings or `.env`. If the token equals
+Supply a positive numeric private-chat ID. The token is read only from
+`TEST_BOT_TOKEN` in the process environment; `--token` is no longer accepted.
+The script never reads application Settings or `.env`. If the token equals
 `TELEGRAM_BOT_TOKEN` in the process environment, it refuses before any request.
 The owner must select the test token explicitly; unset production credentials
 are not discoverable by this script.
