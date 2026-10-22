@@ -57,7 +57,44 @@ BEGIN
  IF token IS NULL THEN RAISE EXCEPTION 'outbox not claimed'; END IF;
  IF public.mark_coaching_dispatch(other_u,key,token) THEN RAISE EXCEPTION 'cross-owner dispatch'; END IF;
  IF public.mark_coaching_dispatch(u,key,gen_random_uuid()) THEN RAISE EXCEPTION 'unfenced dispatch'; END IF;
- IF NOT public.mark_coaching_dispatch(u,key,token) THEN RAISE EXCEPTION 'valid dispatch denied'; END IF;
+ -- Cadence stays in the Program's UTC day; quiet hours follow the current profile zone.
+ UPDATE public.user_profiles SET timezone='Etc/GMT+12',
+ wake_time=to_char((clock_timestamp() AT TIME ZONE 'UTC')-interval '30 minutes','HH24:MI')::time,
+ sleep_time=to_char((clock_timestamp() AT TIME ZONE 'UTC')+interval '30 minutes','HH24:MI')::time
+ WHERE user_id=u;
+ IF public.mark_coaching_dispatch(u,key,token) THEN
+   RAISE EXCEPTION 'profile travel quiet hours ignored'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.coaching_delivery_outbox WHERE user_id=u
+   AND delivery_key=key AND state='cancelled') THEN
+   RAISE EXCEPTION 'quiet travel occurrence not cancelled'; END IF;
+ -- Reset this fixture's cancelled claim to isolate the inverse case: profile awake,
+ -- Program wall time quiet. This direct mutation is test-owner setup, never runtime behavior.
+ UPDATE public.coaching_delivery_outbox SET state='claimed',finished_at=NULL
+ WHERE user_id=u AND delivery_key=key;
+ UPDATE public.proactive_reservations SET state='reserved' WHERE user_id=u AND delivery_key=key;
+ UPDATE public.user_profiles SET
+ wake_time=to_char((clock_timestamp() AT TIME ZONE timezone)-interval '30 minutes','HH24:MI')::time,
+ sleep_time=to_char((clock_timestamp() AT TIME ZONE timezone)+interval '30 minutes','HH24:MI')::time
+ WHERE user_id=u;
+ -- Existing consumed Coach capacity survives Program deletion (program_id NULL).
+ INSERT INTO public.proactive_reservations(user_id,delivery_key,kind,scheduled_at,timezone,local_day,state)
+ VALUES(u,'travel:consumed','coaching',clock_timestamp(),'Etc/GMT+12',
+ (clock_timestamp() AT TIME ZONE 'Etc/GMT+12')::date,'accepted');
+ IF public.mark_coaching_dispatch(u,key,token) THEN
+   RAISE EXCEPTION 'dispatch ignored another Coach in current profile day'; END IF;
+ DELETE FROM public.proactive_reservations WHERE user_id=u AND delivery_key='travel:consumed';
+ UPDATE public.coaching_delivery_outbox SET state='claimed',finished_at=NULL
+ WHERE user_id=u AND delivery_key=key;
+ UPDATE public.proactive_reservations SET state='reserved' WHERE user_id=u AND delivery_key=key;
+ UPDATE public.user_profiles SET daily_message_budget=0 WHERE user_id=u;
+ IF public.mark_coaching_dispatch(u,key,token) THEN
+   RAISE EXCEPTION 'dispatch ignored reduced shared budget'; END IF;
+ UPDATE public.user_profiles SET daily_message_budget=2 WHERE user_id=u;
+ UPDATE public.coaching_delivery_outbox SET state='claimed',finished_at=NULL
+ WHERE user_id=u AND delivery_key=key;
+ UPDATE public.proactive_reservations SET state='reserved' WHERE user_id=u AND delivery_key=key;
+ IF NOT public.mark_coaching_dispatch(u,key,token) THEN
+   RAISE EXCEPTION 'awake profile denied by Program timezone'; END IF;
  IF public.release_proactive_delivery(u,key) THEN RAISE EXCEPTION 'dispatched budget released'; END IF;
  IF NOT public.finish_coaching_delivery(u,key,token,'uncertain') THEN RAISE EXCEPTION 'finish denied'; END IF;
  IF public.finish_coaching_delivery(u,key,token,'accepted') THEN RAISE EXCEPTION 'terminal replay changed'; END IF;
@@ -69,6 +106,23 @@ BEGIN
   RAISE EXCEPTION 'cross-owner delivery history'; END IF;
  IF public.note_coaching_reply(other_u,p) THEN RAISE EXCEPTION 'cross-owner reply reset'; END IF;
  IF NOT public.note_coaching_reply(u,p) THEN RAISE EXCEPTION 'owned reply reset denied'; END IF;
+END $$;
+DO $$ DECLARE u UUID; at TIMESTAMPTZ:=clock_timestamp(); BEGIN
+ INSERT INTO public.user_profiles(telegram_chat_id,timezone,daily_message_budget)
+ VALUES(91019003,'UTC',4) RETURNING user_id INTO u;
+ IF public.reserve_proactive_delivery(u,'coach:old','coaching',at)->>'status'<>'reserved'
+ THEN RAISE EXCEPTION 'first Coach admission failed'; END IF;
+ IF public.reserve_proactive_delivery(u,'coach:new-program','coaching',at)->>'status'<>'budget_exhausted'
+ THEN RAISE EXCEPTION 'second Coach admitted across Programs'; END IF;
+ IF NOT public.release_proactive_delivery(u,'coach:old') THEN RAISE EXCEPTION 'unused Coach not released'; END IF;
+ IF public.reserve_proactive_delivery(u,'coach:new-program','coaching',at)->>'status'<>'reserved'
+ THEN RAISE EXCEPTION 'released Coach cannot retry'; END IF;
+ UPDATE public.proactive_reservations SET state='accepted' WHERE user_id=u AND delivery_key='coach:new-program';
+ IF public.reserve_proactive_delivery(u,'coach:after-delete','coaching',at)->>'status'<>'budget_exhausted'
+ THEN RAISE EXCEPTION 'accepted Coach with NULL Program did not retain cap'; END IF;
+ UPDATE public.proactive_reservations SET state='uncertain' WHERE user_id=u AND delivery_key='coach:new-program';
+ IF public.reserve_proactive_delivery(u,'coach:after-uncertain','coaching',at)->>'status'<>'budget_exhausted'
+ THEN RAISE EXCEPTION 'uncertain Coach with NULL Program did not retain cap'; END IF;
 END $$;
 DO $$ DECLARE t TEXT; fn TEXT; BEGIN
  FOREACH t IN ARRAY ARRAY['proactive_reservations','proactive_processing_consents',

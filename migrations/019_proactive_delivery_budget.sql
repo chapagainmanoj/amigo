@@ -91,7 +91,10 @@ DECLARE u public.user_profiles%ROWTYPE; r public.proactive_reservations%ROWTYPE;
  SELECT count(*) INTO used FROM public.proactive_reservations
  WHERE user_id=p_user_id AND state<>'cancelled' AND
    (local_day=day OR (scheduled_at AT TIME ZONE zone)::date=day);
- IF used >= greatest(0,coalesce(u.daily_message_budget,4)) THEN
+ IF used >= greatest(0,coalesce(u.daily_message_budget,4))
+    OR (p_kind='coaching' AND EXISTS(SELECT 1 FROM public.proactive_reservations
+      WHERE user_id=p_user_id AND kind='coaching' AND state<>'cancelled'
+      AND (local_day=day OR (scheduled_at AT TIME ZONE zone)::date=day))) THEN
    RETURN jsonb_build_object('status','budget_exhausted'); END IF;
  IF p_program_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.coaching_programs
    WHERE program_id=p_program_id AND user_id=p_user_id) THEN
@@ -275,7 +278,7 @@ END $$;
 CREATE FUNCTION public.mark_coaching_dispatch(p_user_id UUID,p_delivery_key TEXT,p_claim_token UUID)
 RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE d public.coaching_delivery_outbox%ROWTYPE; p public.coaching_programs%ROWTYPE;
- u public.user_profiles%ROWTYPE; local_now TIMESTAMP; wake TIME; sleep TIME; unanswered BIGINT;
+ u public.user_profiles%ROWTYPE; local_now TIMESTAMP; profile_now TIMESTAMP; wake TIME; sleep TIME; unanswered BIGINT;
  reply TIMESTAMPTZ; activation_allowed BOOLEAN:=FALSE; BEGIN
  SELECT * INTO d FROM public.coaching_delivery_outbox WHERE user_id=p_user_id AND delivery_key=p_delivery_key;
  IF NOT FOUND THEN RETURN FALSE; END IF;
@@ -291,6 +294,7 @@ DECLARE d public.coaching_delivery_outbox%ROWTYPE; p public.coaching_programs%RO
     OR d.claimed_at<=clock_timestamp()-interval '5 minutes' THEN RETURN FALSE; END IF;
  SELECT * INTO u FROM public.user_profiles WHERE user_id=p_user_id;
  local_now:=clock_timestamp() AT TIME ZONE p.timezone;
+ profile_now:=clock_timestamp() AT TIME ZONE coalesce(u.timezone,'UTC');
  wake:=coalesce(u.wake_time,'07:30')::time; sleep:=coalesce(u.sleep_time,'23:00')::time;
  SELECT last_reply_at INTO reply FROM public.coaching_delivery_replies
  WHERE user_id=p_user_id AND program_id=p.program_id;
@@ -304,8 +308,16 @@ DECLARE d public.coaching_delivery_outbox%ROWTYPE; p public.coaching_programs%RO
     OR local_now::date<>d.local_day OR clock_timestamp()<d.scheduled_at
     OR clock_timestamp()>d.scheduled_at+interval '15 minutes'
     OR NOT (extract(isodow FROM local_now)::int=ANY(p.check_in_days))
-    OR (CASE WHEN wake<sleep THEN NOT(local_now::time>=wake AND local_now::time<sleep)
-             ELSE NOT(local_now::time>=wake OR local_now::time<sleep) END)
+    OR (CASE WHEN wake<sleep THEN NOT(profile_now::time>=wake AND profile_now::time<sleep)
+             ELSE NOT(profile_now::time>=wake OR profile_now::time<sleep) END)
+    OR EXISTS(SELECT 1 FROM public.proactive_reservations
+      WHERE user_id=p_user_id AND delivery_key<>p_delivery_key AND kind='coaching'
+      AND state<>'cancelled' AND (local_day=profile_now::date
+        OR (scheduled_at AT TIME ZONE coalesce(u.timezone,'UTC'))::date=profile_now::date))
+    OR (SELECT count(*) FROM public.proactive_reservations WHERE user_id=p_user_id
+      AND state<>'cancelled' AND (local_day=profile_now::date
+        OR (scheduled_at AT TIME ZONE coalesce(u.timezone,'UTC'))::date=profile_now::date))
+      >greatest(0,coalesce(u.daily_message_budget,4))
     OR unanswered>=2 OR (unanswered=1 AND d.kind<>'follow_up')
     OR (unanswered=0 AND d.kind='follow_up') THEN
    UPDATE public.coaching_delivery_outbox SET state='cancelled',finished_at=clock_timestamp()

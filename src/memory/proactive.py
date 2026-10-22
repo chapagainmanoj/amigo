@@ -111,7 +111,14 @@ class LocalProactiveState:
         )
         limit = user.get("daily_message_budget")
         limit = 4 if limit is None else max(0, int(limit))
-        if not legacy and occupied >= limit:
+        coaching_occupied = kind == "coaching" and any(
+            row["user_id"] == user_id
+            and row["kind"] == "coaching"
+            and row["state"] != "cancelled"
+            and (row["local_day"] == day or local_day(row["scheduled_at"], timezone) == day)
+            for row in self.reservations.values()
+        )
+        if not legacy and (occupied >= limit or coaching_occupied):
             return {"status": "budget_exhausted"}
         row = dict(
             user_id=user_id,
@@ -274,7 +281,8 @@ class LocalProactiveState:
                 profile = user or {}
                 wake = profile.get("wake_time") or "07:30"
                 sleep = profile.get("sleep_time") or "23:00"
-                wall = local.strftime("%H:%M")
+                profile_local = now.astimezone(ZoneInfo(profile.get("timezone") or "UTC"))
+                wall = profile_local.strftime("%H:%M")
                 awake = wake <= wall < sleep if wake < sleep else wall >= wake or wall < sleep
                 reply = self.replies.get((user_id, program["program_id"]))
                 unanswered = sum(
@@ -287,8 +295,27 @@ class LocalProactiveState:
                     )
                     for item in self.deliveries.values()
                 )
+                profile_day = profile_local.date().isoformat()
+                occupied = [
+                    item
+                    for item in self.reservations.values()
+                    if item["user_id"] == user_id
+                    and item["state"] != "cancelled"
+                    and (
+                        item["local_day"] == profile_day
+                        or local_day(item["scheduled_at"], profile.get("timezone") or "UTC")
+                        == profile_day
+                    )
+                ]
+                limit = profile.get("daily_message_budget")
+                limit = 4 if limit is None else max(0, int(limit))
                 invalid = (
-                    program["version"] != row["program_version"]
+                    len(occupied) > limit
+                    or any(
+                        item["kind"] == "coaching" and item["delivery_key"] != key
+                        for item in occupied
+                    )
+                    or program["version"] != row["program_version"]
                     or local.date().isoformat() != row["local_day"]
                     or local.isoweekday() not in program["check_in_days"]
                     or not awake

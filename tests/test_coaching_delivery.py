@@ -497,3 +497,82 @@ async def test_delivery_buttons_bind_owned_program_and_current_version(setup, ki
         assert str(uuid.UUID(identifier)) == program["program_id"]
         assert int(version) == program["version"]
         assert len(button["callback_data"].encode()) <= 64
+
+
+@pytest.mark.parametrize("hour, expected", [(8, False), (1, True)])
+async def test_travel_quiet_hours_use_profile_zone_but_cadence_uses_program_zone(
+    setup, hour, expected
+):
+    store, _, user, program, worker, state = setup
+    state["now"] = state["now"].replace(hour=hour)
+    program.update(check_in_time=f"{hour:02}:00", check_in_days=[4])
+    user["timezone"] = "America/Los_Angeles"
+    plan = plan_coaching_delivery(program, user, state["now"], {"deliveries": []})
+    assert (plan is not None) is expected
+    assert await worker.reconcile() == int(expected)
+    if expected:
+        assert plan["local_day"] == "2026-10-22"  # Profile date is still Wednesday.
+
+
+@pytest.mark.parametrize("hour, expected", [(8, False), (1, True)])
+async def test_dispatch_rechecks_quiet_window_after_profile_travel(setup, hour, expected):
+    store, _, user, program, _, state = setup
+    state["now"] = state["now"].replace(hour=hour)
+    program.update(check_in_time=f"{hour:02}:00", check_in_days=[4])
+    key = f"coach:{program['program_id']}:2026-10-22"
+    result = await store.enqueue_coaching_delivery(
+        user["user_id"], program["program_id"], 1, key, "2026-10-22", "check_in", state["now"]
+    )
+    assert result["status"] == "queued"
+    claim = (await store.claim_coaching_deliveries("travel-worker"))[0]
+    user["timezone"] = "America/Los_Angeles"
+    assert (
+        await store.mark_coaching_dispatch(user["user_id"], key, claim["claim_token"]) is expected
+    )
+    assert store.proactive.deliveries[user["user_id"], key]["state"] == (
+        "dispatched" if expected else "cancelled"
+    )
+
+
+@pytest.mark.parametrize("state", ["reserved", "accepted", "uncertain"])
+async def test_one_coach_per_profile_day_across_programs_and_deleted_program(setup, state):
+    store, _, user, program, _, clock = setup
+    first = await store.proactive.reserve(
+        user, "coach:old", "coaching", clock["now"], program["program_id"]
+    )
+    assert first["status"] == "reserved"
+    row = store.proactive.reservations[user["user_id"], "coach:old"]
+    row.update(state=state, program_id=None)  # Deleted Program retains consumed daily capacity.
+    second = await store.proactive.reserve(
+        user, "coach:new", "coaching", clock["now"], "new-program"
+    )
+    assert second["status"] == "budget_exhausted"
+    if state == "reserved":
+        assert await store.proactive.release(user["user_id"], "coach:old")
+        assert (
+            await store.proactive.reserve(
+                user, "coach:new", "coaching", clock["now"], "new-program"
+            )
+        )["status"] == "reserved"
+
+
+@pytest.mark.parametrize("change", ["travel_collision", "budget_drop"])
+async def test_dispatch_rechecks_profile_day_coach_cap_and_reduced_budget(setup, change):
+    store, _, user, program, worker, state = setup
+    assert await worker.reconcile() == 1
+    claim = (await store.claim_coaching_deliveries("cap-worker"))[0]
+    if change == "budget_drop":
+        user["daily_message_budget"] = 0
+    else:
+        # Previously a distinct UTC day; now overlaps the current profile's local day.
+        prior = state["now"] - timedelta(hours=13)
+        assert (
+            await store.proactive.reserve(user, "coach:prior", "coaching", prior, "old-program")
+        )["status"] == "reserved"
+        store.proactive.reservations[user["user_id"], "coach:prior"].update(
+            state="accepted", program_id=None
+        )
+        user.update(timezone="Europe/Paris", wake_time="00:00", sleep_time="00:00")
+    assert not await store.mark_coaching_dispatch(
+        user["user_id"], claim["delivery_key"], claim["claim_token"]
+    )

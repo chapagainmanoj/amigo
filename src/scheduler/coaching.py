@@ -25,8 +25,9 @@ def plan_coaching_delivery(program, user, now, history):
         return None
     zone = ZoneInfo(program["timezone"])
     local = now.astimezone(zone)
+    profile_local = now.astimezone(ZoneInfo(user.get("timezone") or "UTC"))
     if local.isoweekday() not in program["check_in_days"] or _quiet(
-        local, user.get("wake_time") or "07:30", user.get("sleep_time") or "23:00"
+        profile_local, user.get("wake_time") or "07:30", user.get("sleep_time") or "23:00"
     ):
         return None
     wall = datetime.combine(local.date(), time.fromisoformat(program["check_in_time"]))

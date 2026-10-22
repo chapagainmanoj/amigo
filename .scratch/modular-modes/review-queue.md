@@ -406,3 +406,21 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   kill sends nothing, retains uncertain capacity. Weekly controls include all four choices.
 - Backend foundation committed separately from dashboard records access (following UI slice).
   Full provider batches remain deferred until Phase6 source closure stabilizes, as above.
+
+## Phase 5 follow-up — current-profile quiet hours and shared Coach day cap
+
+- Parent: 402bed5; this commit fixes the four reproduced travel-timezone failures.
+- Files: migrations/019_proactive_delivery_budget.sql (protected); src/memory/proactive.py;
+  src/scheduler/coaching.py; tests/test_coaching_delivery.py;
+  tests/sql/assert_019_proactive_delivery_budget.sql; 019 independent verification and retained
+  travel probe/verification under proposals/.
+- Program timezone controls cadence; current profile timezone controls quiet hours. Coach cap
+  applies across Programs and deleted Program references, including accepted/uncertain delivery;
+  dispatcher rechecks current budget and timezone. Unsent cancellation releases capacity.
+- Evidence: 1151 tests passed in 10.65s; Ruff clean; diff whitespace clean. Original SQL failed
+  travel regression; fresh full 41-file CI SQL chain passed. Independent reviewer reran retained
+  atomic rollback, legacy debt, fencing and mixed concurrency probes; PASS at migration SHA256
+  4c6c0f0ca24e6fd1a65f987d0686c7819e3222bce91c1bde48d189e34b94c781.
+  Assertion SHA256 b8d181f65df9cfcc2d62bba28d999d3b16cda524214b1b096a6971a0f99b5993.
+- Gate A currency/Daily golden included in full suite; production certification still absent.
+  No new provisional policy, admission enablement, deployment or external data changes.

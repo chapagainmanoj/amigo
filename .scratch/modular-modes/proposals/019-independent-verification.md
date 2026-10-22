@@ -49,3 +49,13 @@ Exact driver and SQL probes retained in `019-independent-probes/` beside this re
 Python integration evidence: 96 focused tests passed across real Coach application boundary, delivery worker, Store contracts, Reflect and candidate suites; Ruff clean on new application tests. This record certifies reviewed SQL semantics and local fictional proofs, not live provider results, deployment, or privacy readiness. All specialized Modes remain subject to default-deny admission until explicit readiness approval.
 
 Verdict: no unresolved blocking SQL019 finding at this exact source hash. Worker kill recheck is tracked separately with author; later SQL changes require re-verification.
+
+## Follow-up: profile quiet hours and participant-wide Coach cap
+
+Independent review and fresh proof of post-402bed5 diff completed. Reviewed migration SHA-256 `4c6c0f0ca24e6fd1a65f987d0686c7819e3222bce91c1bde48d189e34b94c781`; assertions SHA-256 `b8d181f65df9cfcc2d62bba28d999d3b16cda524214b1b096a6971a0f99b5993`.
+
+Program timezone still owns selected weekday/day/slot; new profile_now derives quiet hours from current profile timezone. Normal and overnight quiet windows preserve prior comparisons. Reservation enforces one noncancelled Coach commitment per participant local day across Programs, including consumed NULL-program rows; dispatch rechecks other Coach commitments and reduced shared budget under the same participant budget lock. No privilege/ownership/claim changes. Reviewer found assertion TIME expressions needed explicit casts; author fixed all four before proof.
+
+Fresh cluster `/private/tmp/amigo-review019-v8saq9e4` (stopped) ran bootstrap +001–019, latest author assertion including travel quiet/inverse awake, other Coach consumed capacity, reduced shared budget, accepted/uncertain NULL-program and cancelled-release behavior. All passed. Retained independent legacy classification, ownership/roles/withdrawal/lease fencing, replacement/Later rollback, cancellation accounting, eight-way budget concurrency and mixed Coach/Reminder race reran successfully, same PASS outputs as foundation proof. Printed applied source SHA exactly matches follow-up hash above; final `19|1|0` remains explicit synthetic mixed fixture only.
+
+Follow-up verdict: no unresolved blocking finding in exact reviewed SQL bytes. Original 06e51e05 foundation proof preserved above as historical evidence.
