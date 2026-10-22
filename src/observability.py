@@ -25,3 +25,14 @@ async def monitor_event_loop_delay(
             samples += 1
             if sample_limit is not None and samples >= sample_limit:
                 return
+
+
+# Per-second and per-call evidence lines. Staging/production keep them for
+# scripts/summarize_runtime_evidence.py; locally they bury everything else.
+ROUTINE_LOGGERS = ("src.observability", "src.memory.store", "apscheduler")
+
+
+def quiet_routine_logs(quiet: bool = True) -> None:
+    """Raise routine evidence loggers to WARNING, or restore them to inherit the root level."""
+    for name in ROUTINE_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING if quiet else logging.NOTSET)

@@ -167,6 +167,9 @@ async def test_authentication_awaits_native_async_user_verification(monkeypatch)
 
 async def test_event_loop_delay_and_store_latency_are_content_free(caplog):
     caplog.set_level(logging.INFO)
+    # Local development quiets these loggers; evidence environments emit them at INFO.
+    caplog.set_level(logging.INFO, logger="src.observability")
+    caplog.set_level(logging.INFO, logger="src.memory.store")
     stop_event = asyncio.Event()
 
     await monitor_event_loop_delay(
