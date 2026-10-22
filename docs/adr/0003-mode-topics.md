@@ -1,46 +1,71 @@
-# One Telegram Topic per Mode
+# Telegram Topics as Mode conversations
 
-**Status: Accepted, pending spike.** Owner selected topics on 22 October 2026.
-Implementation depends on the test-bot spike below; `/mode` remains the fallback.
+**Status: Accepted — 22 October 2026.** Owner spike passed on Telegram Desktop and iOS.
+**Android was not tested** (no device). This accepts the channel-neutral amendment below;
+production topic mode must remain off until Phase 4 is deployed and reviewed.
 
-Migration 016 assumes one Telegram chat per participant: a Session carries one `active_mode_id`, and moving between Modes is a confirmed switch inside the same chat history. Participants would rather see each Mode as its own conversation.
+## Decision
 
-Telegram now supports topics in private chats with a bot. Bot API 9.3 (31 Dec 2025) added `User.has_topics_enabled`, `message_thread_id` / `is_topic_message` on incoming private messages, and `message_thread_id` on send methods. Bot API 9.4 (9 Feb 2026) let bots call `createForumTopic` in private chats and stop users creating or deleting topics (`User.allows_users_to_create_topics`). Topic mode is a per-bot setting in BotFather. The installed python-telegram-bot 22.8 speaks Bot API 10.0 and already exposes these fields.
+Mode identity, authorization, Sessions and handoffs are channel-neutral. Telegram topics are one
+channel capability, not the canonical Mode model. A `ConversationRef(channel, endpoint)` addresses
+a linked conversation; only `TelegramChannel` interprets Telegram thread IDs. Channels declare
+capabilities, including `threads`, and an explicit fallback (decision 16).
 
-We propose keeping one bot and giving each Mode its own topic inside the participant's private chat. The topic decides the Mode; there is no in-chat Mode switching.
+On threaded channels, the incoming conversation selects the Mode. Unknown conversations route to
+Daily and are remembered as additional Daily endpoints, preserving the reply location. A Mode
+can therefore have several conversations. On channels without threads, `/mode`, `/mode <id>` and
+`/daily` are the main entry mechanism; Telegram also retains these commands for older clients.
+Both paths use one Mode resolver, with the same entitlement and `(user_id, mode_id)` Session rules.
 
-## Considered Options
+`mode_conversations` holds the canonical endpoint per participant/Mode/channel, with primary key
+`(user_id, mode_id, channel)` and unique `(channel, endpoint)`. Additional endpoint aliases preserve
+unknown Daily conversations without replacing the canonical endpoint used for proactive delivery.
+Aliases are channel-neutral too. For Telegram, an endpoint contains chat and thread IDs.
 
-- **One chat, switch Modes (migration 016 as designed)** — Works today. Rejected as the primary design: every Mode shares one chat history, and isolation relies on Session boundaries the participant cannot see. Kept as the fallback if the spike fails.
-- **One bot per Mode** — Each Mode gets its own chat, name and avatar. Rejected: a private `chat_id` equals the participant's Telegram id for every bot, which breaks the unique `user_profiles.telegram_chat_id`. It also needs one token and webhook per Mode, and pairing per bot.
-- **Forum supergroup with topics** — Rejected: the participant would have to create a group and add the bot.
-- **Topics in one private bot chat (chosen)** — One token, one pairing, `telegram_chat_id` stays unique. Telegram support is new, so it carries more risk.
+Every message to a topics-enabled chat carries an explicit conversation. This includes pairing,
+access/Activation errors, feedback, Turn replies and Reminders. Messages lacking an incoming
+conversation resolve/create the canonical Daily conversation before sending. Reminders resolve
+Daily on the primary messaging channel at delivery time; outbox payloads do not gain thread IDs.
 
-## Consequences
+Startup checks the bot capability settings. Production requires topic mode on and user-created
+threads off. Development warns on unsupported settings and uses the non-threaded command path
+when topics are unavailable. No threadless resend is permitted in a topics-enabled chat.
 
-- New migration: a `mode_topics` table, `(user_id, mode_id)` primary key, `(user_id, thread_id)` unique. It needs review, and `EXPECTED_SCHEMA_VERSION` must be bumped with it.
-- `src/main.py` passes `message.message_thread_id` with `chat_id`. Messages with no thread, or an unknown thread, route to Daily.
-- Active Sessions become per `(user_id, mode_id)`; `sessions.active_mode_id` becomes a fixed Mode set when the Session is created. The Store change is mirrored in `MemoryStore`, `InMemoryStore` and `FakeStore`.
-- `MessageChannel.send_message` (plus edits and chat actions) gains an optional `thread_id`; all implementations are checked. If a topic send fails with "message thread not found", the message goes to the chat without a thread and the topic is recreated.
-- Reminders always deliver to the Daily topic.
-- The Daily topic is created when pairing succeeds; other Mode topics are created when their grant becomes active. User-created topics are turned off in BotFather.
-- Handoffs still need confirmation. On confirmation, the new Task appears in the Daily topic.
-- Pairing, the access gate, update deduplication and the dashboard are unchanged.
-- Risk: on 8 May 2026, sends to private-chat topics failed with `message thread not found` and `createForumTopic` returned `BOT_FORUM_CREATE_FORBIDDEN` for most of a day ([tdlib/telegram-bot-api#847](https://github.com/tdlib/telegram-bot-api/issues/847), fixed the same day). The send fallback above covers this.
+Handoffs remain participant-confirmed and treat carried requests as untrusted. History stays
+isolated by Mode Session. Closing expired/revoked Mode conversations preserves history; deleting
+a Telegram topic is not a stop, mute or grant-revocation operation.
 
-## Spike before accepting
+## Owner spike evidence — 22 October 2026
 
-On a throwaway test bot, without touching this codebase:
+- Private topic creation worked; `getMe.has_topics_enabled` was true.
+- Desktop initially showed no tabs until updated/reopened. Sending from “New Chat” created an
+  unknown incoming thread (225 rather than created 223).
+- Desktop and iOS rerun replies arrived in created thread 227. Android **not tested**.
+- Sending without a thread succeeded and created a new topic. Consequently all bot sends must
+  use an explicit thread. This behavior with user-created threads disabled remains untested.
+- Sending to deleted thread 227 returned `ok:true` and restored the topic. Routing and recovery
+  must not depend on “message thread not found”; any defensive error path must keep an explicit
+  conversation and must never resend without a thread.
+- Disabling “Allow users to create new threads” in BotFather made
+  `allows_users_to_create_topics` false and removed “New Chat”. Bot-created topics still worked
+  (thread 235).
 
-1. Turn on topic mode in BotFather; confirm `getMe` returns `has_topics_enabled: true`.
-2. Call `createForumTopic` on a private chat; record the `message_thread_id`.
-3. Send into the topic; reply from Telegram desktop, iOS and Android; confirm each update carries the thread id.
-4. Send without a thread and note where it lands.
-5. Delete the topic from the client and note what the next send to it returns.
+These are owner-reported observations, not builder-run live API tests. Tokens/chat contents were
+not copied into the repository. See the [spike runbook](../../.scratch/modular-modes/proposals/topic-spike-runbook.md).
 
-## Open questions
+## Alternatives
 
-- When a grant is revoked or expires, close the topic (read-only history) or delete it?
-- What first message introduces each new topic?
-- If a participant deletes a topic anyway, recreate it on their next message or at the next grant?
-- Should the dashboard link to each topic?
+- One shared chat with Mode commands: retained as the main path on channels without threads;
+  threaded channels additionally provide visible conversation separation.
+- One bot per Mode: rejected; multiple tokens/pairing flows and linked endpoint complexity.
+- Participant-created forum groups: rejected; unnecessary setup and different privacy context.
+
+## Consequences and remaining checks
+
+Migration 017 adds neutral conversations/aliases, Mode-scoped Sessions and durable handoff
+execution state. All Store implementations and channel implementations must match. Independent
+migration review and local SQL verification precede repository adoption; no Supabase application
+is authorized. Dashboard links use the bot chat rather than invalid private-topic `t.me/c` links.
+
+Android interoperability and threadless-send location after disabling user-created threads are
+unverified. They do not justify threadless sends or block the owner's accepted Phase 4 design.
