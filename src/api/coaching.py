@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 from src.api.dependencies import get_activated_user, get_store
+from src.workflows import coaching_workflow_status
 
 router = APIRouter()
 
@@ -54,3 +55,15 @@ async def delete_coaching(
             "Program records and entries only. Conversation Messages and provider copies remain."
         ),
     }
+
+
+@router.get("/api/coaching/workflow")
+async def inspect_coaching_workflow(
+    user: Annotated[dict, Depends(get_activated_user)],
+    store: Annotated[object, Depends(get_store)],
+    program_id: str | None = None,
+):
+    return JSONResponse(
+        await coaching_workflow_status(store, user["user_id"], program_id),
+        headers={"Cache-Control": "no-store"},
+    )

@@ -18,6 +18,7 @@ from src.mode_readiness import coach_entry_guard, reflect_entry_guard
 from src.tools.coaching import COACHING
 from src.tools.recommender import LAUNDRY
 from src.tools.toolsets import REMINDERS, TASKS
+from src.workflows import COACH_WORKFLOW_V1
 
 
 def daily_instructions(facts: TurnFacts) -> str:
@@ -46,6 +47,7 @@ DAILY = ModeDefinition(
 
 COACH = ModeDefinition(
     id="coach",
+    workflows=(COACH_WORKFLOW_V1,),
     name="Coach",
     purpose=(
         "Help me pursue one goal or habit I choose through a plan, check-ins, progress review, "

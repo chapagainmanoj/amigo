@@ -35,7 +35,7 @@ deployment, security, privacy, documentation, analytics, legal readiness, and cu
   exact local date, wall time, timezone, and UTC instant while blocking ambiguous or invalid wall
   times. Observability, data-rights operations, Activation, end-to-end integration tests, and Gate
   A/B evidence remain open. Amigo is still in pre-beta development.
-- The application now requires exact schema version 19. Migration 017 and the Mode routing slice
+- The application now requires exact schema version 21. Migration 017 and the Mode routing slice
   introduce channel-neutral conversations, Mode-isolated Sessions, grants, confirmed handoff
   execution claims, and primary-channel Daily addressing at Reminder delivery time. Integration
   review and the complete owner test-bot flow remain release gates; no Supabase application or
@@ -121,7 +121,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | Gap | Why it matters | Severity | Recommended fix | Gate |
 |---|---|---:|---|---|
 | No temporal or semantic memory | Current memory is message history, tasks, and optional session summaries. There is no Graphiti, pgvector, contradiction handling, or routine learning. | **High** | Remove current claims. Later define memory provenance, confidence, expiry, correction, retrieval, and deletion before implementation. | Claim removal before launch; feature later |
-| No Memory Inspector or learning controls | Users cannot inspect, correct, export, pause, or delete learned memories, and the promised memory objects do not exist. | **Critical** | Remove the claim or build the complete trust surface, including deletion propagation. | Before advertising memory |
+| Memory admission and rights evidence missing | Migration020 and the default-off Inspector provide owned versioned records, pauses, correction and scoped rights operations. Real eligibility, privacy/backup verification, demand and usability evidence remain missing. | **Partially resolved locally** | Keep admission off until the complete trust contract is independently verified. | Before advertising memory |
 | Adaptive coaching is only a stored default | `coaching_profile` exists but is not learned or applied dynamically; the agent uses a static persona. | **High** | Describe the current personality as fixed. Define signals, safe bounds, overrides, and evaluation before adaptation. | Before claiming adaptation |
 | Proactive admission needs deployment/trial proof | Migration019 adds a shared budget and bounded coaching outbox; legacy over-budget commitments remain explicit debt. Coach admission defaults off. | **Partially resolved locally** | Verify reviewed privacy admission, production cutover and 14-day timing evidence before enabling check-ins. | Before proactive check-ins |
 | No user-facing reminder preferences | Users cannot set quiet hours, wake/sleep times, categories, cadence, or notification limits. | **High** | Add minimal Preferences UI and Telegram controls for mute, quiet hours, timezone, and reminder intensity. | Before broader beta |
@@ -169,7 +169,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | No abuse, rate, or spend controls | An open bot can generate unbounded model calls and database writes. | **High** | Add per-user limits, quotas, spend alarms, usage logging, and an emergency disable control. | Before public access |
 | Task-status updates lacked an ownership predicate | Store updates include `user_id`, and the canonical resolve command atomically enforces Task ownership with Reminder cancellation. | **Resolved locally** | Re-run cross-tenant command assertions against the exact staging schema. | Staging evidence before public beta |
 | Full conversations have no lifecycle policy | Intimate messages, tasks, sessions, and feedback are retained without consent, export, deletion, or retention controls. | **Critical** | Define retention; implement account deletion, export, selective deletion, and provider-processing disclosure. | Before public launch |
-| Security assurance is incomplete | CI is configured to apply every checked-in migration through 019 and runs two-participant RLS regression assertions, the Mode grant/handoff SQL assertions, the Activation lock-order probe, and the schema-chain guard, but dependency audits and secret scanning are still absent. | **Partially resolved locally** | Add dependency and secret scans. | Before launch |
+| Security assurance is incomplete | CI is configured to apply every checked-in migration through 021 and runs two-participant RLS regression assertions, the Mode grant/handoff SQL assertions, the Activation lock-order probe, and the schema-chain guard, but dependency audits and secret scanning are still absent. | **Partially resolved locally** | Add dependency and secret scans. | Before launch |
 
 ## Operations, analytics, and feedback gaps
 
@@ -188,7 +188,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | Gap | Why it matters | Severity | Recommended fix | Gate |
 |---|---|---:|---|---|
 | README uses `git clone <repo-url>` | The advertised quick start cannot be followed literally. | **Medium** | Insert the real URL and validate setup from a clean machine. | Before open-source announcement |
-| Exact-version startup is proven only locally | README includes migrations 001–019, and CI is configured for the full chain, its assertions, and `scripts/check_schema_chain.py` against exact schema version 19. The gate has never run against a real Supabase/PostgREST deployment, so the RPC response shape the gate reads is unverified. | **Medium** | Boot the staged application against staging and confirm `get_app_schema_version` satisfies the exact-version gate. | Before deploying this worktree |
+| Exact-version startup is proven only locally | README includes migrations 001–021, and CI is configured for the full chain, its assertions, and `scripts/check_schema_chain.py` against exact schema version 21. The gate has never run against a real Supabase/PostgREST deployment, so the RPC response shape the gate reads is unverified. | **Medium** | Boot the staged application against staging and confirm `get_app_schema_version` satisfies the exact-version gate. | Before deploying this worktree |
 | Documentation contradicts itself | Gemini 2.5 vs 3.5, Railway vs Render vs Fly, implemented vs future features, and test counts differ. | **High** | Establish a capability matrix and release checklist as the documentation source of truth. | Before customer showing |
 | Blog links and images are unfinished | The bot link is `t.me/YoursAmigoBot`, and referenced screenshots are missing. | **High** | Add verified links and real screenshots or keep the article unpublished. | Before publication |
 | No user help or FAQ | Users have no guidance for corrections, timezone changes, missed reminders, muting, deletion, pairing, or support. | **Medium** | Add `/help`, FAQ, troubleshooting, and a support contact. | Before public beta |
@@ -294,3 +294,27 @@ entries only; retained conversation Messages/provider copies remain. Account-wid
 backup erasure are not claimed. Reflect stores no Mood Entries, Memory, exercises or profile
 inferences; its empty resource registry supplies only static general emergency guidance, never
 stale contact details. CBT personal input remains off. No deployment or Supabase change occurred.
+
+
+### Phase 6 candidates and explicit admission limits
+
+Migrations020/021 extend the local chain to21. Memory uses owned versioned PostgreSQL records,
+exact-preview confirmation, a content-free use ledger, separate learning/use pauses, lifecycle
+filtering and scoped export/Forget. Unconfirmed text remains in bounded process-local previews,
+not durable Memory. Dashboard inspection and JSON/CSV export do not establish backup erasure or
+whole-account rights compliance. Memory saving/retrieval remains OFF pending reviewed eligibility,
+privacy/readiness and the decision26 demand/decision30 technology review. Reflect receives no
+automatic Memory. No embeddings, external Memory processor or automatic profile extraction.
+
+Mode suggestions are a default-off deterministic application policy over current explicit job
+requests. Owner/session/expiry/single-use/grant checks protect an Open Mode action; confirmation
+opens a canonical conversation without transferring history or running a target Turn. Release,
+friction, policy and affirmative per-Turn safety clearance remain required. A participant enabling
+suggestion preferences does not enable those gates. No sentiment/silence/Task-behavior routing.
+
+Coach declares workflow v1 over existing018/019 Program/outbox records and exposes owned metadata
+inspection. Restart tests preserve occurrence identity, stale-token fencing and uncertain-send
+nonretry. This is a declaration of current code, not a generic engine or persisted per-Program
+version binding. A future definition change needs explicit binding/migration review. Issue07's
+provisional triage reuses confirmed handoffs rather than adding a delegation graph; no recurring
+job/benefit evidence has been invented. Provisional decisions and tests remain in the review queue.

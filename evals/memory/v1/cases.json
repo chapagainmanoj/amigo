@@ -1,0 +1,258 @@
+{
+  "version": 1,
+  "kind": "fictional-deterministic-retrieval",
+  "cases": [
+    {
+      "id": "confirmed-relevance",
+      "query": "coffee",
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional morning coffee"
+        },
+        {
+          "id": "tea",
+          "text": "Fictional evening tea"
+        }
+      ],
+      "expected": [
+        "coffee"
+      ]
+    },
+    {
+      "id": "no-overlap",
+      "query": "bicycle",
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional morning coffee"
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "scope-isolation",
+      "mode": "coach",
+      "query": "coffee",
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee",
+          "scopes": [
+            "daily"
+          ]
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "explicit-sharing",
+      "mode": "coach",
+      "query": "coffee",
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee",
+          "scopes": [
+            "daily",
+            "coach"
+          ]
+        }
+      ],
+      "expected": [
+        "coffee"
+      ]
+    },
+    {
+      "id": "reflect-excluded",
+      "mode": "reflect",
+      "query": "coffee",
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee",
+          "scopes": [
+            "daily",
+            "reflect"
+          ]
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "inactive-excluded",
+      "query": "coffee",
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee",
+          "action": "inactive"
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "completed-goal-excluded",
+      "query": "coffee",
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee project",
+          "category": "goal",
+          "action": "complete_goal"
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "cancelled-project-excluded",
+      "query": "coffee",
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee project",
+          "category": "project",
+          "action": "cancel_goal"
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "routine-ninety-days",
+      "query": "coffee",
+      "advance_days": 91,
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee routine",
+          "category": "routine"
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "preference-before-one-eighty",
+      "query": "coffee",
+      "advance_days": 179,
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee preference"
+        }
+      ],
+      "expected": [
+        "coffee"
+      ]
+    },
+    {
+      "id": "preference-after-one-eighty",
+      "query": "coffee",
+      "advance_days": 181,
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee preference"
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "explicit-validity-overrides-age",
+      "query": "coffee",
+      "advance_days": 181,
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee routine",
+          "category": "routine",
+          "valid_until": "2027-10-22"
+        }
+      ],
+      "expected": [
+        "coffee"
+      ]
+    },
+    {
+      "id": "expired-excluded",
+      "query": "coffee",
+      "advance_days": 2,
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee",
+          "valid_until": "2026-10-23"
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "foreign-owner-excluded",
+      "query": "coffee",
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee",
+          "foreign": true
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "use-paused",
+      "query": "coffee",
+      "pause_use": true,
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee"
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "learning-pause-preserves-use",
+      "query": "coffee",
+      "pause_learning": true,
+      "items": [
+        {
+          "id": "coffee",
+          "text": "Fictional coffee"
+        }
+      ],
+      "expected": [
+        "coffee"
+      ]
+    },
+    {
+      "id": "rank-top-three",
+      "query": "coffee morning preferred ritual",
+      "items": [
+        {
+          "id": "a",
+          "text": "Fictional coffee morning preferred ritual"
+        },
+        {
+          "id": "b",
+          "text": "Fictional coffee morning preferred"
+        },
+        {
+          "id": "c",
+          "text": "Fictional coffee morning"
+        },
+        {
+          "id": "d",
+          "text": "Fictional coffee"
+        },
+        {
+          "id": "e",
+          "text": "Fictional tea"
+        }
+      ],
+      "expected": [
+        "a",
+        "b",
+        "c"
+      ]
+    }
+  ]
+}

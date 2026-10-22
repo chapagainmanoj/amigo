@@ -159,6 +159,7 @@ async def run_cli(onboard: bool = False):
     serializer = ParticipantTurnSerializer()
 
     async def maintain_modes():
+        await handlers.memory.service.prune()
         await handlers.handoffs.recover(serializer)
 
     # Start the scheduler so reminders fire in the terminal

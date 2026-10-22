@@ -93,7 +93,7 @@ amigo/
   construction and synchronous Gate A schema capture. All ordinary Mode policy, registry,
   runtime, and Turn-orchestrator methods are asynchronous.
 - **Fail-closed startup**: The Supabase Store must report the exact application schema version
-  (currently 19) before the scheduler, durable-outbox drain, Reminder reload, or Telegram webhook
+  (currently 21) before the scheduler, durable-outbox drain, Reminder reload, or Telegram webhook
   starts.
 - **Mode authority and addressing**: migrations 015–017 order crossed Pairing locks and add
   Session-active-Mode, trial-grant, immutable grant-event, confirmed-handoff, and channel-neutral
@@ -415,3 +415,27 @@ entries only; retained conversation Messages/provider copies remain. Account-wid
 backup erasure are not claimed. Reflect stores no Mood Entries, Memory, exercises or profile
 inferences; its empty resource registry supplies only static general emergency guidance, never
 stale contact details. CBT personal input remains off. No deployment or Supabase change occurred.
+
+
+### Phase 6 candidates and explicit admission limits
+
+Migrations020/021 extend the local chain to21. Memory uses owned versioned PostgreSQL records,
+exact-preview confirmation, a content-free use ledger, separate learning/use pauses, lifecycle
+filtering and scoped export/Forget. Unconfirmed text remains in bounded process-local previews,
+not durable Memory. Dashboard inspection and JSON/CSV export do not establish backup erasure or
+whole-account rights compliance. Memory saving/retrieval remains OFF pending reviewed eligibility,
+privacy/readiness and the decision26 demand/decision30 technology review. Reflect receives no
+automatic Memory. No embeddings, external Memory processor or automatic profile extraction.
+
+Mode suggestions are a default-off deterministic application policy over current explicit job
+requests. Owner/session/expiry/single-use/grant checks protect an Open Mode action; confirmation
+opens a canonical conversation without transferring history or running a target Turn. Release,
+friction, policy and affirmative per-Turn safety clearance remain required. A participant enabling
+suggestion preferences does not enable those gates. No sentiment/silence/Task-behavior routing.
+
+Coach declares workflow v1 over existing018/019 Program/outbox records and exposes owned metadata
+inspection. Restart tests preserve occurrence identity, stale-token fencing and uncertain-send
+nonretry. This is a declaration of current code, not a generic engine or persisted per-Program
+version binding. A future definition change needs explicit binding/migration review. Issue07's
+provisional triage reuses confirmed handoffs rather than adding a delegation graph; no recurring
+job/benefit evidence has been invented. Provisional decisions and tests remain in the review queue.

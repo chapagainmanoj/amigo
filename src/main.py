@@ -13,6 +13,7 @@ from src.api.activation import router as activation_router
 from src.api.coaching import router as coaching_router
 from src.api.dashboard import router as dashboard_router
 from src.api.dependencies import get_activated_user
+from src.api.memory import router as memory_router
 from src.api.modes import router as modes_router
 from src.api.pairing import router as pairing_router
 from src.api.reminders import router as reminders_router
@@ -105,6 +106,7 @@ async def lifespan(app: FastAPI):
     await initialize_runtime(store, reminder_scheduler, outbox_worker)
 
     async def maintain_modes():
+        await handlers.memory.service.prune()
         await handlers.turn_processor.modes.conversations.close_expired()
         await _recover_pending_handoffs()
         coaching_worker.admission_enabled = await coach_readiness.complete()
@@ -150,6 +152,7 @@ app = FastAPI(title="Amigo", lifespan=lifespan)
 app.state.store = store
 app.state.channel = channel
 app.state.bot_username = bot_username
+app.state.memory_service = handlers.memory.service
 app.include_router(activation_router)
 app.include_router(dashboard_router)
 app.include_router(pairing_router)
@@ -157,6 +160,7 @@ app.include_router(tasks_router)
 app.include_router(reminders_router)
 app.include_router(modes_router)
 app.include_router(coaching_router)
+app.include_router(memory_router)
 
 # CORS Setup
 origins = [

@@ -81,6 +81,10 @@ jobs:
             -f tests/sql/assert_018_coaching_programs.sql \
             -f migrations/019_proactive_delivery_budget.sql \
             -f tests/sql/assert_019_proactive_delivery_budget.sql \
+            -f migrations/020_durable_memory.sql \
+            -f tests/sql/assert_020_durable_memory.sql \
+            -f migrations/021_confirmed_mode_suggestions.sql \
+            -f tests/sql/assert_021_confirmed_mode_suggestions.sql \
             -f tests/sql/app_schema_version.sql
 
       - name: Prove the Activation functions cannot deadlock

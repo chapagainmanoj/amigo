@@ -22,6 +22,7 @@ from src.memory.activation import (
     update_profile,
 )
 from src.memory.coaching import LocalCoachingState
+from src.memory.durable import LocalMemoryState
 from src.memory.later import apply_later_transition
 from src.memory.modes import LocalModeState, ModeGrant, ModeGrantResult, ModeResult
 from src.memory.pairing import (
@@ -85,6 +86,7 @@ class InMemoryStore:
         self._mode_state = LocalModeState()
         self._coaching_state = LocalCoachingState()
         self._proactive_state = LocalProactiveState()
+        self._memory_state = LocalMemoryState()
 
     async def connect(self) -> None:
         """Match MemoryStore startup; the local store has no external client."""
@@ -280,6 +282,103 @@ class InMemoryStore:
         return await self._mode_state.resolve_handoff(
             self._sessions, user_id, session_id, handoff_id, confirm,
         )
+
+    async def get_memory_settings(self, user_id):
+        await self._memory_user(user_id)
+        return await self._memory_state.get_settings(user_id)
+
+    async def prepare_memory_confirmation(
+        self,
+        user_id,
+        operation,
+        preview_digest,
+        expected_settings_version,
+        memory_id=None,
+        expected_memory_version=None,
+    ):
+        await self._memory_user(user_id)
+        return await self._memory_state.prepare(
+            user_id,
+            operation,
+            preview_digest,
+            expected_settings_version,
+            memory_id,
+            expected_memory_version,
+        )
+
+    async def confirm_memory_save(
+        self,
+        user_id,
+        token,
+        payload,
+        idempotency_key,
+        payload_hash,
+        enable_memory=False,
+        policy_version=None,
+    ):
+        user = await self._memory_user(user_id)
+        return await self._memory_state.confirm(
+            user,
+            self._messages,
+            self._sessions,
+            token,
+            payload,
+            idempotency_key,
+            payload_hash,
+            enable_memory,
+            policy_version,
+        )
+
+    async def transition_memory(
+        self, user_id, memory_id, expected_version, action, idempotency_key, payload_hash
+    ):
+        return await self._memory_state.transition(
+            await self._memory_user(user_id),
+            memory_id,
+            expected_version,
+            action,
+            idempotency_key,
+            payload_hash,
+        )
+
+    async def set_memory_pauses(
+        self, user_id, expected_version, *, learning=None, use=None, idempotency_key, payload_hash
+    ):
+        await self._memory_user(user_id)
+        return await self._memory_state.pauses(
+            user_id, expected_version, learning, use, idempotency_key, payload_hash
+        )
+
+    async def read_memory_context(self, user_id, mode_id, turn_id, purpose, query):
+        return await self._memory_state.read(
+            await self._memory_user(user_id), mode_id, turn_id, purpose, query
+        )
+
+    async def inspect_memories(self, user_id, states=None, limit=100, offset=0):
+        return await self._memory_state.inspect(
+            await self._memory_user(user_id), states, limit, offset
+        )
+
+    async def export_memory_data(self, user_id):
+        return await self._memory_state.export(await self._memory_user(user_id))
+
+    async def forget_memory(
+        self, user_id, memory_id, expected_version, idempotency_key, payload_hash
+    ):
+        await self._memory_user(user_id)
+        return await self._memory_state.forget(
+            user_id, memory_id, expected_version, idempotency_key, payload_hash
+        )
+
+    async def confirm_forget_all_memory(self, user_id, token, idempotency_key, payload_hash):
+        await self._memory_user(user_id)
+        return await self._memory_state.forget_all(user_id, token, idempotency_key, payload_hash)
+
+    async def _memory_user(self, user_id):
+        user = await self.get_user_by_id(user_id)
+        if user is None:
+            raise ValueError("Memory owner unavailable")
+        return user
 
     async def get_proactive_consent(self, user_id, scope):
         return await self._proactive_state.get_consent(user_id, scope)
@@ -1657,3 +1756,29 @@ class InMemoryStore:
             intended_timezone=intended_timezone,
             now=utc_now(),
         )
+
+    # Content-free confirmed Mode suggestions; trusted application callers only.
+    async def _suggestions(self):
+        from src.memory.suggestions import LocalSuggestionState
+
+        if not hasattr(self, "_suggestion_state"):
+            self._suggestion_state = LocalSuggestionState(self)
+        return self._suggestion_state
+
+    async def get_mode_suggestion_preference(self, user_id):
+        return await (await self._suggestions()).preference(user_id)
+
+    async def set_mode_suggestion_preference(self, user_id, enabled):
+        return await (await self._suggestions()).set_preference(user_id, enabled)
+
+    async def create_mode_suggestion(self, user_id, session_id, target_mode_id,
+                                     *, grant_required=True):
+        return await (await self._suggestions()).create(
+            user_id, session_id, target_mode_id, grant_required=grant_required
+        )
+
+    async def get_mode_suggestion(self, user_id, offer_id):
+        return await (await self._suggestions()).get(user_id, offer_id)
+
+    async def resolve_mode_suggestion(self, user_id, offer_id, confirm):
+        return await (await self._suggestions()).resolve(user_id, offer_id, confirm)

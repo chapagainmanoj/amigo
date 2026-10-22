@@ -13,6 +13,7 @@ from typing import Any, Literal
 from pydantic_ai.toolsets import AbstractToolset
 
 from src.tools.context import ToolContext
+from src.workflows import WorkflowDefinition
 
 ModeStatus = Literal["live", "planned", "disabled"]
 ContextProvider = Callable[[ToolContext], Awaitable[str | None]]
@@ -74,11 +75,16 @@ class ModeDefinition:
     eval_suite: str | None = None
     invalidating_inputs: tuple[str, ...] = ()
     entry_guard: ContextProvider | None = None
+    workflows: tuple[WorkflowDefinition, ...] = ()
     limits: str = "Amigo is experimental and cannot provide clinical care or monitoring."
 
     def __post_init__(self):
         if not _MODE_ID.match(self.id):
             raise ValueError(f"invalid Mode id {self.id!r}")
+        if any(workflow.mode_id != self.id for workflow in self.workflows):
+            raise ValueError("workflow must belong to its declaring Mode")
+        if len({workflow.id for workflow in self.workflows}) != len(self.workflows):
+            raise ValueError("workflow ids must be unique within a Mode")
         if self.status == "live" and self.instructions is None:
             raise ValueError(f"live Mode {self.id!r} must declare instructions")
 

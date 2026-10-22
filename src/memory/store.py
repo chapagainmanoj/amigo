@@ -355,6 +355,185 @@ class MemoryStore:
             raise
         return result.data
 
+    async def _memory_rpc(self, name, params):
+        try:
+            return await self._coaching_rpc(name, params)
+        except (IdempotencyConflictError, StaleVersionError, InvalidTransitionError):
+            raise
+        except Exception as error:
+            message = str(error)
+            if "stale version" in message:
+                raise StaleVersionError("Memory version changed") from None
+            if "invalid transition" in message:
+                raise InvalidTransitionError("Memory confirmation or action unavailable") from None
+            if "idempotency key reused" in message:
+                raise IdempotencyConflictError("Memory command key was reused") from None
+            if "Memory" in message or "memory" in message:
+                raise ValueError("Memory input or owner unavailable") from None
+            raise
+
+    async def get_memory_settings(self, user_id):
+        return await self._memory_rpc(
+            "memory_command",
+            {
+                "p_user_id": user_id,
+                "p_operation": "get_memory_settings",
+                "p_args": {},
+            },
+        )
+
+    async def prepare_memory_confirmation(
+        self,
+        user_id,
+        operation,
+        preview_digest,
+        expected_settings_version,
+        memory_id=None,
+        expected_memory_version=None,
+    ):
+        return await self._memory_rpc(
+            "memory_command",
+            {
+                "p_user_id": user_id,
+                "p_operation": "prepare_memory_confirmation",
+                "p_args": {
+                    "operation": operation,
+                    "preview_digest": preview_digest,
+                    "expected_settings_version": expected_settings_version,
+                    "memory_id": memory_id,
+                    "expected_memory_version": expected_memory_version,
+                },
+            },
+        )
+
+    async def confirm_memory_save(
+        self,
+        user_id,
+        token,
+        payload,
+        idempotency_key,
+        payload_hash,
+        enable_memory=False,
+        policy_version=None,
+    ):
+        return await self._memory_rpc(
+            "memory_command",
+            {
+                "p_user_id": user_id,
+                "p_operation": "confirm_memory_save",
+                "p_args": {
+                    "token": token,
+                    "payload": payload,
+                    "idempotency_key": idempotency_key,
+                    "payload_hash": payload_hash,
+                    "enable_memory": enable_memory,
+                    "policy_version": policy_version,
+                },
+            },
+        )
+
+    async def transition_memory(
+        self, user_id, memory_id, expected_version, action, idempotency_key, payload_hash
+    ):
+        return await self._memory_rpc(
+            "memory_command",
+            {
+                "p_user_id": user_id,
+                "p_operation": "transition_memory",
+                "p_args": {
+                    "memory_id": memory_id,
+                    "expected_version": expected_version,
+                    "action": action,
+                    "idempotency_key": idempotency_key,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+    async def set_memory_pauses(
+        self, user_id, expected_version, *, learning=None, use=None, idempotency_key, payload_hash
+    ):
+        return await self._memory_rpc(
+            "memory_command",
+            {
+                "p_user_id": user_id,
+                "p_operation": "set_memory_pauses",
+                "p_args": {
+                    "expected_version": expected_version,
+                    "learning": learning,
+                    "use": use,
+                    "idempotency_key": idempotency_key,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+    async def read_memory_context(self, user_id, mode_id, turn_id, purpose, query):
+        return await self._memory_rpc(
+            "memory_command",
+            {
+                "p_user_id": user_id,
+                "p_operation": "read_memory_context",
+                "p_args": {
+                    "mode_id": mode_id,
+                    "turn_id": turn_id,
+                    "purpose": purpose,
+                    "query": query,
+                },
+            },
+        )
+
+    async def inspect_memories(self, user_id, states=None, limit=100, offset=0):
+        return await self._memory_rpc(
+            "memory_command",
+            {
+                "p_user_id": user_id,
+                "p_operation": "inspect_memories",
+                "p_args": {"states": states, "limit": limit, "offset": offset},
+            },
+        )
+
+    async def export_memory_data(self, user_id):
+        return await self._memory_rpc(
+            "memory_command",
+            {
+                "p_user_id": user_id,
+                "p_operation": "export_memory_data",
+                "p_args": {},
+            },
+        )
+
+    async def forget_memory(
+        self, user_id, memory_id, expected_version, idempotency_key, payload_hash
+    ):
+        return await self._memory_rpc(
+            "memory_command",
+            {
+                "p_user_id": user_id,
+                "p_operation": "forget_memory",
+                "p_args": {
+                    "memory_id": memory_id,
+                    "expected_version": expected_version,
+                    "idempotency_key": idempotency_key,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+    async def confirm_forget_all_memory(self, user_id, token, idempotency_key, payload_hash):
+        return await self._memory_rpc(
+            "memory_command",
+            {
+                "p_user_id": user_id,
+                "p_operation": "confirm_forget_all_memory",
+                "p_args": {
+                    "token": token,
+                    "idempotency_key": idempotency_key,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
     async def get_proactive_consent(self, user_id, scope):
         return await self._coaching_rpc(
             "get_proactive_consent", {"p_user_id": user_id, "p_scope": scope}
@@ -1532,3 +1711,32 @@ class MemoryStore:
                 ) from None
             raise
         return result.data
+
+    async def get_mode_suggestion_preference(self, user_id):
+        return await self._coaching_rpc("get_mode_suggestion_preference", {"p_user_id": user_id})
+
+    async def set_mode_suggestion_preference(self, user_id, enabled):
+        return await self._coaching_rpc("set_mode_suggestion_preference", {
+            "p_user_id": user_id, "p_enabled": enabled,
+        })
+
+    async def create_mode_suggestion(self, user_id, session_id, target_mode_id,
+                                     *, grant_required=True):
+        if not isinstance(grant_required, bool):
+            raise ValueError("Grant requirement must be Boolean")
+        return await self._coaching_rpc("create_mode_suggestion", {
+            "p_user_id": user_id, "p_session_id": session_id,
+            "p_target_mode_id": target_mode_id, "p_grant_required": grant_required,
+        })
+
+    async def get_mode_suggestion(self, user_id, offer_id):
+        return await self._coaching_rpc("get_mode_suggestion", {
+            "p_user_id": user_id, "p_offer_id": offer_id,
+        })
+
+    async def resolve_mode_suggestion(self, user_id, offer_id, confirm):
+        if not isinstance(confirm, bool):
+            return None
+        return await self._coaching_rpc("resolve_mode_suggestion", {
+            "p_user_id": user_id, "p_offer_id": offer_id, "p_confirm": confirm,
+        })

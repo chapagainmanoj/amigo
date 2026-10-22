@@ -21,7 +21,7 @@ Amigo is in invitation-only beta development. See the
 - **Feedback capture** — `/feedback your thoughts` logs friction points
   for weekly review.
 
-Amigo does not currently provide autonomous morning/evening check-ins, a Memory Inspector,
+Amigo does not currently offer autonomous morning/evening check-ins or participant-enabled Memory,
 adaptive coaching Modes, wellbeing treatment, WhatsApp, voice, or native mobile apps.
 
 ## For Users
@@ -163,6 +163,8 @@ Where to get these:
 19. Run [`migrations/017_mode_conversations.sql`](migrations/017_mode_conversations.sql).
 20. Run [`migrations/018_coaching_programs.sql`](migrations/018_coaching_programs.sql).
 21. Run [`migrations/019_proactive_delivery_budget.sql`](migrations/019_proactive_delivery_budget.sql).
+22. Run [`migrations/020_durable_memory.sql`](migrations/020_durable_memory.sql).
+23. Run [`migrations/021_confirmed_mode_suggestions.sql`](migrations/021_confirmed_mode_suggestions.sql).
 
 Apply migrations in numeric order. Migrations 003 and 004 make Pairing backend-only and enforce
 the reviewed cross-tenant grants and row-level policies. Migration 005 adds canonical Task states
@@ -181,7 +183,7 @@ makes Pairing require an acknowledged Journey. Migration 015 orders Pairing's id
 to prevent crossed Pairing requests from deadlocking. Migration 016 adds Session Mode,
 trial-grant, audit, and confirmed-handoff primitives. Migration 017 adds channel-neutral Mode
 conversation addresses, Sessions keyed by participant and Mode, and leased handoff execution
-claims. The application requires exact schema version 19. These migrations have not been applied
+claims. The application requires exact schema version 21. These migrations have not been applied
 to Supabase by this build; deployment and real-bot verification remain owner actions.
 
 #### Mode conversations and operator access
@@ -269,9 +271,9 @@ python scripts/run_gate_a_eval.py --validate-only
 ```
 
 Python tests use in-memory fakes and make no Supabase, Telegram, or Gemini calls. CI additionally
-is configured to apply every checked-in migration (001–019) to PostgreSQL 15 and run legacy
+is configured to apply every checked-in migration (001–021) to PostgreSQL 15 and run legacy
 backfill, two-participant isolation, durable command/outbox, Activation, Mode conversation/handoff,
-lock-order, and schema-chain regressions for the exact schema-19 startup gate. This is separate
+lock-order, and schema-chain regressions for the exact schema-21 startup gate. This is separate
 from staging and Supabase deployment evidence. See
 [`tests/fakes.py`](tests/fakes.py) for the shared test doubles.
 
@@ -398,3 +400,27 @@ entries only; retained conversation Messages/provider copies remain. Account-wid
 backup erasure are not claimed. Reflect stores no Mood Entries, Memory, exercises or profile
 inferences; its empty resource registry supplies only static general emergency guidance, never
 stale contact details. CBT personal input remains off. No deployment or Supabase change occurred.
+
+
+### Phase 6 candidates and explicit admission limits
+
+Migrations020/021 extend the local chain to21. Memory uses owned versioned PostgreSQL records,
+exact-preview confirmation, a content-free use ledger, separate learning/use pauses, lifecycle
+filtering and scoped export/Forget. Unconfirmed text remains in bounded process-local previews,
+not durable Memory. Dashboard inspection and JSON/CSV export do not establish backup erasure or
+whole-account rights compliance. Memory saving/retrieval remains OFF pending reviewed eligibility,
+privacy/readiness and the decision26 demand/decision30 technology review. Reflect receives no
+automatic Memory. No embeddings, external Memory processor or automatic profile extraction.
+
+Mode suggestions are a default-off deterministic application policy over current explicit job
+requests. Owner/session/expiry/single-use/grant checks protect an Open Mode action; confirmation
+opens a canonical conversation without transferring history or running a target Turn. Release,
+friction, policy and affirmative per-Turn safety clearance remain required. A participant enabling
+suggestion preferences does not enable those gates. No sentiment/silence/Task-behavior routing.
+
+Coach declares workflow v1 over existing018/019 Program/outbox records and exposes owned metadata
+inspection. Restart tests preserve occurrence identity, stale-token fencing and uncertain-send
+nonretry. This is a declaration of current code, not a generic engine or persisted per-Program
+version binding. A future definition change needs explicit binding/migration review. Issue07's
+provisional triage reuses confirmed handoffs rather than adding a delegation graph; no recurring
+job/benefit evidence has been invented. Provisional decisions and tests remain in the review queue.

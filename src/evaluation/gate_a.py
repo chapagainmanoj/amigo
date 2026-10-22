@@ -36,6 +36,7 @@ TURN_CONTEXT_SOURCES = (
     "src/agent/runtime.py",
     "src/agent/safety.py",
     "src/memory/context.py",
+    "src/memory/durable.py",
 )
 TIME_BEHAVIOR_SOURCES = (
     "src/commands/later.py",
@@ -92,6 +93,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/memory/activation.py",
     "src/memory/coaching.py",
     "src/memory/context.py",
+    "src/memory/durable.py",
     "src/memory/later.py",
     "src/memory/memory_store.py",
     "src/memory/modes.py",
@@ -101,7 +103,10 @@ INVALIDATING_INPUT_PATHS = (
     "src/memory/sessions.py",
     "src/memory/store.py",
     "src/memory/tasks.py",
+    "src/memory/suggestions.py",
+    "src/memory_service.py",
     "src/mode_readiness.py",
+    "src/mode_suggestions.py",
     "src/model_routing.py",
     "src/model_usage.py",
     "src/runtime_config.py",
@@ -121,6 +126,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/turns.py",
     "src/utils/__init__.py",
     "src/wellbeing.py",
+    "src/workflows.py",
 )
 
 

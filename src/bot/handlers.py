@@ -10,6 +10,7 @@ from src.coaching import CoachingController
 from src.handoffs import HandoffController
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
+from src.memory_service import MemoryController, MemoryService
 from src.runtime_config import UnsafeProductionConfigurationError, parse_allowed_chat_ids
 from src.scheduler.reminders import ReminderScheduler
 
@@ -38,6 +39,11 @@ class BotHandlers:
             session_mgr=session_mgr,
             scheduler=reminder_scheduler,
             mode_runtime=mode_runtime,
+        )
+        from src.config import settings
+
+        self.memory = MemoryController(
+            MemoryService(store), channel, settings.dashboard_url + "/#memory"
         )
         self.coaching = CoachingController(store, channel)
         self.handoffs = HandoffController(
@@ -86,6 +92,18 @@ class BotHandlers:
             await self._send_activation_required(chat_id, paired=True)
             return
 
+        if text.strip().split()[:1] == ["/memory"]:
+            if not await self.memory.handle(user, chat_id, text.strip(), conversation):
+                await self.channel.send_message(
+                    chat_id, "Use /memory to inspect saved Memory and pause controls.",
+                    conversation=conversation,
+                )
+            return
+
+        if text.strip().split()[:1] == ["/suggestions"]:
+            await self.turn_processor.suggestions.preference(user, chat_id, text, conversation)
+            return
+
         if text.strip() == "/program":
             await self.coaching.inspect(user, chat_id, conversation)
             return
@@ -109,12 +127,18 @@ class BotHandlers:
             )
             return
 
-        if data.startswith(("handoff:", "coach:")):
+        if data.startswith(("handoff:", "coach:", "suggest:", "memory:")):
             user = await self.store.get_user_by_chat_id(chat_id)
             if user and user.get("supabase_auth_id"):
                 activation = await self.store.get_activation_state(user["supabase_auth_id"])
                 if activation.get("completed"):
-                    if data.startswith("coach:"):
+                    if data.startswith("memory:"):
+                        await self.memory.handle_callback(user, chat_id, data, conversation)
+                    elif data.startswith("suggest:"):
+                        await self.turn_processor.suggestions.handle_callback(
+                            user, chat_id, data, conversation
+                        )
+                    elif data.startswith("coach:"):
                         await self.coaching.handle_callback(user, chat_id, data, conversation)
                     else:
                         await self.handoffs.handle_callback(user, chat_id, data, conversation)

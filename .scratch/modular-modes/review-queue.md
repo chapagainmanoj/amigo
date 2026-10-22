@@ -451,3 +451,92 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   No code in this documentation slice changes Gate A inputs; release certification remains absent.
 - Open: recurring participant job, concrete failing existing flow, approved data contract and
   measured benefit. No demand/trial evidence or permanent owner decision manufactured.
+
+## Phase 6 — confirmed suggestions, explicit Memory, declared durable workflows
+
+- Parent5636e80. Backend slice implements Issues05/06/08 under provisional owner-review records.
+- Files touched:
+  - .github/workflows/ci.yml
+  - .scratch/modular-modes/proposals/020-independent-probes/amigo-review020-extra.sql
+  - .scratch/modular-modes/proposals/020-independent-probes/amigo-review020.py
+  - .scratch/modular-modes/proposals/020-independent-verification.md
+  - .scratch/modular-modes/proposals/021-independent-probes/amigo-review021.py
+  - .scratch/modular-modes/proposals/021-independent-review.md
+  - .scratch/modular-modes/proposals/phase6-05-confirmed-mode-suggestions.md
+  - .scratch/modular-modes/proposals/phase6-06-store-backed-memory.md
+  - .scratch/modular-modes/proposals/phase6-08-durable-workflows.md
+  - .scratch/modular-modes/proposals/phase6-chain-verification.md
+  - README.md
+  - docs/architecture.md
+  - docs/capability-matrix.md
+  - docs/pre-launch-gap-analysis.md
+  - evals/memory/v1/README.md
+  - evals/memory/v1/cases.json
+  - migrations/020_durable_memory.sql
+  - migrations/021_confirmed_mode_suggestions.sql
+  - scripts/check_schema_chain.py
+  - src/agent/catalogue.py
+  - src/agent/modes.py
+  - src/api/coaching.py
+  - src/api/memory.py
+  - src/bot/handlers.py
+  - src/bot/turns.py
+  - src/cli.py
+  - src/evaluation/gate_a.py
+  - src/main.py
+  - src/memory/durable.py
+  - src/memory/memory_store.py
+  - src/memory/store.py
+  - src/memory/suggestions.py
+  - src/memory_service.py
+  - src/mode_suggestions.py
+  - src/schema.py
+  - src/tools/memory.py
+  - src/workflows.py
+  - tests/fakes.py
+  - tests/sql/app_schema_version.sql
+  - tests/sql/assert_020_durable_memory.sql
+  - tests/sql/assert_021_confirmed_mode_suggestions.sql
+  - tests/test_memory_retrieval_eval.py
+  - tests/test_memory_service.py
+  - tests/test_memory_store.py
+  - tests/test_mode_suggestions.py
+  - tests/test_workflows.py
+
+- Protected edits: migrations/020_durable_memory.sql, migrations/021_confirmed_mode_suggestions.sql.
+  No .env, config defaults, deployed schema/data, participant pins, push or external messages changed.
+- Evidence: **1313 tests passed11.07s**; Ruff All checks passed; diff clean; scheduler smoke fired
+  through in-memory channel. Includes Daily golden/Tool-schema and111 Gate A currency tests.
+  Added reachable modules to fingerprint; currency tests unmodified. Release Gate A artifact
+  remains absent; candidate tests do not certify production or a provider fallback.
+- Fresh full45-file local CI SQL chain passed at schema21, all missing-chain/predecessor guards
+  passed, Activation forced-interleave/30trials155calls passed. Independent020/021 reviews and
+  frozen hashes/probes retained; combined final reviewed020 hash273f33cc… and0217c515d31… proven.
+- Suggestions: default OFF, explicit current-job rules, no sentiment/silence/Task-behavior signals,
+  one offer per owned open Daily Session, persistent stop preference, no carried text/history or
+  target Turn on confirmation. Same canonical entry path for both channel types; current grants,
+  catalogue/readiness and single-use expiry checks. Default-deny per-Turn clearance seam remains
+  unimplemented for real admission; lexical crisis suppression does not certify safety detection.
+  Decisions23/28 release/friction evidence still missing.54 focused tests, SQL8create→1/8confirm→1.
+- Memory: all-three Store parity; default-deny application semantic eligibility/readiness plus
+  database admissionOFF; max5 enabled owners globally serialized, paused owners counted. Exact
+  owned preview confirms payload/settings/item version; first opt-in atomic. Corrections/sharing/
+  reconfirmation versioned;90/180day aging, explicit validity, goal completion/cancellation, separate
+  learning/use pauses, max3 scoped relevant items across a Turn, content-free uses, complete scoped
+  JSON/CSV and Forget/ForgetAll purge. Candidate plaintext process-local only, bounded cache with
+  timer cleanup and concurrent-limit regression. No registered Daily Memory Tool/context provider.
+  Optional proposal-only Tool cannot confirm; channel receipt offers Edit/Forget/Undo. Inspector
+  API complete; dashboard UI follows separately. Whole-account/provider/backup deletion unverified.
+- Independent020 findings fixed: NULL validation, optimistic settings version, pre-ledger guard.
+  Unicode Python/PG digest parity and6 concurrent opt-ins→5pass1refuse proven. Seventeen authored
+  retrieval fixtures passed exact ID sets; this does not establish generalized95% retrieval or
+  prohibited-content classification. Decision26 demand, privacy/eligibility review, five-person
+  usability and14-day trial remain open. Memory admission stays OFF.
+- Workflows: Coach-only immutable v1 declaration and owned metadata inspection reuse018/019
+  Program/outbox/Command records.16 new tests replace workers after enqueue/claim/dispatch/accepted
+  on both channel paths; occurrence preserved, stale token fenced, uncertain provider send never
+  repeated. No generic/external engine or persisted per-Program definition-version binding; only
+  current v1 exists, future changes require explicit binding/migration decision. No trial evidence
+  or arbitrary Tool workflow guarantee invented.
+- Sole final Gemini batches remain deferred until execution sources freeze; full Claude/Ollama
+  development suites retain failures. New Modes remain Planned until required provider evidence.

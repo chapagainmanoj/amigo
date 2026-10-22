@@ -7,6 +7,7 @@ from src.bot.modes import ModeController
 from src.channels.base import ConversationRef, MessageChannel
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
+from src.mode_suggestions import ModeSuggestionController
 from src.scheduler.reminders import ReminderScheduler
 from src.turns import SessionTurnOrchestrator
 
@@ -31,6 +32,7 @@ class TurnProcessor:
         self.mode_runtime = mode_runtime or default_runtime
         self.turn_orchestrator = SessionTurnOrchestrator(self.mode_runtime)
         self.modes = ModeController(store, channel, scheduler, session_mgr, self.mode_runtime)
+        self.suggestions = ModeSuggestionController(self.modes)
 
     async def handle(
         self, chat_id: int, user: dict, text: str, *, update_id: int,
@@ -62,6 +64,7 @@ class TurnProcessor:
             context, text, requested_mode=prepared.mode_id
         )
         await self.channel.send_message(chat_id, response, conversation=context.conversation)
+        await self.suggestions.offer(context, text, response)
 
     async def _handle_feedback(
         self, chat_id: int, user: dict, session_id: str, text: str, *, conversation=None
