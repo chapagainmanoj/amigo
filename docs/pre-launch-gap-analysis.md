@@ -35,7 +35,7 @@ deployment, security, privacy, documentation, analytics, legal readiness, and cu
   exact local date, wall time, timezone, and UTC instant while blocking ambiguous or invalid wall
   times. Observability, data-rights operations, Activation, end-to-end integration tests, and Gate
   A/B evidence remain open. Amigo is still in pre-beta development.
-- The application now requires exact schema version 17. Migration 017 and the Mode routing slice
+- The application now requires exact schema version 19. Migration 017 and the Mode routing slice
   introduce channel-neutral conversations, Mode-isolated Sessions, grants, confirmed handoff
   execution claims, and primary-channel Daily addressing at Reminder delivery time. Integration
   review and the complete owner test-bot flow remain release gates; no Supabase application or
@@ -123,7 +123,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | No temporal or semantic memory | Current memory is message history, tasks, and optional session summaries. There is no Graphiti, pgvector, contradiction handling, or routine learning. | **High** | Remove current claims. Later define memory provenance, confidence, expiry, correction, retrieval, and deletion before implementation. | Claim removal before launch; feature later |
 | No Memory Inspector or learning controls | Users cannot inspect, correct, export, pause, or delete learned memories, and the promised memory objects do not exist. | **Critical** | Remove the claim or build the complete trust surface, including deletion propagation. | Before advertising memory |
 | Adaptive coaching is only a stored default | `coaching_profile` exists but is not learned or applied dynamically; the agent uses a static persona. | **High** | Describe the current personality as fixed. Define signals, safe bounds, overrides, and evaluation before adaptation. | Before claiming adaptation |
-| Anti-nag fields are inert | The daily budget and coaching fields are not enforced; there is no cooldown, ignored-message tracking, or back-off. | **High** | Add a deterministic governor before any proactive-send path. | Before proactive check-ins |
+| Proactive admission needs deployment/trial proof | Migration019 adds a shared budget and bounded coaching outbox; legacy over-budget commitments remain explicit debt. Coach admission defaults off. | **Partially resolved locally** | Verify reviewed privacy admission, production cutover and 14-day timing evidence before enabling check-ins. | Before proactive check-ins |
 | No user-facing reminder preferences | Users cannot set quiet hours, wake/sleep times, categories, cadence, or notification limits. | **High** | Add minimal Preferences UI and Telegram controls for mute, quiet hours, timezone, and reminder intensity. | Before broader beta |
 | Dashboard snooze did not reschedule the live job | Dashboard Later now routes through the authenticated backend and the same durable replacement-Reminder transition used by Telegram. | **Resolved locally** | Verify the outbox projection and replacement delivery in staging. | Staging evidence before external beta |
 | “Deferred to tomorrow” is incomplete | A deferred task is not proactively carried over or scheduled for review; it is only seen when the user initiates another turn. | **High** | Define carry-over semantics and schedule a next-day check-in or create a correctly dated task. | Before claiming automatic follow-up |
@@ -169,7 +169,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | No abuse, rate, or spend controls | An open bot can generate unbounded model calls and database writes. | **High** | Add per-user limits, quotas, spend alarms, usage logging, and an emergency disable control. | Before public access |
 | Task-status updates lacked an ownership predicate | Store updates include `user_id`, and the canonical resolve command atomically enforces Task ownership with Reminder cancellation. | **Resolved locally** | Re-run cross-tenant command assertions against the exact staging schema. | Staging evidence before public beta |
 | Full conversations have no lifecycle policy | Intimate messages, tasks, sessions, and feedback are retained without consent, export, deletion, or retention controls. | **Critical** | Define retention; implement account deletion, export, selective deletion, and provider-processing disclosure. | Before public launch |
-| Security assurance is incomplete | CI is configured to apply every checked-in migration through 017 and runs two-participant RLS regression assertions, the Mode grant/handoff SQL assertions, the Activation lock-order probe, and the schema-chain guard, but dependency audits and secret scanning are still absent. | **Partially resolved locally** | Add dependency and secret scans. | Before launch |
+| Security assurance is incomplete | CI is configured to apply every checked-in migration through 019 and runs two-participant RLS regression assertions, the Mode grant/handoff SQL assertions, the Activation lock-order probe, and the schema-chain guard, but dependency audits and secret scanning are still absent. | **Partially resolved locally** | Add dependency and secret scans. | Before launch |
 
 ## Operations, analytics, and feedback gaps
 
@@ -188,7 +188,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | Gap | Why it matters | Severity | Recommended fix | Gate |
 |---|---|---:|---|---|
 | README uses `git clone <repo-url>` | The advertised quick start cannot be followed literally. | **Medium** | Insert the real URL and validate setup from a clean machine. | Before open-source announcement |
-| Exact-version startup is proven only locally | README includes migrations 001–017, and CI is configured for the full chain, its assertions, and `scripts/check_schema_chain.py` against exact schema version 17. The gate has never run against a real Supabase/PostgREST deployment, so the RPC response shape the gate reads is unverified. | **Medium** | Boot the staged application against staging and confirm `get_app_schema_version` satisfies the exact-version gate. | Before deploying this worktree |
+| Exact-version startup is proven only locally | README includes migrations 001–019, and CI is configured for the full chain, its assertions, and `scripts/check_schema_chain.py` against exact schema version 19. The gate has never run against a real Supabase/PostgREST deployment, so the RPC response shape the gate reads is unverified. | **Medium** | Boot the staged application against staging and confirm `get_app_schema_version` satisfies the exact-version gate. | Before deploying this worktree |
 | Documentation contradicts itself | Gemini 2.5 vs 3.5, Railway vs Render vs Fly, implemented vs future features, and test counts differ. | **High** | Establish a capability matrix and release checklist as the documentation source of truth. | Before customer showing |
 | Blog links and images are unfinished | The bot link is `t.me/YoursAmigoBot`, and referenced screenshots are missing. | **High** | Add verified links and real screenshots or keep the article unpublished. | Before publication |
 | No user help or FAQ | Users have no guidance for corrections, timezone changes, missed reminders, muting, deletion, pairing, or support. | **Medium** | Add `/help`, FAQ, troubleshooting, and a support contact. | Before public beta |
@@ -271,3 +271,26 @@ After the security, privacy, reminder-consistency, deployment, integration-testi
 truth-in-marketing gaps are addressed, Amigo would be appropriate for a small,
 invitation-only beta. Temporal memory, adaptive coaching, extra modes, and voice can wait;
 trustworthy reminders, honest positioning, fast onboarding, and privacy cannot.
+
+
+### Internal Mode candidates and admission controls (22 October 2026)
+
+Migrations 018/019 add owned versioned Coaching Programs, exact-draft approval callbacks,
+Program export/deletion, a shared proactive budget ledger and a fenced coaching outbox.
+Existing Reminder commitments consume capacity first; historical overflow is recorded as debt,
+not silently dropped. New Reminder scheduling can refuse before mutation when the shared profile
+budget is full. Coaching uses remaining capacity, selected days, quiet hours, one check-in/day,
+one missed follow-up then silence. Weekly review replaces a chosen check-in. Returning to Coach resumes that gate; program approval and extension remain separate choices.
+
+Coach, Reflect and fictional laundry Recommender have authored instructions, isolated Toolsets
+and versioned fictional evaluation suites. They remain Planned pending the sole final Gemini
+batch after shared source changes stop. Candidate runner output cannot certify release/fallback.
+No provider fallback is declared without complete current evidence and human review.
+
+Coach and Reflect additionally deny real admission by default. Missing reviewed notices,
+consent/retention/account-wide rights and qualified wellbeing evidence cannot be replaced with
+an operator grant or a passing model test. Program export/deletion covers Program records and
+entries only; retained conversation Messages/provider copies remain. Account-wide deletion and
+backup erasure are not claimed. Reflect stores no Mood Entries, Memory, exercises or profile
+inferences; its empty resource registry supplies only static general emergency guidance, never
+stale contact details. CBT personal input remains off. No deployment or Supabase change occurred.

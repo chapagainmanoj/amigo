@@ -21,6 +21,7 @@ from src.memory.activation import (
     create_test,
     update_profile,
 )
+from src.memory.coaching import LocalCoachingState
 from src.memory.later import apply_later_transition
 from src.memory.modes import LocalModeState, ModeGrant, ModeGrantResult, ModeResult
 from src.memory.pairing import (
@@ -29,7 +30,8 @@ from src.memory.pairing import (
     ActivationTermsRequiredError,
     PairingTokenRateLimitError,
 )
-from src.memory.reminders import validate_reminder_updates
+from src.memory.proactive import LocalProactiveState, reminder_budget_transaction
+from src.memory.reminders import validate_reminder_timing, validate_reminder_updates
 from src.memory.tasks import validate_task_status
 from src.schema import EXPECTED_SCHEMA_VERSION, require_schema_version
 from src.utils import local_day_utc_range, today_in_tz, utc_now, yesterday_in_tz
@@ -64,11 +66,11 @@ class InMemoryStore:
     """Dict-backed store implementing the same interface as MemoryStore."""
 
     def __init__(self):
-        self._users: dict[str, dict] = {}          # user_id → profile
-        self._sessions: dict[str, dict] = {}        # session_id → session
+        self._users: dict[str, dict] = {}  # user_id → profile
+        self._sessions: dict[str, dict] = {}  # session_id → session
         self._messages: list[dict] = []
-        self._tasks: dict[str, dict] = {}           # task_id → task
-        self._reminders: dict[str, dict] = {}       # reminder_id → reminder
+        self._tasks: dict[str, dict] = {}  # task_id → task
+        self._reminders: dict[str, dict] = {}  # reminder_id → reminder
         self._feedback: list[dict] = []
         self._usage: list[dict] = []
         self._pairing_tokens: dict[str, dict] = {}
@@ -81,6 +83,8 @@ class InMemoryStore:
         self._activation_journeys: dict[str, dict] = {}
         self._schema_version = EXPECTED_SCHEMA_VERSION
         self._mode_state = LocalModeState()
+        self._coaching_state = LocalCoachingState()
+        self._proactive_state = LocalProactiveState()
 
     async def connect(self) -> None:
         """Match MemoryStore startup; the local store has no external client."""
@@ -229,7 +233,7 @@ class InMemoryStore:
         self._messages.append(msg)
         return dict(msg)
 
-# ── Session Modes, trial grants, and confirmed handoffs ──
+    # ── Session Modes, trial grants, and confirmed handoffs ──
 
     async def get_active_mode(self, user_id: str, session_id: str) -> str | None:
         return await self._mode_state.get_mode(self._sessions, user_id, session_id)
@@ -277,6 +281,214 @@ class InMemoryStore:
             self._sessions, user_id, session_id, handoff_id, confirm,
         )
 
+    async def get_proactive_consent(self, user_id, scope):
+        return await self._proactive_state.get_consent(user_id, scope)
+
+    async def set_proactive_consent(
+        self, user_id, scope, policy_version, country_code=None, withdraw=False
+    ):
+        if not await self.get_user_by_id(user_id):
+            raise ValueError("User not found")
+        return await self._proactive_state.set_consent(
+            user_id, scope, policy_version, country_code, withdraw
+        )
+
+    async def set_coaching_consent(self, user_id, policy_version=None):
+        return await self.set_proactive_consent(
+            user_id, "coaching-v1", policy_version, withdraw=policy_version is None
+        )
+
+    async def has_coaching_consent(self, user_id):
+        return await self._proactive_state.has_consent(user_id)
+
+    async def reserve_proactive_delivery(
+        self, user_id, delivery_key, kind, scheduled_at, program_id=None
+    ):
+        user = await self.get_user_by_id(user_id)
+        if program_id is not None and not await self.get_coaching_program(user_id, program_id):
+            raise ValueError("Coaching Program unavailable")
+        return await self._proactive_state.reserve(
+            user, delivery_key, kind, scheduled_at, program_id
+        )
+
+    async def release_proactive_delivery(self, user_id, delivery_key):
+        return await self._proactive_state.release(user_id, delivery_key)
+
+    async def enqueue_coaching_delivery(
+        self, user_id, program_id, expected_version, delivery_key, local_day, kind, scheduled_at
+    ):
+        user = await self.get_user_by_id(user_id)
+        if not user:
+            return {"status": "unavailable"}
+        auth_id = user.get("supabase_auth_id")
+        activation = await self.get_activation_state(auth_id) if auth_id else {}
+        return await self._proactive_state.enqueue(
+            user,
+            self._coaching_state.programs,
+            self._mode_state.grants.values(),
+            program_id,
+            expected_version,
+            local_day,
+            kind,
+            scheduled_at,
+            delivery_key,
+            activated=activation.get("completed") is True,
+        )
+
+    async def claim_coaching_deliveries(self, worker_id, limit=25):
+        await self._proactive_state.cancel_inactive(self._coaching_state.programs)
+        return await self._proactive_state.claim(worker_id, limit)
+
+    async def mark_coaching_dispatch(self, user_id, delivery_key, claim_token):
+        user = await self.get_user_by_id(user_id)
+        auth_id = user.get("supabase_auth_id") if user else None
+        activation = await self.get_activation_state(auth_id) if auth_id else {}
+        return await self._proactive_state.dispatch(
+            user_id,
+            delivery_key,
+            claim_token,
+            self._coaching_state.programs,
+            self._mode_state.grants.values(),
+            user=user, activated=activation.get("completed") is True,
+        )
+
+    async def finish_coaching_delivery(self, user_id, delivery_key, claim_token, outcome):
+        return await self._proactive_state.finish(user_id, delivery_key, claim_token, outcome)
+
+    async def get_coaching_delivery_history(self, user_id, program_id):
+        return await self._proactive_state.history(user_id, program_id)
+
+    async def note_coaching_reply(self, user_id, program_id):
+        if not await self.get_coaching_program(user_id, program_id):
+            return False
+        await self._proactive_state.note_reply(user_id, program_id)
+        return True
+
+    async def get_coaching_program(
+        self, user_id: str, program_id: str | None = None
+    ) -> dict | None:
+        return await self._coaching_state.get(user_id, program_id)
+
+    async def list_coaching_entries(
+        self, user_id: str, program_id: str, limit: int = 20
+    ) -> list[dict]:
+        return await self._coaching_state.list_entries(user_id, program_id, limit)
+
+    async def draft_coaching_program(
+        self,
+        user_id: str,
+        idempotency_key: str,
+        payload_hash: str,
+        *,
+        goal: str,
+        success_measure: str,
+        check_in_days: list[int],
+        check_in_time: str,
+        timezone: str,
+    ) -> dict:
+        if not await self.get_user_by_id(user_id):
+            raise ValueError("User not found")
+        return await self._coaching_state.draft(
+            user_id,
+            idempotency_key,
+            payload_hash,
+            goal=goal,
+            success_measure=success_measure,
+            check_in_days=check_in_days,
+            check_in_time=check_in_time,
+            timezone=timezone,
+        )
+
+    async def change_coaching_program(
+        self,
+        user_id: str,
+        program_id: str,
+        expected_version: int,
+        action: str,
+        idempotency_key: str,
+        payload_hash: str,
+        *,
+        approval_token: str | None = None,
+        progress_text: str | None = None,
+        weekly_choice: str | None = None,
+        extension_days: int | None = None,
+    ) -> dict:
+        result = await self._coaching_state.change(
+            user_id,
+            program_id,
+            expected_version,
+            action,
+            idempotency_key,
+            payload_hash,
+            approval_token=approval_token,
+            progress_text=progress_text,
+            weekly_choice=weekly_choice,
+            extension_days=extension_days,
+        )
+        await self._proactive_state.cancel_inactive(self._coaching_state.programs)
+        return result
+
+    async def revise_coaching_draft(
+        self,
+        user_id: str,
+        program_id: str,
+        expected_version: int,
+        idempotency_key: str,
+        payload_hash: str,
+        *,
+        goal: str,
+        success_measure: str,
+        check_in_days: list[int],
+        check_in_time: str,
+        timezone: str,
+    ) -> dict:
+        result = await self._coaching_state.revise(
+            user_id,
+            program_id,
+            expected_version,
+            idempotency_key,
+            payload_hash,
+            goal=goal,
+            success_measure=success_measure,
+            check_in_days=check_in_days,
+            check_in_time=check_in_time,
+            timezone=timezone,
+        )
+        await self._proactive_state.cancel_inactive(self._coaching_state.programs)
+        return result
+
+    async def issue_coaching_approval(
+        self, user_id: str, program_id: str, expected_version: int
+    ) -> str:
+        return await self._coaching_state.issue_approval(user_id, program_id, expected_version)
+
+    async def confirm_coaching_approval(
+        self,
+        user_id: str,
+        token: str,
+        idempotency_key: str,
+        payload_hash: str,
+    ) -> dict:
+        return await self._coaching_state.confirm(user_id, token, idempotency_key, payload_hash)
+
+    async def complete_due_coaching_programs(self) -> list[dict]:
+        result = await self._coaching_state.complete_due()
+        await self._proactive_state.cancel_inactive(self._coaching_state.programs)
+        return result
+
+    async def list_active_coaching_programs(self) -> list[dict]:
+        return await self._coaching_state.list_active()
+
+    async def export_coaching_data(self, user_id: str) -> dict:
+        return await self._coaching_state.export(user_id)
+
+    async def delete_coaching_data(self, user_id: str, verified_request_id: str) -> None:
+        if not verified_request_id or not verified_request_id.strip():
+            raise ValueError("Verified deletion required")
+        program_ids = [key for key, row in self._coaching_state.programs.items()
+                       if row["user_id"] == user_id]
+        await self._coaching_state.delete(user_id)
+        await self._proactive_state.purge_programs(user_id, program_ids)
 
     async def get_mode_conversation(self, user_id: str, mode_id: str, channel: str) -> dict | None:
         return await self._mode_state.get_conversation(user_id, mode_id, channel)
@@ -450,6 +662,7 @@ class InMemoryStore:
             and task["status"] == "pending"
         ]
 
+    @reminder_budget_transaction
     async def resolve_task_command(
         self,
         *,
@@ -611,6 +824,7 @@ class InMemoryStore:
 
     # ── Reminders ──
 
+    @reminder_budget_transaction
     async def schedule_reminder_command(
         self,
         *,
@@ -737,6 +951,7 @@ class InMemoryStore:
         }
         return result
 
+    @reminder_budget_transaction
     async def cancel_reminder_command(
         self,
         *,
@@ -852,6 +1067,7 @@ class InMemoryStore:
         effect["completed_at"] = utc_now().isoformat() if succeeded else None
         effect["available_at"] = utc_now().isoformat()
 
+    @reminder_budget_transaction
     async def create_reminder(self, task_id: str, user_id: str, scheduled_time: str) -> dict:
         task = self._tasks.get(task_id)
         if not task or task["user_id"] != user_id:
@@ -874,11 +1090,13 @@ class InMemoryStore:
         self._reminders[reminder_id] = reminder
         return dict(reminder)
 
+    @reminder_budget_transaction
     async def update_reminder(self, reminder_id: str, updates: dict, user_id: str) -> dict:
         validate_reminder_updates(updates)
         reminder = self._reminders.get(reminder_id)
         if not reminder or reminder["user_id"] != user_id:
             raise ValueError("Reminder not found")
+        validate_reminder_timing(reminder, updates)
         reminder.update(updates)
         return dict(reminder)
 
@@ -923,6 +1141,7 @@ class InMemoryStore:
             "user": copy.deepcopy(user),
         }
 
+    @reminder_budget_transaction
     async def apply_later_command(
         self,
         *,
@@ -987,6 +1206,7 @@ class InMemoryStore:
         }
         return copy.deepcopy(result)
 
+    @reminder_budget_transaction
     async def claim_reminder_for_send(
         self,
         reminder_id: str,
@@ -1058,6 +1278,7 @@ class InMemoryStore:
             "attempt": copy.deepcopy(attempt),
         }
 
+    @reminder_budget_transaction
     async def finish_reminder_delivery(
         self,
         *,
@@ -1236,6 +1457,7 @@ class InMemoryStore:
             results.append(entry)
         return results
 
+    @reminder_budget_transaction
     async def acknowledge_reminders_for_task(self, task_id: str, user_id: str) -> list[str]:
         ids = []
         for r in self._reminders.values():
@@ -1402,6 +1624,7 @@ class InMemoryStore:
             now=utc_now(),
         )
 
+    @reminder_budget_transaction
     async def create_activation_test_command(
         self,
         *,

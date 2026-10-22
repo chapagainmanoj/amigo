@@ -6,6 +6,7 @@ from src.agent.runtime import ModeRuntime
 from src.bot.reminder_actions import ReminderActions
 from src.bot.turns import TurnProcessor
 from src.channels.base import ConversationRef, MessageChannel
+from src.coaching import CoachingController
 from src.handoffs import HandoffController
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
@@ -38,6 +39,7 @@ class BotHandlers:
             scheduler=reminder_scheduler,
             mode_runtime=mode_runtime,
         )
+        self.coaching = CoachingController(store, channel)
         self.handoffs = HandoffController(
             store, channel, reminder_scheduler, session_mgr, self.turn_processor.mode_runtime
         )
@@ -46,8 +48,14 @@ class BotHandlers:
                 self.turn_processor.modes.conversations.ensure_by_chat
             )
 
-    async def handle_message(self, chat_id: int, text: str, *, update_id: int = 0,
-        conversation: ConversationRef | None = None) -> None:
+    async def handle_message(
+        self,
+        chat_id: int,
+        text: str,
+        *,
+        update_id: int = 0,
+        conversation: ConversationRef | None = None,
+    ) -> None:
         """Handle incoming text message from user."""
         pairing_attempt = text.startswith("/start pair_")
         if not await self._is_allowed(chat_id, pairing_attempt=pairing_attempt):
@@ -60,6 +68,7 @@ class BotHandlers:
         if text.startswith("/start pair_"):
             token = text.replace("/start pair_", "").strip()
             from src.bot.pairing import handle_start_pairing
+
             await handle_start_pairing(chat_id, token, self.store, self.channel)
             return
 
@@ -77,11 +86,20 @@ class BotHandlers:
             await self._send_activation_required(chat_id, paired=True)
             return
 
+        if text.strip() == "/program":
+            await self.coaching.inspect(user, chat_id, conversation)
+            return
+
         await self.turn_processor.handle(
             chat_id, user, text, update_id=update_id, conversation=conversation
         )
 
-    async def handle_callback(self, chat_id: int, message_id: int, data: str, *,
+    async def handle_callback(
+        self,
+        chat_id: int,
+        message_id: int,
+        data: str,
+        *,
         conversation: ConversationRef | None = None,
     ) -> None:
         """Handle inline keyboard button tap."""
@@ -91,12 +109,15 @@ class BotHandlers:
             )
             return
 
-        if data.startswith("handoff:"):
+        if data.startswith(("handoff:", "coach:")):
             user = await self.store.get_user_by_chat_id(chat_id)
             if user and user.get("supabase_auth_id"):
                 activation = await self.store.get_activation_state(user["supabase_auth_id"])
                 if activation.get("completed"):
-                    await self.handoffs.handle_callback(user, chat_id, data, conversation)
+                    if data.startswith("coach:"):
+                        await self.coaching.handle_callback(user, chat_id, data, conversation)
+                    else:
+                        await self.handoffs.handle_callback(user, chat_id, data, conversation)
             return
 
         # Legacy onboarding controls must not bypass Dashboard-first Activation.

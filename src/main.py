@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api.activation import router as activation_router
+from src.api.coaching import router as coaching_router
 from src.api.dashboard import router as dashboard_router
 from src.api.dependencies import get_activated_user
 from src.api.modes import router as modes_router
@@ -22,6 +23,7 @@ from src.channels.telegram import TelegramChannel
 from src.config import settings
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
+from src.mode_readiness import coach_readiness
 from src.observability import monitor_event_loop_delay, quiet_routine_logs
 from src.reliability import assess_readiness
 from src.runtime_config import (
@@ -29,6 +31,7 @@ from src.runtime_config import (
     require_agent_credentials,
     validate_runtime_configuration,
 )
+from src.scheduler.coaching import CoachingDeliveryWorker
 from src.scheduler.outbox import SchedulerOutboxWorker
 from src.scheduler.reminders import ReminderScheduler
 from src.startup import initialize_runtime
@@ -60,6 +63,9 @@ handlers = BotHandlers(
     reminder_scheduler=reminder_scheduler,
 )
 update_coordinator = TelegramUpdateCoordinator(store)
+coaching_worker = CoachingDeliveryWorker(
+    store, channel, admission_check=coach_readiness.complete
+)
 
 # Unknown until getMe succeeds for the configured token. Never seeded with a literal
 # handle: a default would name the production bot from every other environment.
@@ -101,6 +107,9 @@ async def lifespan(app: FastAPI):
     async def maintain_modes():
         await handlers.turn_processor.modes.conversations.close_expired()
         await _recover_pending_handoffs()
+        coaching_worker.admission_enabled = await coach_readiness.complete()
+        await coaching_worker.reconcile()
+        await coaching_worker.drain_once()
 
     await reminder_scheduler.start_mode_maintenance(maintain_modes)
 
@@ -147,6 +156,7 @@ app.include_router(pairing_router)
 app.include_router(tasks_router)
 app.include_router(reminders_router)
 app.include_router(modes_router)
+app.include_router(coaching_router)
 
 # CORS Setup
 origins = [

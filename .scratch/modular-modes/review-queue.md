@@ -287,3 +287,122 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   steps for durable replay; no threadless fallback. Android and owner end-to-end flow remain
   unverified. Live --channel smoke now requires linked account/schema to resolve explicit Daily;
   scheduler smoke remains in memory. Owner applies reviewed migration/deploys separately.
+
+
+## Phase 5 — gated Mode candidates and durable coaching — 22 October 2026
+
+- Commit: this slice, `Build gated Mode candidates and durable coaching workflows`.
+- Phase4 routing commit resolved: `cab0751` (ADR/runbook acceptance `2ae3fcf`).
+- Files touched:
+  - .github/workflows/ci.yml
+  - README.md
+  - docs/architecture.md
+  - docs/capability-matrix.md
+  - docs/pre-launch-gap-analysis.md
+  - scripts/check_schema_chain.py
+  - scripts/run_gate_a_eval.py
+  - scripts/run_mode_deterministic_eval.py
+  - src/agent/catalogue.py
+  - src/agent/modes.py
+  - src/agent/runtime.py
+  - src/api/reminders.py
+  - src/bot/handlers.py
+  - src/bot/reminder_actions.py
+  - src/bot/turns.py
+  - src/commands/base.py
+  - src/evaluation/gate_a.py
+  - src/main.py
+  - src/memory/memory_store.py
+  - src/memory/reminders.py
+  - src/memory/store.py
+  - src/schema.py
+  - src/tools/toolsets.py
+  - tests/fakes.py
+  - tests/sql/app_schema_version.sql
+  - .scratch/modular-modes/evals/
+  - .scratch/modular-modes/proposals/018-independent-verification.md
+  - .scratch/modular-modes/proposals/019-independent-probes/
+  - .scratch/modular-modes/proposals/019-independent-verification.md
+  - .scratch/modular-modes/proposals/issue04-coaching-store-design.md
+  - evals/coach/
+  - evals/recommender/
+  - evals/reflect/
+  - migrations/018_coaching_programs.sql
+  - migrations/019_proactive_delivery_budget.sql
+  - src/agent/coach.py
+  - src/agent/recommender.py
+  - src/agent/reflect.py
+  - src/api/coaching.py
+  - src/coaching.py
+  - src/memory/coaching.py
+  - src/memory/proactive.py
+  - src/mode_readiness.py
+  - src/scheduler/coaching.py
+  - src/tools/coaching.py
+  - src/tools/recommender.py
+  - src/wellbeing.py
+  - tests/sql/assert_018_coaching_programs.sql
+  - tests/sql/assert_019_proactive_delivery_budget.sql
+  - tests/test_coaching_application.py
+  - tests/test_coaching_delivery.py
+  - tests/test_coaching_state.py
+  - tests/test_coaching_store_contracts.py
+  - tests/test_mode_candidates.py
+  - tests/test_recommender.py
+  - tests/test_reflect.py
+  - tests/test_reminder_budget.py
+
+- Protected edits: migrations/018_coaching_programs.sql; migrations/019_proactive_delivery_budget.sql.
+  No config, .env, deployed schema/data, push, participant pin or external message changes.
+- Independent migration reviews: proposals/018-independent-verification.md and
+  proposals/019-independent-verification.md (exact hashes/probes retained). Root full **41-file CI
+  SQL chain passed** on a new local PG15 DB amigo019_full_2c4c1974ae; all assertions through019,
+  schema19 predecessor/gap checks passed; Activation forced-interleave/30 trials/155 calls passed.
+  Independent019 proves atomic refused reschedule/Later leaves original Reminder, Task version,
+  outbox and receipts unchanged; eight parallel reservations admit4/refuse4; mixed Coach/Reminder
+  budget race admits4/refuses1. Legacy attempted/accepted slots survive cancellation.
+- Coach: one owned versioned Program, exact-draft one-use participant button activation (model
+  activation Tool only displays preview), fixed14-day term, explicit bounded extension, participant
+  progress, weekly choice, pause/stop, owned Program inspection/export/delete. Shared budget
+  transactions cover Reminder scheduling/reschedule/Later/Activation/direct writes and Coach;
+  unsent cancellation releases capacity, consumed/uncertain delivery remains counted. Refusals
+  produce clear Tool/callback/API responses. No silent dropping of existing commitments.
+- Outbox: selected weekdays/time, DST validation, <=15min late window, quiet hours, one Coach/day,
+  one missed follow-up then silence including reviews; authenticated return resets wait.
+  Canonical Activation/grant/consent/state/lease checks precede dispatch, uncertain outcomes never
+  retry. Program delete cancels unused queued work; consumed content-free accounting remains.
+- Provisional choices: existing over-budget commitments remain explicit legacy debt, reducing
+  Coach capacity; new requests refuse atomically. Default4 comes from existing profile schema,
+  never a model/caller limit. Program term14x24h; weekly review replaces selected check-in, DST gap
+  skipped/earliest fold only. Owner review required before enabling trial admission.
+- Reflect candidate: isolated history/context, no ordinary writes/Memory/Mood/CBT/exercises,
+  default-deny per-Turn readiness and separate consent, fresh-resource metadata checks with empty
+  default registry and static general emergency fallback. No stale or invented contact details.
+- Recommender: fictional laundry comparison only, labelled simulated weather, no location/live
+  source/saved preference/transaction; dryer/flexible-postpone/urgent-alternative order tested.
+- Privacy facts: whole-account rights/retention operations and qualified wellbeing approval remain
+  missing. Coach/Reflect real admission defaults OFF. Program-only rights endpoint explicitly
+  retains conversation Messages/provider copies; no broader privacy promise is made. Trial demand,
+  moderated usability, qualified review and participant outcomes are not invented.
+- Model evidence: fictional development cases only. Claude Coach/Reflect passed; laundry first
+  failed verbosity, then passed after prompt fix. Ollama Reflect passed; laundry failed Tool args;
+  Coach output exposed a brittle goal-vs-habit expected phrase, corrected in authored suite (the
+  original failed artifact remains). None constitutes a passing provider fallback/allowlist.
+- Sole full Gemini batches deferred until Phase6 shared execution sources stop changing, so final
+  per-Mode evidence is not knowingly stale. Modes stay Planned until those batches pass; candidate
+  runner uses only new InMemoryStores/synthetic grants, never modifies application definitions, and
+  labels artifacts candidate_eval (cannot certify release or fallback). Gemini requests so far0.
+- Validator correction: punctuation-only response assertions match literal punctuation, rather
+  than the empty normalized string; stop/no-question case now meaningful. All semantic criteria
+  retained. New modules added to fingerprint closure; currency tests untouched. GateA certification
+  still absent, no fabricated artifact or human approval.
+- Validation: **1142 passed in 10.40s**; Ruff **All checks passed**; scheduler smoke
+  **in-memory APScheduler reminder fired through channel**; diff whitespace clean.
+  Includes Daily golden/schema, currency, all52 candidate scripted cases, ownership/readiness,
+  24 application approval/rights tests, 56 Reminder budget tests and32 coaching delivery tests.
+- Extra corrections: API availability respects admission guard; model evidence currency binds
+  guard identity. Consent country ASCII validation mirrors SQL. Worker checks mutable readiness
+  before/after awaited policy, immediately before durable dispatch and provider send; post-mark
+  kill sends nothing, retains uncertain capacity. Weekly controls include all four choices.
+- Backend foundation committed separately from dashboard records access (following UI slice).
+  Full provider batches remain deferred until Phase6 source closure stabilizes, as above.

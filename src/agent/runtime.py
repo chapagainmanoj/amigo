@@ -139,6 +139,10 @@ class ModeRuntime:
             raise ModeUnavailableError(
                 mode.id, "not entitled", f"{mode.name} isn't available on your account."
             )
+        if mode.entry_guard is not None:
+            refusal = await mode.entry_guard(context)
+            if refusal:
+                raise ModeUnavailableError(mode.id, "readiness", refusal)
         return mode
 
     async def instructions_for(self, mode: ModeDefinition, context: ToolContext) -> str:

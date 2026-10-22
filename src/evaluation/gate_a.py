@@ -60,10 +60,13 @@ INVALIDATING_INPUT_PATHS = (
     "src/activation.py",
     "src/agent/catalogue.py",
     "src/agent/claude_cli_model.py",
+    "src/agent/coach.py",
     "src/agent/context.py",
     "src/agent/modes.py",
     "src/agent/policies.py",
     "src/agent/prompts.py",
+    "src/agent/recommender.py",
+    "src/agent/reflect.py",
     "src/agent/registry.py",
     "src/agent/runtime.py",
     "src/agent/safety.py",
@@ -74,6 +77,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/bot/reminder_actions.py",
     "src/bot/turns.py",
     "src/channels/base.py",
+    "src/coaching.py",
     "src/commands/base.py",
     "src/commands/later.py",
     "src/commands/reminders.py",
@@ -86,15 +90,18 @@ INVALIDATING_INPUT_PATHS = (
     "src/evaluation/model_policy.py",
     "src/handoffs.py",
     "src/memory/activation.py",
+    "src/memory/coaching.py",
     "src/memory/context.py",
     "src/memory/later.py",
     "src/memory/memory_store.py",
     "src/memory/modes.py",
     "src/memory/pairing.py",
+    "src/memory/proactive.py",
     "src/memory/reminders.py",
     "src/memory/sessions.py",
     "src/memory/store.py",
     "src/memory/tasks.py",
+    "src/mode_readiness.py",
     "src/model_routing.py",
     "src/model_usage.py",
     "src/runtime_config.py",
@@ -102,15 +109,18 @@ INVALIDATING_INPUT_PATHS = (
     "src/schema.py",
     "src/telemetry.py",
     "src/time_resolution.py",
+    "src/tools/coaching.py",
     "src/tools/context.py",
-    "src/tools/handoffs.py",
     "src/tools/handoff_execution.py",
+    "src/tools/handoffs.py",
     "src/tools/observed.py",
+    "src/tools/recommender.py",
     "src/tools/reminders.py",
     "src/tools/tasks.py",
     "src/tools/toolsets.py",
     "src/turns.py",
     "src/utils/__init__.py",
+    "src/wellbeing.py",
 )
 
 
@@ -652,8 +662,14 @@ def _normalized(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
 
 
+def _response_phrase_present(phrase: str, response: str) -> bool:
+    normalized = _normalized(phrase)
+    if normalized:
+        return normalized in _normalized(response)
+    return bool(phrase.strip()) and phrase.strip().casefold() in response.casefold()
+
+
 def _response_checks(response: str, expected: ResponseProperties) -> tuple[bool, list[str]]:
-    normalized = _normalized(response)
     failures = []
     if expected.english and (
         re.search(r"[\u0900-\u097f]", response) or not re.search("[A-Za-z]", response)
@@ -662,14 +678,14 @@ def _response_checks(response: str, expected: ResponseProperties) -> tuple[bool,
     if expected.question_required and "?" not in response:
         failures.append("response does not ask the required question")
     if expected.must_include_any and not any(
-        _normalized(item) in normalized for item in expected.must_include_any
+        _response_phrase_present(item, response) for item in expected.must_include_any
     ):
         failures.append("response lacks every acceptable required phrase")
     for item in expected.must_include_all:
-        if _normalized(item) not in normalized:
+        if not _response_phrase_present(item, response):
             failures.append(f"response lacks required phrase: {item}")
     for item in expected.must_not_include:
-        if _normalized(item) in normalized:
+        if _response_phrase_present(item, response):
             failures.append(f"response contains prohibited phrase: {item}")
     sentences = [item for item in re.split(r"[.!?]+", response) if item.strip()]
     if len(sentences) > expected.max_sentences:

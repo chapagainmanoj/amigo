@@ -1,5 +1,8 @@
 """Every Mode Amigo knows about. Registering a Mode here is the whole integration."""
 
+from dataclasses import replace
+
+from src.agent.coach import coach_instructions, coaching_context
 from src.agent.context import (
     active_reminder_ids,
     pending_task_ids,
@@ -8,7 +11,12 @@ from src.agent.context import (
 )
 from src.agent.modes import ModeDefinition, TurnFacts
 from src.agent.prompts import build_system_prompt
+from src.agent.recommender import recommender_context, recommender_instructions
+from src.agent.reflect import REFLECT_CANDIDATE
 from src.agent.registry import ModeRegistry
+from src.mode_readiness import coach_entry_guard, reflect_entry_guard
+from src.tools.coaching import COACHING
+from src.tools.recommender import LAUNDRY
 from src.tools.toolsets import REMINDERS, TASKS
 
 
@@ -44,19 +52,17 @@ COACH = ModeDefinition(
         "and adjustment."
     ),
     status="planned",
+    instructions=coach_instructions,
+    entry_guard=coach_entry_guard,
+    toolsets=(COACHING,),
+    context=(coaching_context,),
+    entitlement="grant",
+    eval_suite="evals/coach/v1/cases.json",
+    invalidating_inputs=("src/agent/coach.py", "src/tools/coaching.py", "src/coaching.py"),
     handoffs=("daily",),
 )
 
-REFLECT = ModeDefinition(
-    id="reflect",
-    name="Reflect",
-    purpose=(
-        "Help me privately examine an experience, find my own takeaway, and optionally choose "
-        "a next step."
-    ),
-    status="planned",
-    handoffs=("daily",),
-)
+REFLECT = replace(REFLECT_CANDIDATE, entry_guard=reflect_entry_guard)
 
 RECOMMENDER = ModeDefinition(
     id="recommender",
@@ -66,6 +72,12 @@ RECOMMENDER = ModeDefinition(
         "explainable trade-offs."
     ),
     status="planned",
+    instructions=recommender_instructions,
+    toolsets=(LAUNDRY,),
+    context=(recommender_context,),
+    entitlement="grant",
+    eval_suite="evals/recommender/v1/cases.json",
+    invalidating_inputs=("src/agent/recommender.py", "src/tools/recommender.py"),
     handoffs=("daily",),
 )
 

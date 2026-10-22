@@ -26,6 +26,10 @@ def fallback_currency(mode, root: Path) -> dict:
         "instructions_sha256": canonical_hash(mode.instructions(PLACEHOLDER_FACTS)),
         "tool_schema_sha256": canonical_hash(tool_schema(mode_definition=mode)),
         "tool_order": list(mode.tool_order),
+        "entry_guard": (
+            f"{mode.entry_guard.__module__}.{mode.entry_guard.__qualname__}"
+            if mode.entry_guard is not None else None
+        ),
         "context_providers": [
             f"{provider.__module__}.{provider.__qualname__}" for provider in mode.context
         ],

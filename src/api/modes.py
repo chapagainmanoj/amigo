@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Request
 from src.agent.catalogue import build_registry
 from src.api.dependencies import get_activated_user, get_store
 from src.channels.base import ConversationRef
+from src.tools.context import ToolContext
 
 router = APIRouter()
 
@@ -28,6 +29,13 @@ async def list_modes(
             mode.entitlement == "grant" and grant is not None
         )
         available = mode.status == "live" and entitled
+        if available and mode.entry_guard is not None:
+            context = ToolContext(
+                store=store, scheduler=None, channel=channel, user=user, session_id="",
+                chat_id=await channel.recipient_for(user) if channel else 0,
+                timezone=user.get("timezone") or "UTC", turn_id="mode-availability",
+            )
+            available = not bool(await mode.entry_guard(context))
         address = next((
             row for row in conversations
             if row["mode_id"] == mode.id and row["channel"] == channel_id

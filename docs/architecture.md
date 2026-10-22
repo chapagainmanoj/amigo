@@ -93,7 +93,7 @@ amigo/
   construction and synchronous Gate A schema capture. All ordinary Mode policy, registry,
   runtime, and Turn-orchestrator methods are asynchronous.
 - **Fail-closed startup**: The Supabase Store must report the exact application schema version
-  (currently 17) before the scheduler, durable-outbox drain, Reminder reload, or Telegram webhook
+  (currently 19) before the scheduler, durable-outbox drain, Reminder reload, or Telegram webhook
   starts.
 - **Mode authority and addressing**: migrations 015–017 order crossed Pairing locks and add
   Session-active-Mode, trial-grant, immutable grant-event, confirmed-handoff, and channel-neutral
@@ -392,3 +392,26 @@ No Supabase writes. Safe for CI/CD.
   — Session Mode, trial-grant, audit, and confirmed-handoff authority schema.
 - [migrations/017_mode_conversations.sql](../migrations/017_mode_conversations.sql)
   — Channel-neutral conversation addresses, Mode-scoped Sessions, and handoff execution claims.
+
+
+### Internal Mode candidates and admission controls (22 October 2026)
+
+Migrations 018/019 add owned versioned Coaching Programs, exact-draft approval callbacks,
+Program export/deletion, a shared proactive budget ledger and a fenced coaching outbox.
+Existing Reminder commitments consume capacity first; historical overflow is recorded as debt,
+not silently dropped. New Reminder scheduling can refuse before mutation when the shared profile
+budget is full. Coaching uses remaining capacity, selected days, quiet hours, one check-in/day,
+one missed follow-up then silence. Weekly review replaces a chosen check-in. Returning to Coach resumes that gate; program approval and extension remain separate choices.
+
+Coach, Reflect and fictional laundry Recommender have authored instructions, isolated Toolsets
+and versioned fictional evaluation suites. They remain Planned pending the sole final Gemini
+batch after shared source changes stop. Candidate runner output cannot certify release/fallback.
+No provider fallback is declared without complete current evidence and human review.
+
+Coach and Reflect additionally deny real admission by default. Missing reviewed notices,
+consent/retention/account-wide rights and qualified wellbeing evidence cannot be replaced with
+an operator grant or a passing model test. Program export/deletion covers Program records and
+entries only; retained conversation Messages/provider copies remain. Account-wide deletion and
+backup erasure are not claimed. Reflect stores no Mood Entries, Memory, exercises or profile
+inferences; its empty resource registry supplies only static general emergency guidance, never
+stale contact details. CBT personal input remains off. No deployment or Supabase change occurred.

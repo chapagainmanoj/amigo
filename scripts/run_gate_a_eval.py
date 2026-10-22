@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -25,6 +25,8 @@ from pydantic_ai.providers.google import GoogleProvider  # noqa: E402
 
 from src.agent.catalogue import build_registry  # noqa: E402
 from src.agent.modes import PLACEHOLDER_FACTS  # noqa: E402
+from src.agent.registry import ModeRegistry  # noqa: E402
+from src.agent.runtime import ModeRuntime  # noqa: E402
 from src.channels.base import ChannelCapabilities  # noqa: E402
 from src.commands.base import CommandContext  # noqa: E402
 from src.commands.tasks import CreateTaskCommand, CreateTaskInput  # noqa: E402
@@ -133,12 +135,26 @@ def _git(*args: str) -> str:
     ).stdout.strip()
 
 
-def _release_inputs(suite_path: Path, suite: GateASuite, mode_id="daily", model_name=None) -> dict:
+def _evaluation_registry(mode_id, candidate=False):
+    registry = build_registry()
+    if not candidate:
+        return registry
+    if mode_id == "daily":
+        raise ValueError("Daily cannot bypass release gates through candidate evaluation")
+    return ModeRegistry(
+        replace(mode, status="live", entry_guard=None) if mode.id == mode_id else mode
+        for mode in registry
+    )
+
+
+def _release_inputs(
+    suite_path: Path, suite: GateASuite, mode_id="daily", model_name=None, *, candidate=False
+) -> dict:
     status = _git("status", "--porcelain=v1")
     diff = subprocess.run(
         ["git", "diff", "--binary"], cwd=ROOT, check=True, capture_output=True
     ).stdout
-    mode = build_registry()[mode_id]
+    mode = _evaluation_registry(mode_id, candidate)[mode_id]
     selected_model = (
         model_name or settings.dev_model or mode.model.primary or settings.default_model
     )
@@ -180,7 +196,7 @@ def _release_inputs(suite_path: Path, suite: GateASuite, mode_id="daily", model_
     }
 
 
-async def _setup_case(case, suite: GateASuite, repetition: int):
+async def _setup_case(case, suite: GateASuite, repetition: int, mode_id="daily"):
     store = InMemoryStore()
     channel = EvaluationChannel()
     scheduler = ReminderScheduler(channel, store)
@@ -196,7 +212,11 @@ async def _setup_case(case, suite: GateASuite, repetition: int):
             "onboarding_step": 3,
         },
     )
-    session = await store.create_session(user["user_id"], "casual")
+    if mode_id != "daily":
+        await store.grant_mode(
+            user["user_id"], mode_id, "fictional-evaluation", "Synthetic fixtures only"
+        )
+    session = await store.create_session(user["user_id"], "casual", mode_id=mode_id)
     aliases = {}
     for index, setup_task in enumerate(case.setup.tasks):
         result = await CreateTaskCommand(store).run(
@@ -239,9 +259,14 @@ def _state(store: InMemoryStore, aliases: dict[str, str]) -> dict:
 
 
 async def _run_execution(
-    case, suite: GateASuite, repetition: int, provider_model, mode_id="daily"
+    case, suite: GateASuite, repetition: int, provider_model, mode_id="daily", *, candidate=False
 ) -> dict:
-    store, deps, aliases = await _setup_case(case, suite, repetition)
+    store, deps, aliases = await _setup_case(case, suite, repetition, mode_id)
+    orchestrator = default_turn_orchestrator
+    if candidate:
+        from src.turns import SessionTurnOrchestrator
+
+        orchestrator = SessionTurnOrchestrator(ModeRuntime(_evaluation_registry(mode_id, True)))
     observed_models: set[str] = set()
     turn_evidence = []
     total_input = 0
@@ -251,7 +276,7 @@ async def _run_execution(
         deps.turn_id = f"{case.id}:{repetition}:{turn_index}"
         before = _state(store, aliases)
         turn_started = time.perf_counter()
-        result = await default_turn_orchestrator.run_turn(
+        result = await orchestrator.run_turn(
             deps, turn.message, model=provider_model, requested_mode=mode_id
         )
         latency_ms = round((time.perf_counter() - turn_started) * 1_000, 2)
@@ -329,7 +354,8 @@ def _write_evidence(path: Path, evidence: dict) -> None:
 
 async def run(args) -> int:
     mode_id = getattr(args, "mode", "daily")
-    mode = await build_registry().get(mode_id)
+    candidate = getattr(args, "candidate", False)
+    mode = await _evaluation_registry(mode_id, candidate).get(mode_id)
     if mode.status != "live":
         raise SystemExit(f"Mode {mode_id!r} is not live")
     suite_path = (args.suite or ROOT / mode.eval_suite).resolve()
@@ -340,7 +366,9 @@ async def run(args) -> int:
     if args.validate_only:
         return 0
     model_name = (
-        getattr(args, "model", None) or settings.dev_model or mode.model.primary
+        getattr(args, "model", None)
+        or settings.dev_model
+        or mode.model.primary
         or settings.default_model
     )
     certifiable = is_gemini_model(model_name)
@@ -360,7 +388,7 @@ async def run(args) -> int:
         raise SystemExit("--establish-baseline cannot be combined with --case")
     if args.establish_baseline and args.baseline is not None:
         raise SystemExit("--establish-baseline cannot be combined with --baseline")
-    if certifiable and not args.case and not args.establish_baseline:
+    if certifiable and not args.case and not args.establish_baseline and not candidate:
         if args.baseline is None:
             raise SystemExit(
                 "--baseline is required for a declared run; supply the archived last-passing "
@@ -389,12 +417,16 @@ async def run(args) -> int:
             formatted = "\n".join(f"- {error}" for error in baseline_errors)
             raise SystemExit(f"the supplied Gate A baseline is not passing:\n{formatted}")
         baseline_sha256 = hashlib.sha256(baseline_bytes).hexdigest()
-    release_inputs = _release_inputs(suite_path, suite, mode_id, getattr(args, "model", None))
+    release_inputs = _release_inputs(
+        suite_path, suite, mode_id, getattr(args, "model", None), candidate=candidate
+    )
     evidence = {
         "run_id": str(uuid.uuid4()),
         "suite_id": suite.suite_id,
         "purpose": (
-            "development_eval"
+            "candidate_eval"
+            if candidate
+            else "development_eval"
             if not certifiable
             else "development_case"
             if args.case
@@ -433,7 +465,9 @@ async def run(args) -> int:
         for repetition in range(1, args.repetitions + 1):
             print(f"running {case.id} repetition {repetition}/{args.repetitions}", flush=True)
             try:
-                execution = await _run_execution(case, suite, repetition, provider_model, mode_id)
+                execution = await _run_execution(
+                    case, suite, repetition, provider_model, mode_id, candidate=candidate
+                )
             except Exception as error:
                 if not args.case and isinstance(error, ModelHTTPError) and error.status_code == 429:
                     evidence["status"] = "aborted_provider_incident"
@@ -534,6 +568,11 @@ def parse_args():
         "--comparison-output",
         type=Path,
         help="Comparison report path (defaults beside --output)",
+    )
+    parser.add_argument(
+        "--candidate",
+        action="store_true",
+        help="Fictional in-memory candidate evaluation only; cannot certify release or fallback.",
     )
     parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--case", help="Run one case for development; not release evidence")

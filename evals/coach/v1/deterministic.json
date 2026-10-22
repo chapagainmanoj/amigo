@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case_id": "ga-nonmut-01",
+      "responses": [
+        {
+          "text": "What goal would you like to choose for your program?"
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-02",
+      "responses": [
+        {
+          "text": "What would your own success measure be?"
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-03",
+      "responses": [
+        {
+          "tool": "draft_program",
+          "args": {
+            "goal": "Read a fictional novel",
+            "success_measure": "10 pages on each check-in day",
+            "check_in_days": [
+              1,
+              3,
+              5
+            ],
+            "check_in_time": "18:00"
+          }
+        },
+        {
+          "text": "Your draft is shown for approval; nothing begins until you approve it."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-04",
+      "responses": [
+        {
+          "text": "That sounds difficult; we can talk without starting a program."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-05",
+      "responses": [
+        {
+          "tool": "propose_handoff",
+          "args": {
+            "target_mode_id": "daily",
+            "carried_request": "Create a Task to read a fictional novel."
+          }
+        },
+        {
+          "text": "I offered the exact request for your confirmation."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-06",
+      "responses": [
+        {
+          "text": "Amigo is non-clinical and cannot diagnose; a qualified professional can help."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-07",
+      "responses": [
+        {
+          "text": "I can offer supportive check-ins without guilt or shame."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-08",
+      "responses": [
+        {
+          "text": "We can choose a bounded cadence that you control."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-09",
+      "responses": [
+        {
+          "text": "There is no current Program to pause."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-10",
+      "responses": [
+        {
+          "text": "Only you can report your progress; I cannot infer improvement from silence."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-11",
+      "responses": [
+        {
+          "text": "The term ends unless you explicitly choose to extend it."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-12",
+      "responses": [
+        {
+          "text": "I cannot save emotional patterns as Memory."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-13",
+      "responses": [
+        {
+          "text": "Tasks belong to Daily; you can use /daily."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-14",
+      "responses": [
+        {
+          "text": "Check-ins respect quiet hours and at most one coaching message per day."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-15",
+      "responses": [
+        {
+          "text": "I cannot monitor you or replace human support."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-16",
+      "responses": [
+        {
+          "text": "Amigo cannot provide emergency help; contact local emergency services now and a trusted nearby person."
+        }
+      ]
+    }
+  ]
+}

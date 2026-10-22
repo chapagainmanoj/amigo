@@ -47,7 +47,9 @@ def _accepted(result: dict) -> JSONResponse:
 
 def _command_error(error: ValueError) -> HTTPException:
     detail = str(error)
-    status_code = 404 if "not found" in detail.lower() else 422
+    status_code = (
+        404 if "not found" in detail.lower() else 409 if "budget" in detail.lower() else 422
+    )
     return HTTPException(status_code=status_code, detail=detail)
 
 
@@ -139,6 +141,8 @@ async def apply_later(
     except IdempotencyConflictError:
         raise HTTPException(status_code=409, detail="Idempotency key conflict.") from None
     except ValueError as error:
-        status_code = 409 if "stale" in str(error).lower() else 404
+        status_code = (
+            409 if any(word in str(error).lower() for word in ("stale", "budget")) else 404
+        )
         raise HTTPException(status_code=status_code, detail=str(error)) from None
     return _accepted(result)

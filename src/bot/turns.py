@@ -43,6 +43,10 @@ class TurnProcessor:
                 chat_id, prepared.response, conversation=context.conversation
             )
             return
+        if prepared.mode_id == "coach":
+            program = await self.store.get_coaching_program(user["user_id"])
+            if program is not None:
+                await self.store.note_coaching_reply(user["user_id"], program["program_id"])
         if await self.session_mgr.should_close(text):
             await self.store.close_session(context.session_id)
             await self.channel.send_message(

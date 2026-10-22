@@ -40,7 +40,7 @@ CONSTRUCTIBLE_SKIPS = ("003", "004", "007", "008", "009", "010", "012", "013")
 # incomplete chains, and only migrations before it can appear in CONSTRUCTIBLE_SKIPS — a
 # later one is applied after the gate and so can never be missing when the gate runs.
 GATE_MIGRATION = 14
-PREDECESSOR_GATES = (15, 16, 17)
+PREDECESSOR_GATES = (15, 16, 17, 18, 19)
 
 
 def _psql(database: str, *args: str, owner: bool = False) -> subprocess.CompletedProcess:

@@ -10,11 +10,12 @@ from src.commands.base import (
     IdempotencyConflictError,
     InvalidTransitionError,
     PairingChangedError,
+    ProactiveBudgetExceeded,
     StaleVersionError,
 )
 from src.memory.modes import ModeGrant, ModeGrantResult, ModeResult
 from src.memory.pairing import ActivationTermsRequiredError, PairingTokenRateLimitError
-from src.memory.reminders import validate_reminder_updates
+from src.memory.reminders import validate_reminder_timing, validate_reminder_updates
 from src.memory.tasks import validate_task_status
 from src.schema import require_schema_version
 from src.utils import local_day_utc_range, today_in_tz, utc_now, yesterday_in_tz
@@ -46,10 +47,22 @@ def _observe_database_call(method):
 
 def _raise_command_error(error: Exception) -> None:
     message = str(error)
-    if "idempotency_key_conflict" in message:
-        raise IdempotencyConflictError(
-            "Idempotency key was reused with different input"
+    if "proactive_budget_exhausted" in message:
+        raise ProactiveBudgetExceeded("The shared daily message budget is full") from None
+    if "immutable_reminder_schedule" in message:
+        raise ValueError("Reminder timing is immutable; use the reschedule command") from None
+    if "coaching_stale_version" in message:
+        raise StaleVersionError("Coaching Program version changed") from None
+    if "coaching_invalid_transition" in message or "coaching_approval_required" in message:
+        raise InvalidTransitionError(
+            "Coaching action or participant approval unavailable"
         ) from None
+    if "coaching_program_unavailable" in message or "invalid_coaching_" in message:
+        raise ValueError("Coaching Program input or owner unavailable") from None
+    if "verified_deletion_required" in message:
+        raise ValueError("Verified deletion required") from None
+    if "idempotency_key_conflict" in message:
+        raise IdempotencyConflictError("Idempotency key was reused with different input") from None
     if "task_not_found" in message:
         raise ValueError("Task not found") from None
     if "reminder_not_found" in message:
@@ -333,6 +346,303 @@ class MemoryStore:
             .execute()
         )
         return result.data[0]
+
+    async def _coaching_rpc(self, name: str, params: dict) -> object:
+        try:
+            result = await self.db.rpc(name, params).execute()
+        except Exception as error:
+            _raise_command_error(error)
+            raise
+        return result.data
+
+    async def get_proactive_consent(self, user_id, scope):
+        return await self._coaching_rpc(
+            "get_proactive_consent", {"p_user_id": user_id, "p_scope": scope}
+        )
+
+    async def set_proactive_consent(
+        self, user_id, scope, policy_version, country_code=None, withdraw=False
+    ):
+        return await self._coaching_rpc(
+            "set_proactive_consent",
+            dict(
+                p_user_id=user_id,
+                p_scope=scope,
+                p_policy_version=policy_version,
+                p_country_code=country_code,
+                p_withdraw=withdraw,
+            ),
+        )
+
+    async def set_coaching_consent(self, user_id, policy_version=None):
+        return await self._coaching_rpc(
+            "set_coaching_consent", dict(p_user_id=user_id, p_policy_version=policy_version)
+        )
+
+    async def has_coaching_consent(self, user_id):
+        return await self._coaching_rpc("has_coaching_consent", {"p_user_id": user_id})
+
+    async def reserve_proactive_delivery(
+        self, user_id, delivery_key, kind, scheduled_at, program_id=None
+    ):
+        value = scheduled_at.isoformat() if hasattr(scheduled_at, "isoformat") else scheduled_at
+        return await self._coaching_rpc(
+            "reserve_proactive_delivery",
+            dict(
+                p_user_id=user_id,
+                p_delivery_key=delivery_key,
+                p_kind=kind,
+                p_scheduled_at=value,
+                p_program_id=program_id,
+            ),
+        )
+
+    async def release_proactive_delivery(self, user_id, delivery_key):
+        return await self._coaching_rpc(
+            "release_proactive_delivery", dict(p_user_id=user_id, p_delivery_key=delivery_key)
+        )
+
+    async def enqueue_coaching_delivery(
+        self, user_id, program_id, expected_version, delivery_key, local_day, kind, scheduled_at
+    ):
+        value = scheduled_at.isoformat() if hasattr(scheduled_at, "isoformat") else scheduled_at
+        return await self._coaching_rpc(
+            "enqueue_coaching_delivery",
+            dict(
+                p_user_id=user_id,
+                p_program_id=program_id,
+                p_expected_version=expected_version,
+                p_delivery_key=delivery_key,
+                p_local_day=local_day,
+                p_kind=kind,
+                p_scheduled_at=value,
+            ),
+        )
+
+    async def claim_coaching_deliveries(self, worker_id, limit=25):
+        return await self._coaching_rpc(
+            "claim_coaching_deliveries", dict(p_worker_id=worker_id, p_limit=limit)
+        )
+
+    async def mark_coaching_dispatch(self, user_id, delivery_key, claim_token):
+        return await self._coaching_rpc(
+            "mark_coaching_dispatch",
+            dict(
+                p_user_id=user_id,
+                p_delivery_key=delivery_key,
+                p_claim_token=claim_token,
+            ),
+        )
+
+    async def finish_coaching_delivery(self, user_id, delivery_key, claim_token, outcome):
+        return await self._coaching_rpc(
+            "finish_coaching_delivery",
+            dict(
+                p_user_id=user_id,
+                p_delivery_key=delivery_key,
+                p_claim_token=claim_token,
+                p_outcome=outcome,
+            ),
+        )
+
+    async def get_coaching_delivery_history(self, user_id, program_id):
+        return await self._coaching_rpc(
+            "get_coaching_delivery_history", dict(p_user_id=user_id, p_program_id=program_id)
+        )
+
+    async def note_coaching_reply(self, user_id, program_id):
+        return await self._coaching_rpc(
+            "note_coaching_reply", dict(p_user_id=user_id, p_program_id=program_id)
+        )
+
+    @_observe_database_call
+    async def get_coaching_program(
+        self, user_id: str, program_id: str | None = None
+    ) -> dict | None:
+        query = self.db.table("coaching_programs").select("*").eq("user_id", user_id)
+        query = (
+            query.eq("program_id", program_id)
+            if program_id is not None
+            else query.in_("state", ["draft", "active", "paused"])
+        )
+        result = await query.maybe_single().execute()
+        return result.data if result and result.data else None
+
+    @_observe_database_call
+    async def list_coaching_entries(
+        self, user_id: str, program_id: str, limit: int = 20
+    ) -> list[dict]:
+        if not await self.get_coaching_program(user_id, program_id):
+            raise ValueError("Coaching Program unavailable")
+        result = await (
+            self.db.table("coaching_entries")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("program_id", program_id)
+            .order("created_at", desc=True)
+            .limit(max(1, min(limit, 100)))
+            .execute()
+        )
+        return list(reversed(result.data or []))
+
+    @_observe_database_call
+    async def draft_coaching_program(
+        self,
+        user_id: str,
+        idempotency_key: str,
+        payload_hash: str,
+        *,
+        goal: str,
+        success_measure: str,
+        check_in_days: list[int],
+        check_in_time: str,
+        timezone: str,
+    ) -> dict:
+        return await self._coaching_rpc(
+            "coaching_program_command",
+            {
+                "p_user_id": user_id,
+                "p_program_id": None,
+                "p_expected_version": None,
+                "p_action": "draft",
+                "p_idempotency_key": idempotency_key,
+                "p_payload_hash": payload_hash,
+                "p_data": {
+                    "goal": goal,
+                    "success_measure": success_measure,
+                    "check_in_days": check_in_days,
+                    "check_in_time": check_in_time,
+                    "timezone": timezone,
+                },
+            },
+        )
+
+    @_observe_database_call
+    async def change_coaching_program(
+        self,
+        user_id: str,
+        program_id: str,
+        expected_version: int,
+        action: str,
+        idempotency_key: str,
+        payload_hash: str,
+        *,
+        approval_token: str | None = None,
+        progress_text: str | None = None,
+        weekly_choice: str | None = None,
+        extension_days: int | None = None,
+    ) -> dict:
+        return await self._coaching_rpc(
+            "coaching_program_command",
+            {
+                "p_user_id": user_id,
+                "p_program_id": program_id,
+                "p_expected_version": expected_version,
+                "p_action": action,
+                "p_idempotency_key": idempotency_key,
+                "p_payload_hash": payload_hash,
+                "p_data": {
+                    "approval_token": approval_token,
+                    "progress_text": progress_text,
+                    "weekly_choice": weekly_choice,
+                    "extension_days": extension_days,
+                },
+            },
+        )
+
+    @_observe_database_call
+    async def revise_coaching_draft(
+        self,
+        user_id: str,
+        program_id: str,
+        expected_version: int,
+        idempotency_key: str,
+        payload_hash: str,
+        *,
+        goal: str,
+        success_measure: str,
+        check_in_days: list[int],
+        check_in_time: str,
+        timezone: str,
+    ) -> dict:
+        return await self._coaching_rpc(
+            "coaching_program_command",
+            {
+                "p_user_id": user_id,
+                "p_program_id": program_id,
+                "p_expected_version": expected_version,
+                "p_action": "revise",
+                "p_idempotency_key": idempotency_key,
+                "p_payload_hash": payload_hash,
+                "p_data": {
+                    "goal": goal,
+                    "success_measure": success_measure,
+                    "check_in_days": check_in_days,
+                    "check_in_time": check_in_time,
+                    "timezone": timezone,
+                },
+            },
+        )
+
+    @_observe_database_call
+    async def issue_coaching_approval(
+        self, user_id: str, program_id: str, expected_version: int
+    ) -> str:
+        return await self._coaching_rpc(
+            "issue_coaching_approval",
+            {
+                "p_user_id": user_id,
+                "p_program_id": program_id,
+                "p_expected_version": expected_version,
+            },
+        )
+
+    @_observe_database_call
+    async def confirm_coaching_approval(
+        self,
+        user_id: str,
+        token: str,
+        idempotency_key: str,
+        payload_hash: str,
+    ) -> dict:
+        return await self._coaching_rpc(
+            "confirm_coaching_approval",
+            {
+                "p_user_id": user_id,
+                "p_token": token,
+                "p_idempotency_key": idempotency_key,
+                "p_payload_hash": payload_hash,
+            },
+        )
+
+    @_observe_database_call
+    async def complete_due_coaching_programs(self) -> list[dict]:
+        return await self._coaching_rpc("complete_due_coaching_programs", {}) or []
+
+    @_observe_database_call
+    async def list_active_coaching_programs(self) -> list[dict]:
+        result = await (
+            self.db.table("coaching_programs")
+            .select("*")
+            .eq("state", "active")
+            .gt("ends_at", utc_now().isoformat())
+            .execute()
+        )
+        return result.data or []
+
+    @_observe_database_call
+    async def export_coaching_data(self, user_id: str) -> dict:
+        return await self._coaching_rpc("export_coaching_data", {"p_user_id": user_id})
+
+    @_observe_database_call
+    async def delete_coaching_data(self, user_id: str, verified_request_id: str) -> None:
+        await self._coaching_rpc(
+            "delete_coaching_data",
+            {
+                "p_user_id": user_id,
+                "p_verified_request_id": verified_request_id,
+            },
+        )
 
     @_observe_database_call
     async def get_mode_conversation(self, user_id: str, mode_id: str, channel: str) -> dict | None:
@@ -774,28 +1084,43 @@ class MemoryStore:
         if not task or not task.data:
             raise ValueError("Task not found")
 
-        result = await (
-            self.db.table("reminders")
-            .insert({
-                "task_id": task_id,
-                "user_id": user_id,
-                "scheduled_time": scheduled_time,
-            })
-            .execute()
-        )
+        try:
+            result = await (
+                self.db.table("reminders")
+                .insert({
+                    "task_id": task_id,
+                    "user_id": user_id,
+                    "scheduled_time": scheduled_time,
+                })
+                .execute()
+            )
+        except Exception as error:
+            _raise_command_error(error)
+            raise
         return result.data[0]
 
     @_observe_database_call
     async def update_reminder(self, reminder_id: str, updates: dict, user_id: str) -> dict:
         """Update reminder fields (status, snooze_count, telegram_message_id)."""
         validate_reminder_updates(updates)
-        result = await (
-            self.db.table("reminders")
-            .update(updates)
-            .eq("reminder_id", reminder_id)
-            .eq("user_id", user_id)
-            .execute()
-        )
+        if "scheduled_time" in updates:
+            existing = await (self.db.table("reminders").select("scheduled_time")
+                              .eq("reminder_id", reminder_id).eq("user_id", user_id)
+                              .maybe_single().execute())
+            if not existing or not existing.data:
+                raise ValueError("Reminder not found")
+            validate_reminder_timing(existing.data, updates)
+        try:
+            result = await (
+                self.db.table("reminders")
+                .update(updates)
+                .eq("reminder_id", reminder_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+        except Exception as error:
+            _raise_command_error(error)
+            raise
         if not result.data:
             raise ValueError("Reminder not found")
         return result.data[0]

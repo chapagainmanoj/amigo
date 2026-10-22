@@ -161,6 +161,8 @@ Where to get these:
 17. Run [`migrations/015_ordered_pairing_locks.sql`](migrations/015_ordered_pairing_locks.sql).
 18. Run [`migrations/016_session_modes_grants_handoffs.sql`](migrations/016_session_modes_grants_handoffs.sql).
 19. Run [`migrations/017_mode_conversations.sql`](migrations/017_mode_conversations.sql).
+20. Run [`migrations/018_coaching_programs.sql`](migrations/018_coaching_programs.sql).
+21. Run [`migrations/019_proactive_delivery_budget.sql`](migrations/019_proactive_delivery_budget.sql).
 
 Apply migrations in numeric order. Migrations 003 and 004 make Pairing backend-only and enforce
 the reviewed cross-tenant grants and row-level policies. Migration 005 adds canonical Task states
@@ -179,7 +181,7 @@ makes Pairing require an acknowledged Journey. Migration 015 orders Pairing's id
 to prevent crossed Pairing requests from deadlocking. Migration 016 adds Session Mode,
 trial-grant, audit, and confirmed-handoff primitives. Migration 017 adds channel-neutral Mode
 conversation addresses, Sessions keyed by participant and Mode, and leased handoff execution
-claims. The application requires exact schema version 17. These migrations have not been applied
+claims. The application requires exact schema version 19. These migrations have not been applied
 to Supabase by this build; deployment and real-bot verification remain owner actions.
 
 #### Mode conversations and operator access
@@ -267,9 +269,9 @@ python scripts/run_gate_a_eval.py --validate-only
 ```
 
 Python tests use in-memory fakes and make no Supabase, Telegram, or Gemini calls. CI additionally
-is configured to apply every checked-in migration (001–017) to PostgreSQL 15 and run legacy
+is configured to apply every checked-in migration (001–019) to PostgreSQL 15 and run legacy
 backfill, two-participant isolation, durable command/outbox, Activation, Mode conversation/handoff,
-lock-order, and schema-chain regressions for the exact schema-17 startup gate. This is separate
+lock-order, and schema-chain regressions for the exact schema-19 startup gate. This is separate
 from staging and Supabase deployment evidence. See
 [`tests/fakes.py`](tests/fakes.py) for the shared test doubles.
 
@@ -373,3 +375,26 @@ Amigo's original source code, scripts, and documentation are licensed under the
 [GNU Affero General Public License version 3](LICENSE). Identified third-party materials retain
 their applicable licenses and rights. The open-source license permits independent deployment but
 does not promise official support for self-hosted installations.
+
+
+### Internal Mode candidates and admission controls (22 October 2026)
+
+Migrations 018/019 add owned versioned Coaching Programs, exact-draft approval callbacks,
+Program export/deletion, a shared proactive budget ledger and a fenced coaching outbox.
+Existing Reminder commitments consume capacity first; historical overflow is recorded as debt,
+not silently dropped. New Reminder scheduling can refuse before mutation when the shared profile
+budget is full. Coaching uses remaining capacity, selected days, quiet hours, one check-in/day,
+one missed follow-up then silence. Weekly review replaces a chosen check-in. Returning to Coach resumes that gate; program approval and extension remain separate choices.
+
+Coach, Reflect and fictional laundry Recommender have authored instructions, isolated Toolsets
+and versioned fictional evaluation suites. They remain Planned pending the sole final Gemini
+batch after shared source changes stop. Candidate runner output cannot certify release/fallback.
+No provider fallback is declared without complete current evidence and human review.
+
+Coach and Reflect additionally deny real admission by default. Missing reviewed notices,
+consent/retention/account-wide rights and qualified wellbeing evidence cannot be replaced with
+an operator grant or a passing model test. Program export/deletion covers Program records and
+entries only; retained conversation Messages/provider copies remain. Account-wide deletion and
+backup erasure are not claimed. Reflect stores no Mood Entries, Memory, exercises or profile
+inferences; its empty resource registry supplies only static general emergency guidance, never
+stale contact details. CBT personal input remains off. No deployment or Supabase change occurred.

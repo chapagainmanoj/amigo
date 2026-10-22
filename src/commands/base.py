@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from typing import Literal
 
 
+class ProactiveBudgetExceeded(ValueError):  # noqa: N818 - public command API name
+    """A requested proactive send cannot fit the participant's shared local-day budget."""
+
+
 class IdempotencyConflictError(ValueError):
     """Raised when one idempotency key is reused for different input."""
 

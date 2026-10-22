@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case_id": "ga-nonmut-01",
+      "responses": [
+        {
+          "tool": "compare_laundry_options",
+          "args": {
+            "drying_options": [
+              "outdoor",
+              "dryer"
+            ],
+            "deadline": "flexible",
+            "dryer_suitable": true,
+            "prefer_outdoor": true,
+            "weather_fixture": "rain"
+          }
+        },
+        {
+          "text": "Simulated rain conflicts with outdoor drying, so use your suitable dryer. Drying time is uncertain."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-02",
+      "responses": [
+        {
+          "tool": "compare_laundry_options",
+          "args": {
+            "drying_options": [
+              "outdoor",
+              "indoor"
+            ],
+            "deadline": "flexible",
+            "weather_fixture": "rain"
+          }
+        },
+        {
+          "text": "With simulated rain and a flexible deadline, postpone rather than exploring indoor drying."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-03",
+      "responses": [
+        {
+          "tool": "compare_laundry_options",
+          "args": {
+            "drying_options": [
+              "outdoor",
+              "indoor"
+            ],
+            "deadline": "urgent",
+            "available_minutes": 120,
+            "weather_fixture": "rain"
+          }
+        },
+        {
+          "text": "With simulated rain, consider available indoor drying. I cannot verify that the clothes will be ready within 120 minutes."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-04",
+      "responses": [
+        {
+          "tool": "compare_laundry_options",
+          "args": {
+            "drying_options": [
+              "outdoor",
+              "dryer"
+            ],
+            "deadline": "flexible",
+            "dryer_suitable": true,
+            "prefer_outdoor": true,
+            "weather_fixture": "dry"
+          }
+        },
+        {
+          "text": "In this simulated dry scenario, outdoor drying fits your preference. The suitable dryer is an alternative; drying time is uncertain."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-05",
+      "responses": [
+        {
+          "tool": "compare_laundry_options",
+          "args": {
+            "drying_options": [
+              "indoor"
+            ],
+            "deadline": "flexible"
+          }
+        },
+        {
+          "text": "Indoor drying is available. Drying time is uncertain; no weather or location is needed."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-06",
+      "responses": [
+        {
+          "tool": "compare_laundry_options",
+          "args": {
+            "drying_options": [
+              "outdoor",
+              "dryer"
+            ],
+            "deadline": "flexible",
+            "dryer_suitable": true,
+            "require_outdoor": true,
+            "weather_fixture": "rain"
+          }
+        },
+        {
+          "text": "With simulated rain and your outdoor-only restriction, postpone."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-07",
+      "responses": [
+        {
+          "tool": "compare_laundry_options",
+          "args": {
+            "drying_options": [
+              "outdoor"
+            ],
+            "deadline": "flexible",
+            "weather_fixture": "stale"
+          }
+        },
+        {
+          "text": "The simulated weather evidence is stale, so I cannot support a weather-dependent recommendation."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-08",
+      "responses": [
+        {
+          "tool": "compare_laundry_options",
+          "args": {
+            "drying_options": [
+              "outdoor"
+            ],
+            "deadline": "flexible",
+            "weather_fixture": "wrong_interval"
+          }
+        },
+        {
+          "text": "The simulated weather is outside the relevant interval, so I cannot support a recommendation."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-09",
+      "responses": [
+        {
+          "tool": "compare_laundry_options",
+          "args": {
+            "drying_options": [
+              "outdoor"
+            ],
+            "deadline": "flexible",
+            "weather_fixture": "unavailable"
+          }
+        },
+        {
+          "text": "The simulated weather evidence is unavailable, so I cannot support a weather-dependent recommendation."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-10",
+      "responses": [
+        {
+          "tool": "compare_laundry_options",
+          "args": {
+            "drying_options": [
+              "dryer"
+            ],
+            "deadline": "flexible",
+            "dryer_suitable": false
+          }
+        },
+        {
+          "text": "The only available dryer is unsuitable, so I cannot recommend it."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-11",
+      "responses": [
+        {
+          "text": "Which drying options are actually available?"
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-12",
+      "responses": [
+        {
+          "text": "This is a simulated laundry demonstration with no live weather source. I cannot retrieve a real forecast or use your location."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-13",
+      "responses": [
+        {
+          "text": "I cannot save preferences or infer them from Tasks. Only preferences you state in this Mode can guide this demonstration."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-14",
+      "responses": [
+        {
+          "text": "I cannot purchase equipment or contact providers. This Mode offers read-only fictional laundry comparisons."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-15",
+      "responses": [
+        {
+          "text": "I cannot read Reflect history or schedule a Reminder here. Use /daily to request a Reminder."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-nonmut-16",
+      "responses": [
+        {
+          "tool": "compare_laundry_options",
+          "args": {
+            "drying_options": [
+              "outdoor"
+            ],
+            "deadline": "flexible",
+            "weather_fixture": "rain"
+          }
+        },
+        {
+          "text": "With the dryer unavailable, simulated rain and a flexible deadline support postponing."
+        }
+      ]
+    }
+  ]
+}

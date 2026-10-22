@@ -14,13 +14,19 @@ if str(ROOT) not in sys.path:
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart  # noqa: E402
 from pydantic_ai.models.function import FunctionModel  # noqa: E402
 
-from scripts.run_gate_a_eval import _setup_case, _state  # noqa: E402
+from scripts.run_gate_a_eval import _evaluation_registry, _setup_case, _state  # noqa: E402
 from src.agent.catalogue import build_registry  # noqa: E402
 from src.evaluation.gate_a import extract_trace, load_mode_suite, score_turn  # noqa: E402
 from src.turns import default_turn_orchestrator  # noqa: E402
 
 
-async def evaluate_mode(mode) -> list[str]:
+async def evaluate_mode(mode, *, candidate=False) -> list[str]:
+    orchestrator = default_turn_orchestrator
+    if candidate:
+        from src.agent.runtime import ModeRuntime
+        from src.turns import SessionTurnOrchestrator
+
+        orchestrator = SessionTurnOrchestrator(ModeRuntime(_evaluation_registry(mode.id, True)))
     suite_path = ROOT / mode.eval_suite
     suite = load_mode_suite(suite_path, mode.id)
     subset = json.loads(suite_path.with_name("deterministic.json").read_text())
@@ -35,7 +41,7 @@ async def evaluate_mode(mode) -> list[str]:
             raise ValueError(f"Mode {mode.id} deterministic case {case_id} is duplicate or unknown")
         seen.add(case_id)
         case = by_id[case_id]
-        store, context, aliases = await _setup_case(case, suite, 1)
+        store, context, aliases = await _setup_case(case, suite, 1, mode.id)
         responses = list(entry["responses"])
 
         def scripted(messages, info, responses=responses, aliases=aliases):
@@ -55,7 +61,7 @@ async def evaluate_mode(mode) -> list[str]:
         for index, turn in enumerate(case.turns, start=1):
             context.turn_id = f"deterministic:{mode.id}:{case_id}:{index}"
             before = _state(store, aliases)
-            result = await default_turn_orchestrator.run_turn(
+            result = await orchestrator.run_turn(
                 context, turn.message, requested_mode=mode.id, model=FunctionModel(scripted)
             )
             trace, response = extract_trace(result.messages)
@@ -73,14 +79,14 @@ async def evaluate_mode(mode) -> list[str]:
     return failures
 
 
-async def run(mode_id: str | None = None) -> int:
-    registry = build_registry()
+async def run(mode_id: str | None = None, *, candidate=False) -> int:
+    registry = _evaluation_registry(mode_id, candidate) if candidate else build_registry()
     modes = [await registry.get(mode_id)] if mode_id is not None else await registry.live()
     failures = []
     for mode in modes:
         if mode.status != "live":
             raise ValueError(f"Mode {mode.id!r} is not live")
-        failures.extend(await evaluate_mode(mode))
+        failures.extend(await evaluate_mode(mode, candidate=candidate))
     if failures:
         print("\n".join(failures))
         return 1
@@ -91,4 +97,10 @@ async def run(mode_id: str | None = None) -> int:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", help="One live Mode; omitted runs all live Modes")
-    raise SystemExit(asyncio.run(run(parser.parse_args().mode)))
+    parser.add_argument(
+        "--candidate", action="store_true", help="Fictional in-memory candidate only"
+    )
+    args = parser.parse_args()
+    if args.candidate and not args.mode:
+        parser.error("--candidate requires --mode")
+    raise SystemExit(asyncio.run(run(args.mode, candidate=args.candidate)))

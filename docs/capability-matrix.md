@@ -10,7 +10,7 @@ the current repository; it does not mean production reliability, security, or us
 have passed. A beta experiment must be presented as experimental. A roadmap item must never be
 described in the present tense.
 
-The checked-in schema chain reaches migration 017 and the application requires exact version 17.
+The checked-in schema chain reaches migration 019 and the application requires exact version 19.
 The channel-neutral Mode routing, isolated Sessions, grants, confirmed handoffs, and dashboard
 availability implementation are release-gated pending integration review and complete owner
 application-flow evidence. The owner's topic spike passed on Desktop and iOS; Android was not
@@ -66,3 +66,26 @@ Before publishing copy, screenshots, a demo script, or a sales claim:
 3. Call future behavior roadmap and avoid dates or “coming soon” promises unless it has an
    approved release gate and committed delivery plan.
 4. Update this matrix only after implementation evidence and the governing Wayfinder gate agree.
+
+
+### Internal Mode candidates and admission controls (22 October 2026)
+
+Migrations 018/019 add owned versioned Coaching Programs, exact-draft approval callbacks,
+Program export/deletion, a shared proactive budget ledger and a fenced coaching outbox.
+Existing Reminder commitments consume capacity first; historical overflow is recorded as debt,
+not silently dropped. New Reminder scheduling can refuse before mutation when the shared profile
+budget is full. Coaching uses remaining capacity, selected days, quiet hours, one check-in/day,
+one missed follow-up then silence. Weekly review replaces a chosen check-in. Returning to Coach resumes that gate; program approval and extension remain separate choices.
+
+Coach, Reflect and fictional laundry Recommender have authored instructions, isolated Toolsets
+and versioned fictional evaluation suites. They remain Planned pending the sole final Gemini
+batch after shared source changes stop. Candidate runner output cannot certify release/fallback.
+No provider fallback is declared without complete current evidence and human review.
+
+Coach and Reflect additionally deny real admission by default. Missing reviewed notices,
+consent/retention/account-wide rights and qualified wellbeing evidence cannot be replaced with
+an operator grant or a passing model test. Program export/deletion covers Program records and
+entries only; retained conversation Messages/provider copies remain. Account-wide deletion and
+backup erasure are not claimed. Reflect stores no Mood Entries, Memory, exercises or profile
+inferences; its empty resource registry supplies only static general emergency guidance, never
+stale contact details. CBT personal input remains off. No deployment or Supabase change occurred.

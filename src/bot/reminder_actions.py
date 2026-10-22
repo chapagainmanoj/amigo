@@ -3,7 +3,7 @@
 import logging
 
 from src.channels.base import MessageChannel
-from src.commands.base import CommandContext, InvalidTransitionError
+from src.commands.base import CommandContext, InvalidTransitionError, ProactiveBudgetExceeded
 from src.commands.later import ApplyLaterCommand
 from src.memory.store import MemoryStore
 from src.scheduler.reminders import ReminderScheduler
@@ -138,6 +138,11 @@ class ReminderActions:
                 ),
                 reminder_id=reminder_id,
             )
+        except ProactiveBudgetExceeded:
+            await self.channel.send_message(
+                chat_id, "Daily message budget is full. Your current Reminder was not changed."
+            )
+            return
         except ValueError:
             await self.channel.send_message(chat_id, "This reminder was already handled.")
             return
