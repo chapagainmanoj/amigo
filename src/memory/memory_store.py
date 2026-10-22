@@ -631,6 +631,35 @@ class InMemoryStore:
     async def list_pending_handoff_executions(self, limit: int = 25) -> list[dict]:
         return await self._mode_state.pending_executions(self._users.values(), limit)
 
+    async def get_memory_source_message(self, user_id: str, session_id: str) -> dict | None:
+        session = self._sessions.get(session_id)
+        if session is None or session["user_id"] != user_id:
+            return None
+        candidates = [
+            row
+            for row in self._messages
+            if row["session_id"] == session_id
+            and row["user_id"] == user_id
+            and row["role"] == "user"
+        ]
+        if not candidates:
+            return None
+        row = max(candidates, key=lambda item: (item.get("created_at") or "", item["message_id"]))
+        return {
+            **{
+                field: row.get(field)
+                for field in (
+                    "message_id",
+                    "user_id",
+                    "session_id",
+                    "role",
+                    "created_at",
+                    "channel",
+                )
+            },
+            "mode_id": session.get("mode_id", "daily"),
+        }
+
     async def get_session_messages(self, session_id: str) -> list[dict]:
         return [
             {"role": m["role"], "content": m["content"], "created_at": m["created_at"]}

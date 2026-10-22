@@ -673,6 +673,42 @@ class FakeStore:
     async def list_pending_handoff_executions(self, limit: int = 25) -> list[dict]:
         return await self._mode_state.pending_executions(self.users.values(), limit)
 
+    async def get_memory_source_message(self, user_id: str, session_id: str) -> dict | None:
+        session = next(
+            (
+                row
+                for row in self.sessions
+                if row["session_id"] == session_id and row["user_id"] == user_id
+            ),
+            None,
+        )
+        if session is None:
+            return None
+        candidates = [
+            row
+            for row in self.messages
+            if row["session_id"] == session_id
+            and row["user_id"] == user_id
+            and row["role"] == "user"
+        ]
+        if not candidates:
+            return None
+        row = max(candidates, key=lambda item: (item.get("created_at") or "", item["message_id"]))
+        return {
+            **{
+                field: row.get(field)
+                for field in (
+                    "message_id",
+                    "user_id",
+                    "session_id",
+                    "role",
+                    "created_at",
+                    "channel",
+                )
+            },
+            "mode_id": session.get("mode_id", "daily"),
+        }
+
     async def get_session_messages(self, session_id: str) -> list[dict]:
         return [m for m in self.messages if m["session_id"] == session_id]
 

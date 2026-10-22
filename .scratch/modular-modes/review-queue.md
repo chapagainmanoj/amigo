@@ -560,3 +560,15 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Protected files:none; no Turn source changes in this UI slice. Latest full backend1313passed,
   Ruff/smoke passed; Gate A currency inputs unchanged by these UI files, release certification absent.
 - Open: actual eligibility/privacy/retention/demand/usability/trial evidence, as backend record.
+
+## Phase 6 follow-up — exact Memory Message provenance
+
+- Parent20724b4; files src/memory/store.py, memory_store.py, tests/fakes.py,
+  src/tools/memory.py, tests/test_memory_service.py. Protected files:none; no migration.
+- Optional unregistered proposal Tool now reads latest owned user Message metadata through a
+  dedicated Store API, checks both Session/Message owner and Mode, and uses its actual recorded
+  date/channel. Transcript DTO remains unchanged. Missing date refuses instead of inventing one.
+- Evidence: **1323 tests passed38.28s**, Ruff clean, diff clean. Past-date/missing-date and
+  cross-owner metadata query regressions pass; Daily golden/schema and111 currency pass.
+  Removed formatter-only Store churn after AST-equivalence check; only new methods remain.
+- Gate A source inputs changed; no release artifact certified. No Memory admission enablement.

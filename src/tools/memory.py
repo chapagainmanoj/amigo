@@ -1,8 +1,10 @@
 """Optional, unregistered candidate Toolset. No Tool can confirm or silently save Memory."""
 
+from datetime import UTC, datetime
+
 from pydantic_ai import FunctionToolset, RunContext
 
-from src.memory_service import MemoryController, memory_now
+from src.memory_service import MemoryController
 from src.tools.context import ToolContext
 
 MEMORY_CANDIDATES: FunctionToolset[ToolContext] = FunctionToolset(max_retries=0)
@@ -19,24 +21,27 @@ async def propose_memory(ctx: RunContext[ToolContext], category: str, text: str)
     service = getattr(context, "memory_service", None)
     if service is None:
         return "Memory saving is unavailable pending privacy and eligibility review."
-    messages = await context.store.get_session_messages(context.session_id)
-    source = next(
-        (
-            row
-            for row in reversed(messages)
-            if row["role"] == "user" and row["user_id"] == context.user["user_id"]
-        ),
-        None,
+    source = await context.store.get_memory_source_message(
+        context.user["user_id"], context.session_id
     )
-    if source is None:
+    if source is None or source.get("mode_id") != context.mode_id:
         return "Memory needs an owned source Message and explicit confirmation."
+    try:
+        source_time = datetime.fromisoformat(source["created_at"])
+        source_time = (
+            source_time.replace(tzinfo=UTC)
+            if source_time.tzinfo is None
+            else source_time.astimezone(UTC)
+        )
+    except (KeyError, TypeError, ValueError):
+        return "Memory needs an owned source Message with a recorded date. No preview was created."
     payload = dict(
         category=category,
         text=text,
         source_mode_id=context.mode_id,
-        source_channel=context.channel.channel_id,
+        source_channel=source["channel"],
         source_message_id=source["message_id"],
-        source_date=memory_now(context.clock).date().isoformat(),
+        source_date=source_time.date().isoformat(),
         creation_path="amigo_proposed",
         scopes=[context.mode_id],
         valid_until=None,

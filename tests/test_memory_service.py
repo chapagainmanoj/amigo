@@ -475,3 +475,69 @@ async def test_optional_proposal_tool_is_unregistered_cannot_confirm_and_default
     )
     assert "unavailable" in result
     assert (await env.service.inspect(env.owner["user_id"]))["memories"] == []
+
+
+async def test_optional_proposal_source_date_uses_actual_owned_message_not_turn_clock(
+    memory_env, monkeypatch
+):
+    from datetime import datetime
+
+    from src.tools.memory import propose_memory
+
+    env = memory_env
+    for module in ("tests.fakes", "src.memory.memory_store"):
+        monkeypatch.setattr(f"{module}.utc_now", lambda: datetime(2026, 9, 1, 23, 55))
+    session = await env.store.create_session(env.owner["user_id"])
+    source = await env.store.add_message(
+        session["session_id"], env.owner["user_id"], "user", "Fictional old preference"
+    )
+    channel = FakeChannel()
+    context = SimpleNamespace(
+        store=env.store,
+        session_id=session["session_id"],
+        user=env.owner,
+        mode_id="daily",
+        channel=channel,
+        chat_id=62001,
+        clock=env.clock,
+        memory_service=env.service,
+        conversation=None,
+    )
+    result = await propose_memory(SimpleNamespace(deps=context), "preference", env.payload["text"])
+    assert "preview was shown" in result
+    preview = next(iter(env.service._previews.values()))["public"]
+    assert preview["payload"]["source_message_id"] == source["message_id"]
+    assert preview["payload"]["source_date"] == "2026-09-01"
+    assert preview["payload"]["source_date"] != env.clock.now.date().isoformat()
+
+
+@pytest.mark.parametrize("timestamp", [None, "not-a-timestamp", 123])
+async def test_optional_proposal_missing_source_date_refuses_without_candidate(
+    memory_env, monkeypatch, timestamp
+):
+    from src.tools.memory import propose_memory
+
+    env = memory_env
+    channel = FakeChannel()
+    source = dict(
+        message_id="00000000-0000-0000-0000-000000000001",
+        user_id=env.owner["user_id"],
+        role="user",
+        created_at=timestamp,
+    )
+    source.update(mode_id="daily", channel="dashboard")
+    monkeypatch.setattr(env.store, "get_memory_source_message", AsyncMock(return_value=source))
+    context = SimpleNamespace(
+        store=env.store,
+        session_id="session",
+        user=env.owner,
+        mode_id="daily",
+        channel=channel,
+        chat_id=62001,
+        clock=env.clock,
+        memory_service=env.service,
+        conversation=None,
+    )
+    result = await propose_memory(SimpleNamespace(deps=context), "preference", env.payload["text"])
+    assert "recorded date" in result
+    assert env.service._previews == {} and env.store._memory_state.claims == {}

@@ -900,6 +900,48 @@ class MemoryStore:
         return result.data or []
 
     @_observe_database_call
+    async def get_memory_source_message(self, user_id: str, session_id: str) -> dict | None:
+        """Latest owned user Message metadata; transcript reads keep their existing DTO."""
+        result = await (
+            self.db.table("messages")
+            .select(
+                "message_id,user_id,session_id,role,created_at,channel,sessions!inner(user_id,mode_id)"
+            )
+            .eq("user_id", user_id)
+            .eq("session_id", session_id)
+            .eq("role", "user")
+            .eq("sessions.user_id", user_id)
+            .order("created_at", desc=True)
+            .order("message_id", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not result.data:
+            return None
+        row = result.data[0]
+        session = row.get("sessions")
+        if (
+            row.get("user_id") != user_id
+            or not isinstance(session, dict)
+            or session.get("user_id") != user_id
+        ):
+            return None
+        return {
+            **{
+                field: row.get(field)
+                for field in (
+                    "message_id",
+                    "user_id",
+                    "session_id",
+                    "role",
+                    "created_at",
+                    "channel",
+                )
+            },
+            "mode_id": session.get("mode_id", "daily"),
+        }
+
+    @_observe_database_call
     async def get_session_messages(self, session_id: str) -> list[dict]:
         """Get all messages in a session, ordered by time."""
         result = await (
