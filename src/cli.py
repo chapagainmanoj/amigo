@@ -3,6 +3,7 @@
 Usage:
     APP_CHANNEL=cli GOOGLE_API_KEY=your-key python -m src.cli
     APP_CHANNEL=cli GOOGLE_API_KEY=your-key python -m src.cli --onboard
+    DEV_MODEL=claude-cli:sonnet APP_CHANNEL=cli python -m src.cli --preview-modes
 """
 
 import argparse
@@ -10,6 +11,7 @@ import asyncio
 import logging
 import signal
 import sys
+from dataclasses import replace
 from datetime import UTC, timedelta
 
 from src.activation import ACTIVATION_POLICY_VERSION
@@ -38,6 +40,7 @@ _RESET = "\033[0m"
 
 DEV_CHAT_ID = 12345
 DEV_TIMEZONE = "Asia/Kathmandu"
+PREVIEW_OPERATOR = "cli-preview"
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +92,37 @@ async def _seed_dev_user(store: InMemoryStore) -> dict:
     return await store.get_user_by_chat_id(DEV_CHAT_ID)
 
 
+def _preview_runtime():
+    """Planned Modes as live for the disposable CLI store only; never a release decision.
+
+    Entry guards (Coach admission, Reflect wellbeing consent) are dropped exactly as the
+    candidate eval runner does. Reflect's deterministic safety routing still runs first.
+    """
+    from src.agent.catalogue import build_registry
+    from src.agent.registry import ModeRegistry
+    from src.agent.runtime import ModeRuntime
+
+    if settings.app_env == "production":
+        raise SystemExit("--preview-modes is development-only")
+    registry = ModeRegistry(
+        mode if mode.id == "daily" else replace(mode, status="live", entry_guard=None)
+        for mode in build_registry()
+    )
+    return ModeRuntime(registry)
+
+
+async def _grant_preview_modes(store: InMemoryStore, runtime) -> list[str]:
+    user = await store.get_user_by_chat_id(DEV_CHAT_ID)
+    granted = []
+    for mode in runtime.registry:
+        if mode.entitlement == "grant":
+            await store.grant_mode(
+                user["user_id"], mode.id, PREVIEW_OPERATOR, "local CLI preview"
+            )
+            granted.append(mode.id)
+    return granted
+
+
 async def _handle_cli_commands(text: str, store: InMemoryStore) -> bool:
     """Handle CLI-only meta commands. Returns True if handled."""
     if text == "/quit":
@@ -130,7 +164,7 @@ async def _handle_cli_commands(text: str, store: InMemoryStore) -> bool:
     return False
 
 
-async def run_cli(onboard: bool = False):
+async def run_cli(onboard: bool = False, preview_modes: bool = False):
     """Main CLI loop — wire components and run an interactive chat session."""
     validate_runtime_configuration(settings)
     require_agent_credentials(settings)
@@ -150,11 +184,13 @@ async def run_cli(onboard: bool = False):
     reminder_scheduler = ReminderScheduler(channel=channel, store=store)
     outbox_worker = SchedulerOutboxWorker(store, reminder_scheduler)
 
+    mode_runtime = _preview_runtime() if preview_modes else None
     handlers = BotHandlers(
         channel=channel,
         store=store,
         session_mgr=session_mgr,
         reminder_scheduler=reminder_scheduler,
+        mode_runtime=mode_runtime,
     )
 
     serializer = ParticipantTurnSerializer()
@@ -181,6 +217,12 @@ async def run_cli(onboard: bool = False):
             f"simulated Activation complete.{_RESET}"
         )
         print(f"{_DIM}Use --onboard flag to walk through onboarding.{_RESET}\n")
+        if mode_runtime is not None:
+            granted = await _grant_preview_modes(store, mode_runtime)
+            print(
+                f"{_DIM}Preview Modes (development only, not live): {', '.join(granted)}. "
+                f"Use /mode, /mode <id>, /daily.{_RESET}\n"
+            )
 
     try:
         while True:
@@ -236,12 +278,17 @@ def main():
         action="store_true",
         help="Run through the full onboarding flow instead of skipping it",
     )
+    parser.add_argument(
+        "--preview-modes",
+        action="store_true",
+        help="Development only: enable Planned Modes for the seeded dev user",
+    )
     args = parser.parse_args()
 
     # Handle Ctrl+C gracefully
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
 
-    asyncio.run(run_cli(onboard=args.onboard))
+    asyncio.run(run_cli(onboard=args.onboard, preview_modes=args.preview_modes))
 
 
 if __name__ == "__main__":
