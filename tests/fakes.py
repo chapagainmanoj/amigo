@@ -716,7 +716,10 @@ class FakeStore:
         }
 
     async def get_session_messages(self, session_id: str) -> list[dict]:
-        return [m for m in self.messages if m["session_id"] == session_id]
+        return [
+            {field: row[field] for field in ("role", "content", "created_at")}
+            for row in self.messages if row["session_id"] == session_id
+        ]
 
     async def has_session_on_local_day(
         self, user_id: str, timezone: str, mode_id: str = "daily"

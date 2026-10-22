@@ -645,3 +645,12 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Independent fresh45-file SQL chain PASS at020hashccec4ac4…;73Store/service/APItests passed,
   author90focused passed; ESLint/build/Ruffclean. Rootfull1346passed21.46s/Ruff/diffclean;
  111currency/Daily golden included. Release Gate A certification absent; no live admission.
+
+### Review fix16 — shared transcript DTO parity
+
+- get_memory_source_message was already committed11e923d with E501 fixes. Remaining16 change:
+  tests/fakes.py transcript now matches real/InMemory role/content/created_at only; detached rows.
+  New tests/test_session_message_contract.py verifies shape, detachment and separate provenance API.
+- Focused transcript/Memory/currency tests passed; Ruff/diff clean. Prior full1346passed;
+  next combined full suite includes these two new cases. Protected/SQL files:none.
+  Daily prompt/Tool schema unchanged; no model/Gate A certification fabricated.
