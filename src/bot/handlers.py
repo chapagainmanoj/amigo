@@ -65,8 +65,11 @@ class BotHandlers:
         """Handle incoming text message from user."""
         pairing_attempt = text.startswith("/start pair_")
         if not await self._is_allowed(chat_id, pairing_attempt=pairing_attempt):
+            if self.channel.capabilities.threads and conversation is None:
+                return
             await self.channel.send_message(
-                chat_id, "Hey! Amigo isn't open to new users yet. Stay tuned 👋"
+                chat_id, "Hey! Amigo isn't open to new users yet. Stay tuned 👋",
+                conversation=conversation,
             )
             return
 
@@ -75,21 +78,23 @@ class BotHandlers:
             token = text.replace("/start pair_", "").strip()
             from src.bot.pairing import handle_start_pairing
 
-            await handle_start_pairing(chat_id, token, self.store, self.channel)
+            await handle_start_pairing(
+                chat_id, token, self.store, self.channel, conversation=conversation
+            )
             return
 
         # Dashboard-first Activation owns account creation and onboarding.
         user = await self.store.get_user_by_chat_id(chat_id)
         if user is None:
-            await self._send_activation_required(chat_id)
+            await self._send_activation_required(chat_id, conversation=conversation)
             return
         auth_id = user.get("supabase_auth_id")
         if not auth_id:
-            await self._send_activation_required(chat_id)
+            await self._send_activation_required(chat_id, conversation=conversation)
             return
         activation = await self.store.get_activation_state(auth_id)
         if not activation.get("completed"):
-            await self._send_activation_required(chat_id, paired=True)
+            await self._send_activation_required(chat_id, paired=True, conversation=conversation)
             return
 
         if text.strip().split()[:1] == ["/memory"]:
@@ -122,8 +127,11 @@ class BotHandlers:
     ) -> None:
         """Handle inline keyboard button tap."""
         if not await self._is_allowed(chat_id):
+            if self.channel.capabilities.threads and conversation is None:
+                return
             await self.channel.send_message(
-                chat_id, "Hey! Amigo isn't open to new users yet. Stay tuned 👋"
+                chat_id, "Hey! Amigo isn't open to new users yet. Stay tuned 👋",
+                conversation=conversation,
             )
             return
 
@@ -146,13 +154,15 @@ class BotHandlers:
 
         # Legacy onboarding controls must not bypass Dashboard-first Activation.
         if data.startswith("tz:") or data.startswith("onboard:"):
-            await self._send_activation_required(chat_id)
+            await self._send_activation_required(chat_id, conversation=conversation)
             await self.channel.edit_message_buttons(chat_id, message_id, buttons=None)
             return
 
         await self.reminder_actions.handle_callback(chat_id, message_id, data)
 
-    async def _send_activation_required(self, chat_id: int, *, paired: bool = False) -> None:
+    async def _send_activation_required(
+        self, chat_id: int, *, paired: bool = False, conversation=None
+    ) -> None:
         """Direct Telegram-only and incomplete accounts to the verified Dashboard journey."""
         from src.config import settings
 
@@ -162,6 +172,7 @@ class BotHandlers:
             prefix
             + "Finish the beta limits, profile, and private test Reminder before using Amigo: "
             + settings.dashboard_url,
+            conversation=conversation,
         )
 
     async def _cancel_reminders_for_task(self, task_id: str, user_id: str) -> None:

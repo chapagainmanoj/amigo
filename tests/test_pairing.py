@@ -377,3 +377,35 @@ async def test_memory_store_completes_pairing_through_atomic_rpc():
     assert db.calls == [
         ("complete_pairing", {"p_token": _token(42), "p_telegram_chat_id": 1234})
     ]
+
+
+async def test_pairing_adopts_incoming_daily_without_creating_topic():
+    from unittest.mock import AsyncMock
+
+    from src.channels.base import ConversationRef
+
+    store, channel = FakeStore(), FakeChannel(threads=True, channel_id="fake")
+    auth_id = str(uuid.uuid4())
+    await _acknowledge(store, auth_id)
+    await store.create_pairing_token(_token(43), auth_id, utc_now() + timedelta(minutes=15))
+    incoming = ConversationRef("fake", {"chat_id": 6043, "conversation_id": 43})
+    channel.create_conversation = AsyncMock(wraps=channel.create_conversation)
+    await handle_start_pairing(6043, _token(43), store, channel, conversation=incoming)
+    user = await store.get_user_by_chat_id(6043)
+    canonical = await store.get_mode_conversation(user["user_id"], "daily", "fake")
+    assert canonical["endpoint"] == dict(incoming.endpoint)
+    assert channel.sent[-1]["conversation"] == incoming
+    channel.create_conversation.assert_not_awaited()
+
+
+async def test_denied_chat_never_creates_topics_even_if_paired():
+    from unittest.mock import AsyncMock
+
+    store, channel = FakeStore(), FakeChannel(threads=True)
+    channel.create_conversation = AsyncMock(wraps=channel.create_conversation)
+    handlers = BotHandlers(channel, store, SessionManager(store), FakeScheduler())
+    handlers._is_allowed = AsyncMock(return_value=False)
+    await handlers.handle_message(6044, "hello")
+    await handlers.handle_callback(6044, 1, "done:x")
+    channel.create_conversation.assert_not_awaited()
+    assert not channel.sent

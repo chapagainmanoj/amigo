@@ -1,6 +1,5 @@
 """Telegram transport: all Bot API, topic identifiers and update decoding stay here."""
 
-import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
@@ -46,8 +45,6 @@ class TelegramChannel:
     def __init__(self, *, token: str | None = None):
         self._token = token
         self._bot: Bot | None = None
-        self._bootstrap: dict[str, ConversationRef] = {}
-        self._conversation_locks: dict[str, asyncio.Lock] = {}
 
     @property
     def bot(self) -> Bot:
@@ -126,16 +123,9 @@ class TelegramChannel:
                 if self._thread_for(chat_id, resolved) is None:
                     raise ValueError("Default conversation requires a thread")
                 return resolved
-        # Pairing/access errors may precede a durable participant identity. Even these replies
-        # need a stable explicit topic: an unaddressed send creates a fresh Telegram topic.
-        if not hasattr(self, "_bootstrap"):
-            self._bootstrap = {}
-            self._conversation_locks = {}
-        key = str(chat_id)
-        async with self._conversation_locks.setdefault(key, asyncio.Lock()):
-            if key not in self._bootstrap:
-                self._bootstrap[key] = await self.create_conversation(chat_id, "Daily")
-            return self._bootstrap[key]
+        # Unpaired recipients have no canonical conversation. Do not create provider resources
+        # for them or send without a thread (which would create one implicitly).
+        return None
 
     async def send_message(
         self,
@@ -146,6 +136,9 @@ class TelegramChannel:
         conversation: ConversationRef | None = None,
     ) -> int | None:
         conversation = await self._address(chat_id, conversation)
+        if self.capabilities.threads and conversation is None:
+            logger.warning("Telegram reply omitted: no authorized conversation")
+            return None
         kwargs = {"chat_id": chat_id, "text": text, "reply_markup": _markup(buttons)}
         if conversation is not None:
             thread_id = self._thread_for(chat_id, conversation)
@@ -155,8 +148,6 @@ class TelegramChannel:
             message = await self.bot.send_message(**kwargs)
         except BadRequest as error:
             if conversation is not None and "message thread not found" in str(error).lower():
-                if hasattr(self, "_bootstrap"):
-                    self._bootstrap.pop(str(chat_id), None)
                 raise ConversationUnavailableError(conversation) from None
             raise
         return message.message_id

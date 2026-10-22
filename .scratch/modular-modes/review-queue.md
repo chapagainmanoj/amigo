@@ -731,3 +731,14 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   Runtime entitlement remains checked on every Turn; revoked grants still refuse.
 - Threaded+command regressions/currency163passed12.44s; fullRuff/diffclean. Latestfull1352passed;
   no changes to Daily prompts/Tools/currency checker and no release certification.
+
+### Review fix8 — no unpaired/denied bootstrap topics
+
+- Files channels/telegram.py, conversations.py, bot/handlers.py, bot/pairing.py and channel/pairing
+  tests. Protected/SQL:none. Removed in-memory bootstrap creation. Unpaired threaded deliveries
+  use an explicit incoming address or omit delivery; never send unthreaded/create resources.
+  Denied chats do not invoke canonical resolver. Successful pairing persists incoming conversation
+  as canonical Daily before response, or creates one durable Daily if no incoming address.
+- Pairing/channel/currency163passed10.74s; routing/channel/pairing102passed4.14s; Ruff/diffclean.
+  Added successful adoption/no-topic and denied-chat regressions. No provider/network calls.
+  Latestfull1352passed; current source invalidates prior Gate A release evidence.

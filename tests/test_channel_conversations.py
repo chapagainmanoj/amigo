@@ -97,13 +97,11 @@ async def test_explicit_conversation_is_the_only_delivery_thread():
     channel.bot.create_forum_topic.assert_not_awaited()
 
 
-async def test_unpaired_and_error_replies_reuse_one_bootstrap_daily_topic():
+async def test_unpaired_replies_create_no_topics_or_unthreaded_sends():
     channel = threaded_channel()
     await asyncio.gather(channel.send_message(123, "Pair"), channel.send_message(123, "Denied"))
-    channel.bot.create_forum_topic.assert_awaited_once_with(chat_id=123, name="Daily")
-    assert [
-        call.kwargs["message_thread_id"] for call in channel.bot.send_message.await_args_list
-    ] == [235, 235]
+    channel.bot.create_forum_topic.assert_not_awaited()
+    channel.bot.send_message.assert_not_awaited()
 
 
 async def test_implicit_reply_uses_durable_default_resolver_before_bootstrap():

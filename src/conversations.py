@@ -41,7 +41,7 @@ class ModeConversationService:
     async def ensure_by_chat(self, chat_id):
         user = await self.store.get_user_by_chat_id(chat_id)
         if user is None:
-            return None  # Channel owns a bootstrap conversation for unpaired recipients.
+            return None
         return await self.ensure(user, chat_id=chat_id)
 
     async def select(self, user: dict, incoming: ConversationRef | None) -> str | None:
