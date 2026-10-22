@@ -71,7 +71,8 @@ def configured_model() -> str:
     """Resolve the configured model lazily so importing this module never reads settings."""
     from src.config import settings
 
-    model = settings.default_model
+    dev_model = settings.dev_model
+    model = dev_model if isinstance(dev_model, str) and dev_model else settings.default_model
     # Pydantic AI uses provider-prefixed names for Google models
     if model.startswith("gemini-"):
         return f"google:{model}"
@@ -84,6 +85,12 @@ def _provider_for(name: str) -> Provider[Any]:
         from src.config import settings
 
         return GoogleProvider(api_key=settings.google_api_key or None)
+    if name == "ollama":
+        from pydantic_ai.providers.ollama import OllamaProvider
+
+        from src.config import settings
+
+        return OllamaProvider(base_url=settings.ollama_base_url)
     return infer_provider(name)
 
 
@@ -160,7 +167,23 @@ class ModeRuntime:
             return reference
         model = self._models.get(reference)
         if model is None:
-            model = self._models[reference] = infer_model(reference, _provider_for)
+            if reference.startswith("claude-cli:"):
+                from src.config import settings
+                from src.runtime_config import is_production
+
+                if is_production(settings):
+                    raise ValueError("Claude CLI is development-only")
+                from src.agent.claude_cli_model import claude_cli_model
+
+                model = claude_cli_model(reference.partition(":")[2])
+            elif reference.partition(":")[0] in {"google", "google-gla"}:
+                from src.model_usage import LoggedGoogleModel
+
+                provider, _, model_name = reference.partition(":")
+                model = LoggedGoogleModel(model_name, provider=_provider_for(provider))
+            else:
+                model = infer_model(reference, _provider_for)
+            self._models[reference] = model
         return model
 
     async def agent_for(self, mode: ModeDefinition, *, fallback=False) -> Agent[ToolContext, str]:
@@ -218,7 +241,12 @@ class ModeRuntime:
                 message_history.append(ModelResponse(parts=[TextPart(content=message.content)]))
 
         agent = await self.agent_for(mode)
-        requested = mode.model.primary or configured_model()
+        from src.config import settings
+
+        dev_model = settings.dev_model
+        requested = (
+            dev_model if isinstance(dev_model, str) and dev_model else None
+        ) or mode.model.primary or configured_model()
         override = self._model_override.get()
         primary = model or (override[0] if override else None) or requested
         fallback = (

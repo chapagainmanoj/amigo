@@ -40,6 +40,8 @@ class Settings(BaseSettings):
 
     # LLM defaults
     default_model: str = "gemini-3.5-flash"
+    dev_model: str = ""
+    ollama_base_url: str = "http://localhost:11434/v1"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

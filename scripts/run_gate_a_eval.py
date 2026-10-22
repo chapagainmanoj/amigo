@@ -21,7 +21,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pydantic_ai.exceptions import ModelHTTPError  # noqa: E402
-from pydantic_ai.models.google import GoogleModel  # noqa: E402
 from pydantic_ai.providers.google import GoogleProvider  # noqa: E402
 
 from src.agent.catalogue import build_registry  # noqa: E402
@@ -45,6 +44,7 @@ from src.evaluation.gate_a import (  # noqa: E402
     extract_trace,
     file_set_hash,
     invalidating_inputs,
+    is_gemini_model,
     load_mode_suite,
     observed_model_names,
     score_turn,
@@ -53,6 +53,7 @@ from src.evaluation.gate_a import (  # noqa: E402
 )
 from src.evaluation.model_policy import fallback_currency  # noqa: E402
 from src.memory.memory_store import InMemoryStore  # noqa: E402
+from src.model_usage import LoggedGoogleModel  # noqa: E402
 from src.scheduler.reminders import ReminderScheduler  # noqa: E402
 from src.telemetry import estimated_cost  # noqa: E402
 from src.tools.context import ToolContext  # noqa: E402
@@ -76,7 +77,7 @@ class FixedClock(Clock):
         return self.instant.replace(tzinfo=UTC).astimezone(ZoneInfo(timezone))
 
 
-class RateLimitedGoogleModel(GoogleModel):
+class RateLimitedGoogleModel(LoggedGoogleModel):
     """Space provider requests without retrying an unchanged candidate."""
 
     def __init__(self, *args, minimum_interval_seconds: float, **kwargs):
@@ -117,7 +118,9 @@ def _release_inputs(suite_path: Path, suite: GateASuite, mode_id="daily", model_
         ["git", "diff", "--binary"], cwd=ROOT, check=True, capture_output=True
     ).stdout
     mode = build_registry()[mode_id]
-    selected_model = model_name or mode.model.primary or settings.default_model
+    selected_model = (
+        model_name or settings.dev_model or mode.model.primary or settings.default_model
+    )
     schema = tool_schema(mode_id)
     return {
         "git_revision": _git("rev-parse", "HEAD"),
@@ -315,8 +318,15 @@ async def run(args) -> int:
     print(f"validated {suite.suite_id}: {len(suite.cases)} cases, {suite.repetitions} repetitions")
     if args.validate_only:
         return 0
-    if not settings.google_api_key:
+    model_name = (
+        getattr(args, "model", None) or settings.dev_model or mode.model.primary
+        or settings.default_model
+    )
+    certifiable = is_gemini_model(model_name)
+    if certifiable and not settings.google_api_key:
         raise SystemExit("GOOGLE_API_KEY is required for a declared Gate A run")
+    if not certifiable and args.establish_baseline:
+        raise SystemExit("Non-Gemini development evidence cannot establish a Gate A baseline")
     if args.repetitions != suite.repetitions and not args.case:
         raise SystemExit("a declared Gate A run must use exactly three repetitions")
 
@@ -329,7 +339,7 @@ async def run(args) -> int:
         raise SystemExit("--establish-baseline cannot be combined with --case")
     if args.establish_baseline and args.baseline is not None:
         raise SystemExit("--establish-baseline cannot be combined with --baseline")
-    if not args.case and not args.establish_baseline:
+    if certifiable and not args.case and not args.establish_baseline:
         if args.baseline is None:
             raise SystemExit(
                 "--baseline is required for a declared run; supply the archived last-passing "
@@ -363,7 +373,9 @@ async def run(args) -> int:
         "run_id": str(uuid.uuid4()),
         "suite_id": suite.suite_id,
         "purpose": (
-            "development_case"
+            "development_eval"
+            if not certifiable
+            else "development_case"
             if args.case
             else "baseline"
             if args.establish_baseline
@@ -385,15 +397,17 @@ async def run(args) -> int:
     }
     _write_evidence(args.output, evidence)
 
-    selected_model = release_inputs["model"].removeprefix("google:")
-    if selected_model.startswith("gemini-"):
+    selected_model = release_inputs["model"].removeprefix("google:").removeprefix("google-gla:")
+    if certifiable:
         provider_model = RateLimitedGoogleModel(
             selected_model,
             provider=GoogleProvider(api_key=settings.google_api_key),
             minimum_interval_seconds=args.request_interval_seconds,
         )
     else:
-        provider_model = release_inputs["provider_model"]
+        from src.agent.runtime import default_runtime
+
+        provider_model = await default_runtime.model_for(release_inputs["provider_model"])
     for case in selected:
         for repetition in range(1, args.repetitions + 1):
             print(f"running {case.id} repetition {repetition}/{args.repetitions}", flush=True)

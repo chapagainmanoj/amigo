@@ -704,6 +704,11 @@ def check_evidence(
     empty_diff_sha256 = hashlib.sha256(b"").hexdigest()
     if release_inputs.get("working_tree_diff_sha256") != empty_diff_sha256:
         errors.append("evidence.release_inputs.working_tree_diff_sha256 must prove a clean tree")
+    from src.evaluation.gate_a import is_gemini_model
+
+    declared_model = release_inputs.get("model")
+    if not isinstance(declared_model, str) or not is_gemini_model(declared_model):
+        errors.append("Non-Gemini development evidence cannot certify Gate A")
     expected_model = model_name or mode.model.primary or settings.default_model
     if not _historical_baseline and release_inputs.get("model") != expected_model:
         errors.append(

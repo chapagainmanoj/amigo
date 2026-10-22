@@ -58,6 +58,7 @@ INVALIDATING_INPUT_PATHS = (
     "scripts/run_gate_a_eval.py",
     "src/activation.py",
     "src/agent/catalogue.py",
+    "src/agent/claude_cli_model.py",
     "src/agent/context.py",
     "src/agent/modes.py",
     "src/agent/policies.py",
@@ -85,6 +86,8 @@ INVALIDATING_INPUT_PATHS = (
     "src/memory/reminders.py",
     "src/memory/store.py",
     "src/memory/tasks.py",
+    "src/model_usage.py",
+    "src/runtime_config.py",
     "src/schema.py",
     "src/scheduler/reminders.py",
     "src/time_resolution.py",
@@ -97,6 +100,11 @@ INVALIDATING_INPUT_PATHS = (
     "src/turns.py",
     "src/utils/__init__.py",
 )
+
+
+def is_gemini_model(model_id: str) -> bool:
+    """Only Google's Gemini route can provide production Gate A certification."""
+    return model_id.startswith(("gemini-", "google:gemini-", "google-gla:gemini-"))
 
 
 def tool_schema(mode_id: str = "daily", *, mode_definition=None) -> list[dict]:

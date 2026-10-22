@@ -42,6 +42,13 @@ def require_agent_credentials(config: object) -> None:
     Without it a missing key surfaces as the agent's friendly "having trouble thinking" reply,
     which reads like a model outage rather than a configuration error.
     """
+    dev_model = str(getattr(config, "dev_model", "")).strip()
+    if dev_model and is_production(config):
+        _invalid("DEV_MODEL", "is development-only")
+    if dev_model.startswith(("claude-cli:", "ollama:")):
+        if not dev_model.partition(":")[2].strip():
+            raise UnsafeProductionConfigurationError("DEV_MODEL requires a model name")
+        return
     if not str(getattr(config, "google_api_key", "")).strip():
         raise UnsafeProductionConfigurationError(
             "GOOGLE_API_KEY is required to run the agent. Set it in .env or the environment."
@@ -52,6 +59,9 @@ def validate_runtime_configuration(config: object) -> None:
     """Reject unsafe production settings before startup creates any side effect."""
     if not is_production(config):
         return
+
+    if str(getattr(config, "dev_model", "")).strip():
+        _invalid("DEV_MODEL", "is development-only")
 
     if str(getattr(config, "app_channel", "")).strip().lower() != "telegram":
         _invalid("APP_CHANNEL", "must be telegram in production")
