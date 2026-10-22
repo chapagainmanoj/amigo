@@ -80,6 +80,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/memory/context.py",
     "src/memory/later.py",
     "src/memory/memory_store.py",
+    "src/memory/modes.py",
     "src/memory/pairing.py",
     "src/memory/reminders.py",
     "src/memory/store.py",
