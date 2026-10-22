@@ -154,13 +154,34 @@ async def test_cli_subscription_env_tools_output_and_privacy(monkeypatch):
     )
     spawn = AsyncMock(return_value=process)
     monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "private-key")
+    for name in (
+        "ANTHROPIC_API_KEY",
+        "SUPABASE_SERVICE_KEY",
+        "TELEGRAM_BOT_TOKEN",
+        "GOOGLE_API_KEY",
+        "OTHER_PRIVATE_SECRET",
+        "ANTHROPIC_BASE_URL",
+        "CLAUDE_CODE_USE_BEDROCK",
+    ):
+        monkeypatch.setenv(name, "private-sentinel")
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "subscription-auth-sentinel")
+    monkeypatch.setenv("CLAUDE_CODE_MAX_OUTPUT_TOKENS", "untrusted-parent-limit")
     response = await ClaudeModels().generate_content(
         model="claude-cli:sonnet", contents="fiction", config=None
     )
     assert response.parsed == {"question_id": "fact"}
     args, kwargs = spawn.call_args
-    assert "ANTHROPIC_API_KEY" not in kwargs["env"]
+    assert set(kwargs["env"]) <= {
+        "PATH",
+        "HOME",
+        "USER",
+        "LANG",
+        "TERM",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
+    }
+    assert "private-sentinel" not in kwargs["env"].values()
+    assert kwargs["env"]["CLAUDE_CODE_OAUTH_TOKEN"] == "subscription-auth-sentinel"
     assert kwargs["env"]["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == "64"
     assert args[args.index("--tools") + 1] == ""
     assert "--no-session-persistence" in args

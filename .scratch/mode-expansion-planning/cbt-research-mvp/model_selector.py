@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 import re
 import time
 from dataclasses import dataclass
@@ -322,8 +321,9 @@ class ClaudeModels:
     """Subscription CLI, tools disabled, no persisted session, bounded output and lifetime."""
 
     async def generate_content(self, *, model: str, contents: str, config: object) -> object:
-        env = dict(os.environ)
-        env.pop("ANTHROPIC_API_KEY", None)
+        from src.agent.claude_cli_model import subscription_cli_environment
+
+        env = subscription_cli_environment()
         env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(MAX_OUTPUT_TOKENS)
         process = await asyncio.create_subprocess_exec(
             "claude",

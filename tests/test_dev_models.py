@@ -85,7 +85,17 @@ def test_cli_rejects_malformed_or_undeclared_proposals_without_content(reply):
 
 
 async def test_cli_subprocess_has_no_key_tools_or_persistence(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "private-key")
+    for name in (
+        "ANTHROPIC_API_KEY",
+        "SUPABASE_SERVICE_KEY",
+        "TELEGRAM_BOT_TOKEN",
+        "GOOGLE_API_KEY",
+        "OTHER_PRIVATE_SECRET",
+        "ANTHROPIC_BASE_URL",
+        "CLAUDE_CODE_USE_BEDROCK",
+    ):
+        monkeypatch.setenv(name, "private-sentinel")
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "subscription-auth-sentinel")
     process = SimpleNamespace(
         communicate=AsyncMock(return_value=(_envelope('{"text":"hello"}'), None)),
         returncode=0,
@@ -100,7 +110,16 @@ async def test_cli_subprocess_has_no_key_tools_or_persistence(monkeypatch):
     assert "--safe-mode" in args
     assert "--strict-mcp-config" in args
     assert args[args.index("--mcp-config") + 1] == '{"mcpServers":{}}'
-    assert "ANTHROPIC_API_KEY" not in kwargs["env"]
+    assert set(kwargs["env"]) <= {
+        "PATH",
+        "HOME",
+        "USER",
+        "LANG",
+        "TERM",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+    }
+    assert "private-sentinel" not in kwargs["env"].values()
+    assert kwargs["env"]["CLAUDE_CODE_OAUTH_TOKEN"] == "subscription-auth-sentinel"
     assert spawn.await_count == 1
     prompt = json.loads(process.communicate.call_args.args[0])
     assert prompt["messages"]
@@ -205,3 +224,20 @@ def test_empty_development_model_names_fail_before_execution(dev_model):
     config = Settings(_env_file=None, dev_model=dev_model, google_api_key="")
     with pytest.raises(UnsafeProductionConfigurationError, match="model name"):
         require_agent_credentials(config)
+
+
+def test_cli_environment_preserves_only_known_identity_and_subscription_auth():
+    from src.agent.claude_cli_model import subscription_cli_environment
+
+    allowed = {
+        "PATH": "/test/bin",
+        "HOME": "/test/home",
+        "USER": "test-user",
+        "LANG": "en_US.UTF-8",
+        "TERM": "xterm",
+        "CLAUDE_CODE_OAUTH_TOKEN": "oauth-sentinel",
+    }
+    with patch.dict("os.environ", {**allowed, "UNRECOGNIZED_AUTH_TOKEN": "private"}, clear=True):
+        assert subscription_cli_environment() == allowed
+    with patch.dict("os.environ", {}, clear=True):
+        assert subscription_cli_environment() == {}

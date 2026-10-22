@@ -19,6 +19,25 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 _FAILURE = "Development model request failed."
 _TIMEOUT_SECONDS = 60
 _MAX_OUTPUT_BYTES = 1_048_576
+# PATH resolves the CLI; HOME/USER allow its normal local subscription/keychain identity;
+# LANG/TERM preserve text/terminal behavior. Only the documented subscription OAuth token
+# may supply explicit authentication. Application/API credentials and provider overrides never
+# enter this subprocess. Tool access and session persistence remain disabled.
+_SUBSCRIPTION_ENVIRONMENT = frozenset(
+    {
+        "PATH",
+        "HOME",
+        "USER",
+        "LANG",
+        "TERM",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+    }
+)
+
+
+def subscription_cli_environment() -> dict[str, str]:
+    """Copy only OS identity/text settings and explicit subscription OAuth authentication."""
+    return {name: value for name, value in os.environ.items() if name in _SUBSCRIPTION_ENVIRONMENT}
 
 
 class ClaudeCLIError(RuntimeError):
@@ -112,8 +131,7 @@ def claude_cli_model(
             },
             ensure_ascii=False,
         )
-        environment = dict(os.environ)
-        environment.pop("ANTHROPIC_API_KEY", None)
+        environment = subscription_cli_environment()
         process = None
         try:
             process = await asyncio.create_subprocess_exec(
