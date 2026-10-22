@@ -124,7 +124,7 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_KEY=your-service-role-key
 
 # App
-APP_BASE_URL=https://your-ngrok-url.ngrok-free.app
+APP_BASE_URL=https://your-tunnel-url  # optional with scripts/dev_tunnel.sh
 ```
 
 Where to get these:
@@ -181,12 +181,32 @@ not available until the application slice is implemented and reviewed.
 
 #### 3. Run
 
+Telegram needs a public HTTPS URL for the webhook. The simplest option is
+[`scripts/dev_tunnel.sh`](scripts/dev_tunnel.sh), which uses Microsoft Dev Tunnels (the same
+service as VS Code port forwarding) and starts Amigo behind it in one command:
+
+```bash
+brew install devtunnel        # once; first run also asks you to log in with GitHub
+
+scripts/dev_tunnel.sh                # tunnel + API
+scripts/dev_tunnel.sh --reload       # tunnel + API with auto-reload
+scripts/dev_tunnel.sh --tunnel-only  # tunnel only; run the API from your debugger
+```
+
+The script creates a persistent public tunnel named `amigo-<user>` on port 8000, so its URL
+(`https://<id>-8000.<region>.devtunnels.ms`) stays the same across runs. It passes that URL to
+Amigo as `APP_BASE_URL` without editing `.env`, and prints Telegram's `getWebhookInfo` once the
+API is healthy. Override the port or tunnel name with `PORT=` and `TUNNEL_ID=`. Tunnels expire
+after 30 days unused; the script recreates one, possibly with a new URL.
+
+To debug in VS Code, set `APP_BASE_URL` in `.env` to the printed tunnel URL once, run
+`scripts/dev_tunnel.sh --tunnel-only`, and start the API from the debugger without `--reload`.
+
+Alternatively, with ngrok:
+
 ```bash
 # Terminal 1 — expose local server to the internet
 ngrok http 8000
-
-## copy command from ngrok dashboard to update the webhook url for telegram
-
 # Copy the HTTPS URL into .env as APP_BASE_URL
 
 # Terminal 2 — start Amigo
@@ -195,7 +215,8 @@ uvicorn src.main:app --reload --port 8000
 ```
 
 On startup, Amigo registers its Telegram webhook at
-`{APP_BASE_URL}/webhook`.
+`{APP_BASE_URL}/webhook`. Use a separate development bot: every startup re-points that bot's
+webhook at your machine.
 
 Health check: `curl http://localhost:8000/health`
 

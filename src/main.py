@@ -39,6 +39,9 @@ logging.basicConfig(
     level=getattr(logging, settings.log_level),
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
+# httpx logs every request URL at INFO, and Telegram Bot API URLs embed the bot token.
+for _noisy in ("httpx", "httpcore"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # ── Wiring ──
