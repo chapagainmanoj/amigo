@@ -339,6 +339,8 @@ No Supabase writes. Safe for CI/CD.
   separation decision (superseded by ADR 0002).
 - [ADR 0002](adr/0002-agentic-tool-calling-loop.md) — Agentic tool-calling
   loop replacing the classify→extract→resolve pipeline.
+- [ADR 0003](adr/0003-mode-topics.md) — Proposed: one Telegram topic per Mode
+  in the participant's private chat.
 - [pre-launch implementation plan](pre-launch-implementation-plan.md) — Current release roadmap
   and implementation sequence.
 - [staging performance evidence](staging-performance-evidence.md) — Controlled before/after
