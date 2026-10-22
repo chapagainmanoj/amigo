@@ -10,9 +10,14 @@ import asyncio
 import logging
 import signal
 import sys
+from datetime import UTC, timedelta
 
+from src.activation import ACTIVATION_POLICY_VERSION
 from src.bot.handlers import BotHandlers
 from src.channels.cli import CLIChannel
+from src.commands.activation import CreateActivationTestCommand
+from src.commands.base import CommandContext
+from src.commands.tasks import ResolveTaskCommand
 from src.config import settings
 from src.memory.memory_store import InMemoryStore
 from src.memory.sessions import SessionManager
@@ -20,6 +25,7 @@ from src.observability import quiet_routine_logs
 from src.runtime_config import require_agent_credentials, validate_runtime_configuration
 from src.scheduler.outbox import SchedulerOutboxWorker
 from src.scheduler.reminders import ReminderScheduler
+from src.utils import utc_now
 
 # ANSI
 _GREEN = "\033[92m"
@@ -46,13 +52,38 @@ Type /quit to exit, /tasks to see tasks, /debug to toggle debug logging{_RESET}
 
 async def _seed_dev_user(store: InMemoryStore) -> dict:
     """Pre-create an onboarded dev user so you skip straight to chatting."""
+    # This fixture exists only in the CLI's disposable InMemoryStore. Use the canonical
+    # Activation transitions so Telegram's production gate stays exercised and unchanged.
+    auth_id = "cli-development-fixture"
+    await store.acknowledge_activation_terms(auth_id, ACTIVATION_POLICY_VERSION)
     user = await store.create_user(DEV_CHAT_ID)
-    await store.update_user(user["user_id"], {
-        "name": "Dev",
-        "timezone": DEV_TIMEZONE,
-        "onboarding_step": 3,
-        "onboarding_complete": True,
-    })
+    user_id = user["user_id"]
+    await store.update_user(user_id, {"supabase_auth_id": auth_id})
+    await store.update_activation_profile(
+        auth_id, name="Dev", timezone=DEV_TIMEZONE, wake_time="07:30", sleep_time="23:00"
+    )
+    result = await CreateActivationTestCommand(store).run(
+        CommandContext(user_id, "dashboard", "cli-fixture-activation"),
+        scheduled_at=utc_now().replace(tzinfo=UTC) + timedelta(minutes=2),
+        timezone=DEV_TIMEZONE,
+    )
+    reminder_id = result["reminder"]["reminder_id"]
+    # Simulated delivery, not a Telegram send. Resolving cancels its pending schedule effect.
+    await store.update_reminder(
+        reminder_id, {"status": "sent", "telegram_message_id": 0}, user_id
+    )
+    resolved = await ResolveTaskCommand(store).run(
+        CommandContext(user_id, "telegram", "cli-fixture-complete"),
+        task_id=result["task"]["task_id"], outcome="completed", acted_reminder_id=reminder_id,
+    )
+    # Both fixture effects were simulated above; never enqueue them on the running scheduler.
+    for effect in [*result["effects"], *resolved["effects"]]:
+        await store.complete_scheduler_effect(
+            effect["effect_id"], user_id, succeeded=True, error_type=None
+        )
+    activation = await store.get_activation_state(auth_id)
+    if not activation["completed"]:
+        raise RuntimeError("CLI development fixture failed Activation")
     return await store.get_user_by_chat_id(DEV_CHAT_ID)
 
 
@@ -131,7 +162,10 @@ async def run_cli(onboard: bool = False):
     # Seed dev user unless --onboard flag is set
     if not onboard:
         await _seed_dev_user(store)
-        print(f"{_DIM}Dev user seeded (name=Dev, tz={DEV_TIMEZONE}). Skipping onboarding.{_RESET}")
+        print(
+            f"{_DIM}Dev user seeded (name=Dev, tz={DEV_TIMEZONE}); "
+            f"simulated Activation complete.{_RESET}"
+        )
         print(f"{_DIM}Use --onboard flag to walk through onboarding.{_RESET}\n")
 
     try:
