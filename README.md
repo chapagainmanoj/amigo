@@ -160,6 +160,7 @@ Where to get these:
     the ledger that later migrations extend.
 17. Run [`migrations/015_ordered_pairing_locks.sql`](migrations/015_ordered_pairing_locks.sql).
 18. Run [`migrations/016_session_modes_grants_handoffs.sql`](migrations/016_session_modes_grants_handoffs.sql).
+19. Run [`migrations/017_mode_conversations.sql`](migrations/017_mode_conversations.sql).
 
 Apply migrations in numeric order. Migrations 003 and 004 make Pairing backend-only and enforce
 the reviewed cross-tenant grants and row-level policies. Migration 005 adds canonical Task states
@@ -175,9 +176,43 @@ idempotent command that moves one owned pending Task to an explicit Planning Day
 and version checks. Migration 013 adds the durable Activation Journey: the backend-only
 acknowledgement, paired profile, private test Reminder, and canonical Activation read model, and
 makes Pairing require an acknowledged Journey. Migration 015 orders Pairing's identity-row locks
-to prevent crossed Pairing requests from deadlocking. Migration 016 adds the dormant Session Mode,
-trial-grant, audit, and confirmed-handoff schema primitives; participant-facing Mode switching is
-not available until the application slice is implemented and reviewed.
+to prevent crossed Pairing requests from deadlocking. Migration 016 adds Session Mode,
+trial-grant, audit, and confirmed-handoff primitives. Migration 017 adds channel-neutral Mode
+conversation addresses, Sessions keyed by participant and Mode, and leased handoff execution
+claims. The application requires exact schema version 17. These migrations have not been applied
+to Supabase by this build; deployment and real-bot verification remain owner actions.
+
+#### Mode conversations and operator access
+
+Daily remains the only live Mode. Coach, Reflect, and Recommender stay Planned until their own
+implementation and evaluation gates pass. `GET /api/modes` reports the authenticated participant's
+Mode availability, grant expiry, and channel-provided chat links; dashboard chips use this result.
+
+Mode routing is channel-neutral. Threaded channels resolve a `ConversationRef` to a Mode;
+unknown conversations enter Daily. Channels without threads use `/mode`, `/mode <id>`, and
+`/daily`. These commands also remain available on Telegram for older clients. History is isolated
+by Mode-scoped Session, and handoffs need participant confirmation before carrying the selected
+request to a target Mode.
+
+For Telegram, enable Threaded Mode and disable user-created threads in BotFather before deploying
+this routing. Production startup rejects unsafe topic settings. Every threaded delivery needs an
+explicit conversation; Reminders resolve the current primary-channel Daily conversation when they
+send. Deleting a private topic does not stop delivery: Telegram can restore it on the next send.
+The owner's test bot verified Desktop and iOS behavior; Android and the complete application flow
+still need owner verification. Do not enable Threaded Mode on the production bot before this
+application slice is reviewed and deployed.
+
+The operator script grants or revokes access with a required reason:
+
+```bash
+python scripts/grant_mode.py grant --chat-id 123 --mode coach --operator owner --reason "Internal trial"
+python scripts/grant_mode.py revoke --chat-id 123 --mode coach --operator owner --reason "Trial ended"
+```
+
+Granting requires a live Mode, defaults to 14 days, and enforces at most five active grants per
+Mode in the Store. `--expires-at` can shorten that window. A successful grant creates its channel
+conversation; revocation and periodic maintenance close unavailable specialized conversations.
+The commands do not make a Planned Mode live and are not participant self-service controls.
 
 #### 3. Run
 
@@ -226,15 +261,16 @@ checked, the scheduler heartbeat is stale, or durable scheduler effects have fai
 ### Test & Lint
 
 ```bash
-python -m pytest tests/ -v         # 568 tests at the 2026-10-03 local verification
+python -m pytest tests/ -v         # full local suite
 ruff check src tests scripts       # lint
 python scripts/run_gate_a_eval.py --validate-only
 ```
 
 Python tests use in-memory fakes and make no Supabase, Telegram, or Gemini calls. CI additionally
-applies every checked-in migration (001–016) to PostgreSQL 15 and runs legacy backfill,
-two-participant isolation, durable command/outbox, Activation, lock-order, and schema-chain
-regressions. The CI database now satisfies the application's exact schema-16 startup gate. See
+is configured to apply every checked-in migration (001–017) to PostgreSQL 15 and run legacy
+backfill, two-participant isolation, durable command/outbox, Activation, Mode conversation/handoff,
+lock-order, and schema-chain regressions for the exact schema-17 startup gate. This is separate
+from staging and Supabase deployment evidence. See
 [`tests/fakes.py`](tests/fakes.py) for the shared test doubles.
 
 The controlled before/after runtime procedure is documented in

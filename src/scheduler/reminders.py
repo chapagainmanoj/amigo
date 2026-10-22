@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 MISSED_FIRE_WINDOW = timedelta(minutes=15)
 RECONCILIATION_INTERVAL_SECONDS = 60
 POLLING_INTERVAL_SECONDS = 10
-_SYSTEM_JOB_IDS = {"scheduler-outbox-worker", "scheduler-reconciliation"}
+_SYSTEM_JOB_IDS = {
+    "scheduler-outbox-worker", "scheduler-reconciliation", "mode-conversation-maintenance",
+}
 SCHEDULER_OWNER_KEY = "beta-scheduler"
 
 
@@ -38,6 +40,7 @@ class ReminderScheduler:
         self.store = store
         self.clock = clock
         self.worker_id = str(uuid.uuid4())
+        self._mode_conversations = None
 
     def start(self) -> None:
         """Start the scheduler."""
@@ -182,6 +185,35 @@ class ReminderScheduler:
             max_instances=1,
         )
 
+    async def start_mode_maintenance(self, callback) -> None:
+        """Close expired Mode conversations without coupling the scheduler to a transport."""
+        self.scheduler.add_job(
+            callback,
+            trigger="interval",
+            seconds=RECONCILIATION_INTERVAL_SECONDS,
+            id="mode-conversation-maintenance",
+            replace_existing=True,
+            max_instances=1,
+        )
+
+    async def _daily_delivery(self, user_id: str):
+        """Resolve the current Daily address at delivery time, never from outbox payloads."""
+        from src.conversations import ModeConversationService
+
+        user = await self.store.get_user_by_id(user_id)
+        if not user or user["user_id"] != user_id:
+            raise ValueError("Reminder endpoint no longer belongs to its participant")
+        current_channel = getattr(self.channel, "channel_id", "telegram")
+        if user.get("primary_channel", "telegram") != current_channel:
+            raise ValueError("Reminder channel is not the participant's primary channel")
+        chat_id = await self.channel.recipient_for(user)
+        if chat_id is None:
+            raise ValueError("Participant has no linked messaging endpoint")
+        if self._mode_conversations is None:
+            self._mode_conversations = ModeConversationService(self.store, self.channel)
+        conversation = await self._mode_conversations.ensure(user, "daily", chat_id=chat_id)
+        return chat_id, conversation
+
     def _schedule_recovery_summary(
         self,
         user_id: str,
@@ -220,7 +252,10 @@ class ReminderScheduler:
             f"• {title}" for title in titles
         )
         try:
-            message_id = await self.channel.send_message(chat_id, text)
+            chat_id, conversation = await self._daily_delivery(user_id)
+            message_id = await self.channel.send_message(
+                chat_id, text, conversation=conversation,
+            )
         except Exception as error:
             for reminder, attempt_id in claimed:
                 await self.store.finish_reminder_delivery(
@@ -306,10 +341,12 @@ class ReminderScheduler:
             attempt_id = reminder["attempt"]["attempt_id"]
 
             try:
+                chat_id, conversation = await self._daily_delivery(user_id)
                 message_id = await self.channel.send_message(
                     chat_id,
                     f"Hey — you mentioned wanting to \"{task_title}\" today. Good time? 📋",
                     buttons=reminder_keyboard(reminder_id),
+                    conversation=conversation,
                 )
             except Exception as error:
                 await self.store.finish_reminder_delivery(

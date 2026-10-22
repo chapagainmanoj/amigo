@@ -14,7 +14,7 @@ def _profile_timezone(context: ToolContext) -> str:
 
 async def yesterday_summary(context: ToolContext) -> str | None:
     summary = await ContextBuilder(context.store).get_yesterday_summary(
-        context.user["user_id"], _profile_timezone(context)
+        context.user["user_id"], _profile_timezone(context), mode_id=context.mode_id
     )
     return f"\n<yesterday_summary>\n{summary}\n</yesterday_summary>" if summary else None
 

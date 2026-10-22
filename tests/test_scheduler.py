@@ -109,7 +109,7 @@ async def test_send_reminder_sends_buttons_and_marks_sent():
 
 async def test_ambiguous_send_failure_is_terminal_without_false_acceptance():
     class FailingChannel(FakeChannel):
-        async def send_message(self, chat_id, text, *, buttons=None):
+        async def send_message(self, chat_id, text, *, buttons=None, conversation=None):
             raise TimeoutError("injected provider failure")
 
     store = FakeStore()

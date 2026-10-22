@@ -11,15 +11,15 @@ deployment, security, privacy, documentation, analytics, legal readiness, and cu
 > decisions, and the [pre-launch implementation plan](pre-launch-implementation-plan.md) tracks
 > current implementation status.
 
-## Current disposition — 2026-08-31
+## Current disposition — 2026-10-22
 
 - The beta promise, target segment, offer/support contract, privacy/retention contract,
   Task/Reminder lifecycle, cross-surface contract, runtime strategy, model-evaluation contract,
   Activation Journey, cohort protocol, pricing hypothesis, product boundaries, expansion posture,
   reliability semantics, and AGPL-3.0 contribution/security contract are now closed decisions.
-- Local public copy has been narrowed to the Telegram Core Loop and unavailable Modes/WhatsApp
-  have been hidden. Deployment and screenshot verification are still required before that evidence
-  can close a release gate.
+- Local public copy remains scoped to the Telegram Core Loop. Dashboard Mode chips now read
+  authenticated availability; Planned and unentitled entries have no actionable link. WhatsApp
+  remains unavailable. Deployment and screenshot verification are still required before release.
 - `LICENSE`, `CONTRIBUTING.md`, and `SECURITY.md` now implement the repository source contract;
   enabling GitHub private vulnerability reporting still requires authenticated repository setup.
 - The deprecated UTC calls and dead agent/context code identified here are removed. Python tests
@@ -35,6 +35,12 @@ deployment, security, privacy, documentation, analytics, legal readiness, and cu
   exact local date, wall time, timezone, and UTC instant while blocking ambiguous or invalid wall
   times. Observability, data-rights operations, Activation, end-to-end integration tests, and Gate
   A/B evidence remain open. Amigo is still in pre-beta development.
+- The application now requires exact schema version 17. Migration 017 and the Mode routing slice
+  introduce channel-neutral conversations, Mode-isolated Sessions, grants, confirmed handoff
+  execution claims, and primary-channel Daily addressing at Reminder delivery time. Integration
+  review and the complete owner test-bot flow remain release gates; no Supabase application or
+  production deployment is asserted. The topic spike passed on Desktop and iOS; Android was not
+  tested. Daily is the only live Mode; Coach, Reflect and Recommender remain Planned.
 - APScheduler is now a rebuildable projection of authoritative Reminder rows. Startup and
   minute-level reconciliation repair missing or wrongly timed jobs, remove inverse drift, recover
   interrupted sends, mark occurrences over 15 minutes late missed, and aggregate recent delayed
@@ -122,7 +128,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | Dashboard snooze did not reschedule the live job | Dashboard Later now routes through the authenticated backend and the same durable replacement-Reminder transition used by Telegram. | **Resolved locally** | Verify the outbox projection and replacement delivery in staging. | Staging evidence before external beta |
 | “Deferred to tomorrow” is incomplete | A deferred task is not proactively carried over or scheduled for review; it is only seen when the user initiates another turn. | **High** | Define carry-over semantics and schedule a next-day check-in or create a correctly dated task. | Before claiming automatic follow-up |
 | Reminder time resolution required hardening | The earlier parser could resolve `at 8` incorrectly and did not preserve a complete local-time decision. The typed resolver now blocks bare/fuzzy/contradictory/passed inputs, handles DST gaps and folds, confirms quiet-hour requests, and stores the confirmed UTC instant. | **Resolved locally** | Verify the confirmation conversation and UTC anchoring in staging before closing the release gate. | Staging evidence before launch |
-| Dashboard exposes unavailable modes | Recommender, Coach, Reflect, and WhatsApp are prominent despite being unavailable. Unavailable mode chips are still clickable. | **Medium** | Hide unfinished modes from customer builds or place them on a clearly labeled roadmap. | Before customer demo |
+| Dashboard exposes unavailable modes | Mode chips now use authenticated server availability; Planned and unentitled Modes have no actionable link. Specialized Modes remain Planned, and WhatsApp is unavailable. | **Resolved locally; deployment unverified** | Verify status labels, grant expiry, links and inaccessible Modes in the deployed UI. | Before customer demo |
 
 ## Onboarding, UX, design, and accessibility gaps
 
@@ -133,7 +139,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | Timezone onboarding assumed Nepal | New Telegram-only onboarding is blocked; the dashboard suggests the browser timezone and validates an explicit IANA timezone plus quiet hours. | **Resolved locally** | Verify representative timezones and mobile recovery in staging. | Staging evidence before general launch |
 | Auth lacks customer essentials | No forgot-password flow, password rules, resend-confirmation flow, legal consent, support link, or explanation of why an account is needed. | **High** | Add recovery and verification states, benefits, consent, and support contact. | Before launch |
 | Signed-in mobile layout is incomplete | The authenticated shell uses a persistent desktop sidebar without a mobile navigation replacement. | **High** | Add bottom navigation or a drawer and test all signed-in views at 320–430 px widths. | Before showing mobile users |
-| Accessibility is incomplete | Icon-only controls lack accessible names; labels are not explicitly bound to inputs; visually disabled mode controls remain actionable. | **Medium** | Add names, label associations, true disabled behavior, keyboard tests, status announcements, and automated accessibility checks. | Before public launch |
+| Accessibility is incomplete | Mode loading/failure states now announce status and unavailable Mode chips are non-actionable; broader keyboard, label and screen-reader verification remains open. | **Medium** | Verify accessible names, label associations, keyboard behavior and status announcements across the deployed UI. | Before public launch |
 | Data-loading failures are silent | Failed Supabase reads commonly render empty panels rather than error or retry states. | **High** | Add explicit loading, empty, permission, offline, failure, and retry states. | Before launch |
 | Branding is coherent but generic | The auth surface lacks a distinctive mark, product demonstration, trust cues, screenshots, and evidence. | **Medium** | Add a brand mark, a precise promise, a short demo, privacy cues, and beta/testimonial framing. | Before customer showing |
 
@@ -163,7 +169,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | No abuse, rate, or spend controls | An open bot can generate unbounded model calls and database writes. | **High** | Add per-user limits, quotas, spend alarms, usage logging, and an emergency disable control. | Before public access |
 | Task-status updates lacked an ownership predicate | Store updates include `user_id`, and the canonical resolve command atomically enforces Task ownership with Reminder cancellation. | **Resolved locally** | Re-run cross-tenant command assertions against the exact staging schema. | Staging evidence before public beta |
 | Full conversations have no lifecycle policy | Intimate messages, tasks, sessions, and feedback are retained without consent, export, deletion, or retention controls. | **Critical** | Define retention; implement account deletion, export, selective deletion, and provider-processing disclosure. | Before public launch |
-| Security assurance is incomplete | CI applies every checked-in migration through 016 and runs two-participant RLS regression assertions, the Mode grant/handoff SQL assertions, the Activation lock-order probe, and the schema-chain guard, but dependency audits and secret scanning are still absent. | **Partially resolved locally** | Add dependency and secret scans. | Before launch |
+| Security assurance is incomplete | CI is configured to apply every checked-in migration through 017 and runs two-participant RLS regression assertions, the Mode grant/handoff SQL assertions, the Activation lock-order probe, and the schema-chain guard, but dependency audits and secret scanning are still absent. | **Partially resolved locally** | Add dependency and secret scans. | Before launch |
 
 ## Operations, analytics, and feedback gaps
 
@@ -182,7 +188,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | Gap | Why it matters | Severity | Recommended fix | Gate |
 |---|---|---:|---|---|
 | README uses `git clone <repo-url>` | The advertised quick start cannot be followed literally. | **Medium** | Insert the real URL and validate setup from a clean machine. | Before open-source announcement |
-| Exact-version startup is proven only locally | README includes migrations 001–016, and CI applies the whole chain, its assertions, and `scripts/check_schema_chain.py`. The gate has never run against a real Supabase/PostgREST deployment, so the RPC response shape the gate reads is unverified. | **Medium** | Boot the staged application against staging and confirm `get_app_schema_version` satisfies the exact-version gate. | Before deploying this worktree |
+| Exact-version startup is proven only locally | README includes migrations 001–017, and CI is configured for the full chain, its assertions, and `scripts/check_schema_chain.py` against exact schema version 17. The gate has never run against a real Supabase/PostgREST deployment, so the RPC response shape the gate reads is unverified. | **Medium** | Boot the staged application against staging and confirm `get_app_schema_version` satisfies the exact-version gate. | Before deploying this worktree |
 | Documentation contradicts itself | Gemini 2.5 vs 3.5, Railway vs Render vs Fly, implemented vs future features, and test counts differ. | **High** | Establish a capability matrix and release checklist as the documentation source of truth. | Before customer showing |
 | Blog links and images are unfinished | The bot link is `t.me/YoursAmigoBot`, and referenced screenshots are missing. | **High** | Add verified links and real screenshots or keep the article unpublished. | Before publication |
 | No user help or FAQ | Users have no guidance for corrections, timezone changes, missed reminders, muting, deletion, pairing, or support. | **Medium** | Add `/help`, FAQ, troubleshooting, and a support contact. | Before public beta |
@@ -215,7 +221,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 1. Narrow the value proposition and first target user.
 2. Validate the locally implemented dashboard-first Activation path end to end in staging.
 3. Prove delivery and resolution of the guided first Reminder in staging.
-4. Hide unfinished modes and WhatsApp.
+4. Verify server-backed unavailable Mode labels and links; keep WhatsApp unavailable.
 5. Add real bot/dashboard links and screenshots.
 6. Improve auth recovery, support, consent, and trust cues.
 7. Prepare a deterministic three-minute demo and recording.

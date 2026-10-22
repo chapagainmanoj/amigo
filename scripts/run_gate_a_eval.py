@@ -25,6 +25,7 @@ from pydantic_ai.providers.google import GoogleProvider  # noqa: E402
 
 from src.agent.catalogue import build_registry  # noqa: E402
 from src.agent.modes import PLACEHOLDER_FACTS  # noqa: E402
+from src.channels.base import ChannelCapabilities  # noqa: E402
 from src.commands.base import CommandContext  # noqa: E402
 from src.commands.tasks import CreateTaskCommand, CreateTaskInput  # noqa: E402
 from src.config import settings  # noqa: E402
@@ -99,10 +100,30 @@ class RateLimitedGoogleModel(LoggedGoogleModel):
 class EvaluationChannel:
     """No-network channel for isolated model evaluations."""
 
-    async def send_message(self, chat_id, text, *, buttons=None) -> int:
+    channel_id = "evaluation"
+    capabilities = ChannelCapabilities(threads=False)
+
+    async def recipient_for(self, user):
+        return 0
+
+    async def recipient_matches(self, conversation, recipient):
+        return False
+
+    async def create_conversation(self, recipient, name):
+        raise NotImplementedError("Evaluation channel has no threads")
+
+    async def close_conversation(self, recipient, conversation):
+        return None
+
+    async def conversation_link(self, recipient, conversation=None):
+        return None
+
+    async def send_message(self, chat_id, text, *, buttons=None, conversation=None) -> int:
         return 1
 
-    async def edit_message_buttons(self, chat_id, message_id, *, buttons=None) -> None:
+    async def edit_message_buttons(
+        self, chat_id, message_id, *, buttons=None, conversation=None
+    ) -> None:
         return None
 
 

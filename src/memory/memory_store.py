@@ -92,6 +92,13 @@ class InMemoryStore:
 
     # ── User Profiles ──
 
+    async def get_command_receipt(self, user_id: str, idempotency_key: str) -> dict | None:
+        return copy.deepcopy(self._command_receipts.get((user_id, idempotency_key)))
+
+    async def get_user_by_id(self, user_id: str) -> dict | None:
+        user = self._users.get(user_id)
+        return copy.deepcopy(user) if user else None
+
     async def get_user_by_chat_id(self, chat_id: int) -> dict | None:
         for user in self._users.values():
             if user.get("telegram_chat_id") == chat_id:
@@ -162,29 +169,33 @@ class InMemoryStore:
 
     # ── Sessions ──
 
-    async def get_active_session(self, user_id: str) -> dict | None:
+    async def get_active_session(self, user_id: str, mode_id: str = "daily") -> dict | None:
         active = [
             s for s in self._sessions.values()
-            if s["user_id"] == user_id and s.get("ended_at") is None
+            if s["user_id"] == user_id and s.get("mode_id", "daily") == mode_id
+            and s.get("ended_at") is None
         ]
         if not active:
             return None
         active.sort(key=lambda s: s["started_at"], reverse=True)
         return dict(active[0])
 
-    async def create_session(self, user_id: str, session_type: str = "casual") -> dict:
+    async def create_session(
+        self, user_id: str, session_type: str = "casual", mode_id: str = "daily"
+    ) -> dict:
         session_id = _new_id()
         now = utc_now().isoformat()
         session = {
             "session_id": session_id,
             "user_id": user_id,
             "session_type": session_type,
+            "mode_id": mode_id,
             "started_at": now,
             "ended_at": None,
             "last_activity_at": now,
             "message_count": 0,
             "context_summary": None,
-            "active_mode_id": None,
+            "active_mode_id": None if mode_id == "daily" else mode_id,
         }
         self._sessions[session_id] = session
         return dict(session)
@@ -266,6 +277,49 @@ class InMemoryStore:
             self._sessions, user_id, session_id, handoff_id, confirm,
         )
 
+
+    async def get_mode_conversation(self, user_id: str, mode_id: str, channel: str) -> dict | None:
+        return await self._mode_state.get_conversation(user_id, mode_id, channel)
+
+    async def get_mode_by_conversation(
+        self, user_id: str, channel: str, endpoint: dict
+    ) -> str | None:
+        return await self._mode_state.mode_by_conversation(user_id, channel, endpoint)
+
+    async def save_mode_conversation(
+        self, user_id: str, mode_id: str, channel: str, endpoint: dict, *, alias: bool = False,
+    ) -> dict:
+        return await self._mode_state.save_conversation(
+            self._users.values(), user_id, mode_id, channel, endpoint, alias,
+        )
+
+    async def close_mode_conversation(self, user_id: str, mode_id: str, channel: str) -> None:
+        await self._mode_state.close_conversation(user_id, mode_id, channel)
+
+    async def list_mode_conversations(self, user_id: str | None = None) -> list[dict]:
+        return await self._mode_state.list_conversations(user_id)
+
+    async def claim_handoff_execution(
+        self, user_id: str, handoff_id: str, worker_id: str, *,
+        execution_session_id: str | None = None,
+    ) -> dict:
+        return await self._mode_state.claim_execution(
+            self._sessions, user_id, handoff_id, worker_id, execution_session_id,
+        )
+
+    async def save_handoff_execution_plan(
+        self, user_id: str, handoff_id: str, claim_token: str, plan: list[dict],
+    ) -> bool:
+        return await self._mode_state.save_execution_plan(user_id, handoff_id, claim_token, plan)
+
+    async def complete_handoff_execution(
+        self, user_id: str, handoff_id: str, claim_token: str,
+    ) -> bool:
+        return await self._mode_state.complete_execution(user_id, handoff_id, claim_token)
+
+    async def list_pending_handoff_executions(self, limit: int = 25) -> list[dict]:
+        return await self._mode_state.pending_executions(self._users.values(), limit)
+
     async def get_session_messages(self, session_id: str) -> list[dict]:
         return [
             {"role": m["role"], "content": m["content"], "created_at": m["created_at"]}
@@ -273,17 +327,21 @@ class InMemoryStore:
             if m["session_id"] == session_id
         ]
 
-    async def has_session_on_local_day(self, user_id: str, timezone: str) -> bool:
+    async def has_session_on_local_day(
+        self, user_id: str, timezone: str, mode_id: str = "daily"
+    ) -> bool:
         start_utc, end_utc = local_day_utc_range(timezone)
         for s in self._sessions.values():
-            if s["user_id"] != user_id:
+            if s["user_id"] != user_id or s.get("mode_id", "daily") != mode_id:
                 continue
             started = datetime.fromisoformat(s["started_at"])
             if start_utc <= started < end_utc:
                 return True
         return False
 
-    async def get_yesterday_summary(self, user_id: str, timezone: str) -> str | None:
+    async def get_yesterday_summary(
+        self, user_id: str, timezone: str, mode_id: str = "daily"
+    ) -> str | None:
         yesterday = yesterday_in_tz(timezone)
         start_utc, end_utc = local_day_utc_range(timezone, yesterday)
         for s in sorted(
@@ -291,7 +349,7 @@ class InMemoryStore:
             key=lambda x: x.get("ended_at") or "",
             reverse=True,
         ):
-            if s["user_id"] != user_id:
+            if s["user_id"] != user_id or s.get("mode_id", "daily") != mode_id:
                 continue
             if s.get("context_summary") is None:
                 continue

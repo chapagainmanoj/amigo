@@ -14,6 +14,7 @@ from datetime import UTC, timedelta
 
 from src.activation import ACTIVATION_POLICY_VERSION
 from src.bot.handlers import BotHandlers
+from src.bot.update_claims import ParticipantTurnSerializer
 from src.channels.cli import CLIChannel
 from src.commands.activation import CreateActivationTestCommand
 from src.commands.base import CommandContext
@@ -58,7 +59,7 @@ async def _seed_dev_user(store: InMemoryStore) -> dict:
     await store.acknowledge_activation_terms(auth_id, ACTIVATION_POLICY_VERSION)
     user = await store.create_user(DEV_CHAT_ID)
     user_id = user["user_id"]
-    await store.update_user(user_id, {"supabase_auth_id": auth_id})
+    await store.update_user(user_id, {"supabase_auth_id": auth_id, "primary_channel": "cli"})
     await store.update_activation_profile(
         auth_id, name="Dev", timezone=DEV_TIMEZONE, wake_time="07:30", sleep_time="23:00"
     )
@@ -155,9 +156,15 @@ async def run_cli(onboard: bool = False):
         reminder_scheduler=reminder_scheduler,
     )
 
+    serializer = ParticipantTurnSerializer()
+
+    async def maintain_modes():
+        await handlers.handoffs.recover(serializer)
+
     # Start the scheduler so reminders fire in the terminal
     reminder_scheduler.start()
     reminder_scheduler.start_outbox_worker(outbox_worker.drain_once)
+    await reminder_scheduler.start_mode_maintenance(maintain_modes)
 
     # Seed dev user unless --onboard flag is set
     if not onboard:
@@ -193,11 +200,12 @@ async def run_cli(onboard: bool = False):
             if channel.pending_buttons and text.isdigit():
                 callback_data = channel.resolve_button(text)
                 if callback_data:
-                    await handlers.handle_callback(
-                        chat_id=DEV_CHAT_ID,
-                        message_id=0,
-                        data=callback_data,
-                    )
+                    async with serializer.hold(DEV_CHAT_ID):
+                        await handlers.handle_callback(
+                            chat_id=DEV_CHAT_ID,
+                            message_id=0,
+                            data=callback_data,
+                        )
                     continue
                 else:
                     msg = "Invalid button choice. Type a valid number or a message."
@@ -205,7 +213,8 @@ async def run_cli(onboard: bool = False):
                     continue
 
             # Regular message
-            await handlers.handle_message(chat_id=DEV_CHAT_ID, text=text)
+            async with serializer.hold(DEV_CHAT_ID):
+                await handlers.handle_message(chat_id=DEV_CHAT_ID, text=text)
 
     except KeyboardInterrupt:
         print(f"\n{_DIM}👋 Interrupted. Bye!{_RESET}\n")

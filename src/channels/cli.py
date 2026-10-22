@@ -3,6 +3,8 @@
 import logging
 from itertools import count
 
+from src.channels.base import ChannelCapabilities, ConversationRef
+
 logger = logging.getLogger(__name__)
 
 # ANSI escape helpers
@@ -25,6 +27,9 @@ class CLIChannel:
     - pending_buttons tracks the most recent button set for dispatch.
     """
 
+    channel_id = "cli"
+    capabilities = ChannelCapabilities(actions=True, message_editing=True)
+
     def __init__(self):
         # Last set of buttons sent, so the input loop can resolve "1" → callback_data
         self.pending_buttons: list[dict[str, str]] = []
@@ -36,8 +41,10 @@ class CLIChannel:
         text: str,
         *,
         buttons: list[list[dict[str, str]]] | None = None,
+        conversation: ConversationRef | None = None,
     ) -> int | None:
         """Print a message to the terminal, optionally with numbered button choices."""
+        self._validate_conversation(chat_id, conversation)
         msg_id = next(_msg_counter)
 
         print(f"\n{_CYAN}{_BOLD}Amigo:{_RESET} {text}")
@@ -63,12 +70,14 @@ class CLIChannel:
         message_id: int,
         *,
         buttons: list[list[dict[str, str]]] | None = None,
+        conversation: ConversationRef | None = None,
     ) -> None:
         """Edit buttons on a previous message.
 
         Terminal is append-only, so we just clear the pending state
         or print new buttons.
         """
+        self._validate_conversation(chat_id, conversation)
         if buttons is None:
             # Buttons removed — clear pending
             if self._pending_message_id == message_id:
@@ -94,3 +103,28 @@ class CLIChannel:
         except (ValueError, IndexError):
             pass
         return None
+
+    async def create_conversation(self, chat_id: str | int, name: str) -> ConversationRef:
+        """The terminal has one endpoint; Mode commands select its canonical Mode."""
+        return ConversationRef(self.channel_id, {"chat_id": chat_id})
+
+    async def close_conversation(self, chat_id: str | int, conversation: ConversationRef) -> None:
+        self._validate_conversation(chat_id, conversation)
+
+    def _validate_conversation(self, chat_id, conversation):
+        if conversation is not None and (
+            conversation.channel != self.channel_id
+            or str(conversation.endpoint.get("chat_id")) != str(chat_id)
+        ):
+            raise ValueError("Conversation does not match the channel endpoint")
+
+    async def conversation_link(self, conversation: ConversationRef | None) -> str | None:
+        return None
+
+    async def recipient_matches(self, conversation: ConversationRef, recipient: str | int) -> bool:
+        return conversation.channel == self.channel_id and str(
+            conversation.endpoint.get("chat_id")
+        ) == str(recipient)
+
+    async def recipient_for(self, user: dict) -> str | int | None:
+        return user.get("telegram_chat_id") or user.get("chat_id") or "cli"

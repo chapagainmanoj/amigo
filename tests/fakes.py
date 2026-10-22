@@ -12,6 +12,7 @@ import uuid
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from src.channels.base import ChannelCapabilities, ConversationRef
 from src.commands.base import (
     IdempotencyConflictError,
     InvalidTransitionError,
@@ -59,12 +60,16 @@ def _elapsed_ms(later: str, earlier: str) -> int:
 class FakeChannel:
     """In-memory message channel. Records all sent messages for assertions."""
 
-    def __init__(self):
+    def __init__(self, *, threads=False, channel_id="telegram"):
+        self.channel_id = channel_id
+        self.capabilities = ChannelCapabilities(threads=threads, actions=True, message_editing=True)
+        self.conversations: list[ConversationRef] = []
+        self.closed_conversations: list[ConversationRef] = []
         self.sent: list[dict] = []  # [{chat_id, text, buttons}]
         self.edited: list[dict] = []
 
     async def send_message(
-        self, chat_id: str | int, text: str, *, buttons=None
+        self, chat_id: str | int, text: str, *, buttons=None, conversation=None
     ) -> int | None:
         msg_id = len(self.sent) + 1
         self.sent.append({
@@ -73,10 +78,38 @@ class FakeChannel:
             "buttons": buttons,
             "message_id": msg_id,
         })
+        if conversation is not None:
+            self.sent[-1]["conversation"] = conversation
         return msg_id
 
-    async def edit_message_buttons(self, chat_id, message_id, *, buttons=None):
+    async def edit_message_buttons(
+        self, chat_id, message_id, *, buttons=None, conversation=None
+    ):
         self.edited.append({"chat_id": chat_id, "message_id": message_id, "buttons": buttons})
+        if conversation is not None:
+            self.edited[-1]["conversation"] = conversation
+
+    async def create_conversation(self, chat_id, name):
+        endpoint = {"chat_id": chat_id}
+        if self.capabilities.threads:
+            endpoint["conversation_id"] = len(self.conversations) + 1
+        conversation = ConversationRef(self.channel_id, endpoint)
+        self.conversations.append(conversation)
+        return conversation
+
+    async def close_conversation(self, chat_id, conversation):
+        self.closed_conversations.append(conversation)
+
+    async def conversation_link(self, conversation):
+        return None
+
+    async def recipient_matches(self, conversation, recipient):
+        return conversation.channel == self.channel_id and str(
+            conversation.endpoint.get("chat_id")
+        ) == str(recipient)
+
+    async def recipient_for(self, user):
+        return user.get("telegram_chat_id") or user.get("chat_id")
 
     @property
     def last_text(self) -> str:
@@ -118,6 +151,13 @@ class FakeStore:
     async def verify_schema_version(self, expected: int) -> int:
         """Mirror the production Store's exact schema gate."""
         return require_schema_version(self.schema_version, expected)
+
+    async def get_command_receipt(self, user_id: str, idempotency_key: str) -> dict | None:
+        return copy.deepcopy(self.command_receipts.get((user_id, idempotency_key)))
+
+    async def get_user_by_id(self, user_id: str) -> dict | None:
+        user = next((row for row in self.users.values() if row["user_id"] == user_id), None)
+        return copy.deepcopy(user) if user else None
 
     async def get_user_by_chat_id(self, chat_id: int) -> dict | None:
         return self.users.get(chat_id)
@@ -176,23 +216,27 @@ class FakeStore:
         )
         return copy.deepcopy(row)
 
-    async def get_active_session(self, user_id: str) -> dict | None:
+    async def get_active_session(self, user_id: str, mode_id: str = "daily") -> dict | None:
         for s in reversed(self.sessions):
-            if s["user_id"] == user_id and s.get("ended_at") is None:
+            if (s["user_id"] == user_id and s.get("mode_id", "daily") == mode_id
+                    and s.get("ended_at") is None):
                 return s
         return None
 
-    async def create_session(self, user_id: str, session_type: str = "casual") -> dict:
+    async def create_session(
+        self, user_id: str, session_type: str = "casual", mode_id: str = "daily"
+    ) -> dict:
         session = {
             "session_id": str(uuid.uuid4()),
             "user_id": user_id,
             "session_type": session_type,
+            "mode_id": mode_id,
             "started_at": utc_now().isoformat(),
             "last_activity_at": utc_now().isoformat(),
             "ended_at": None,
             "message_count": 0,
             "context_summary": None,
-            "active_mode_id": None,
+            "active_mode_id": None if mode_id == "daily" else mode_id,
         }
         self.sessions.append(session)
         return session
@@ -273,26 +317,75 @@ class FakeStore:
             sessions, user_id, session_id, handoff_id, confirm,
         )
 
+
+    async def get_mode_conversation(self, user_id: str, mode_id: str, channel: str) -> dict | None:
+        return await self._mode_state.get_conversation(user_id, mode_id, channel)
+
+    async def get_mode_by_conversation(
+        self, user_id: str, channel: str, endpoint: dict
+    ) -> str | None:
+        return await self._mode_state.mode_by_conversation(user_id, channel, endpoint)
+
+    async def save_mode_conversation(
+        self, user_id: str, mode_id: str, channel: str, endpoint: dict, *, alias: bool = False,
+    ) -> dict:
+        return await self._mode_state.save_conversation(
+            self.users.values(), user_id, mode_id, channel, endpoint, alias,
+        )
+
+    async def close_mode_conversation(self, user_id: str, mode_id: str, channel: str) -> None:
+        await self._mode_state.close_conversation(user_id, mode_id, channel)
+
+    async def list_mode_conversations(self, user_id: str | None = None) -> list[dict]:
+        return await self._mode_state.list_conversations(user_id)
+
+    async def claim_handoff_execution(
+        self, user_id: str, handoff_id: str, worker_id: str, *,
+        execution_session_id: str | None = None,
+    ) -> dict:
+        return await self._mode_state.claim_execution(
+            {row["session_id"]: row for row in self.sessions}, user_id, handoff_id,
+            worker_id, execution_session_id,
+        )
+
+    async def save_handoff_execution_plan(
+        self, user_id: str, handoff_id: str, claim_token: str, plan: list[dict],
+    ) -> bool:
+        return await self._mode_state.save_execution_plan(user_id, handoff_id, claim_token, plan)
+
+    async def complete_handoff_execution(
+        self, user_id: str, handoff_id: str, claim_token: str,
+    ) -> bool:
+        return await self._mode_state.complete_execution(user_id, handoff_id, claim_token)
+
+    async def list_pending_handoff_executions(self, limit: int = 25) -> list[dict]:
+        return await self._mode_state.pending_executions(self.users.values(), limit)
+
     async def get_session_messages(self, session_id: str) -> list[dict]:
         return [m for m in self.messages if m["session_id"] == session_id]
 
-    async def has_session_on_local_day(self, user_id: str, timezone: str) -> bool:
+    async def has_session_on_local_day(
+        self, user_id: str, timezone: str, mode_id: str = "daily"
+    ) -> bool:
         from src.utils import local_day_utc_range
         start_utc, end_utc = local_day_utc_range(timezone)
         for session in self.sessions:
-            if session["user_id"] != user_id:
+            if session["user_id"] != user_id or session.get("mode_id", "daily") != mode_id:
                 continue
             started_at = datetime.fromisoformat(session["started_at"])
             if start_utc <= started_at < end_utc:
                 return True
         return False
 
-    async def get_yesterday_summary(self, user_id: str, timezone: str) -> str | None:
+    async def get_yesterday_summary(
+        self, user_id: str, timezone: str, mode_id: str = "daily"
+    ) -> str | None:
         from src.utils import local_day_utc_range, yesterday_in_tz
         start_utc, end_utc = local_day_utc_range(timezone, yesterday_in_tz(timezone))
         candidates = []
         for session in self.sessions:
-            if session["user_id"] != user_id or not session.get("context_summary"):
+            if (session["user_id"] != user_id or session.get("mode_id", "daily") != mode_id
+                or not session.get("context_summary")):
                 continue
             started_at = datetime.fromisoformat(session["started_at"])
             if start_utc <= started_at < end_utc:

@@ -181,3 +181,109 @@ owner topic spike or Phase 4 implementation. One commit per finding; no protecte
 
 **STOP:** spike script ready for owner run with TEST_BOT_TOKEN, --test-bot and private --chat-id.
 ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client observations required.
+
+
+## Phase 3 spike acceptance — 22 October 2026
+
+- Commit: `2ae3fcf` Accept channel-neutral Mode conversations after owner topic spike.
+- Files: docs/adr/0003-mode-topics.md; .scratch/modular-modes/proposals/topic-spike-runbook.md.
+- ADR Accepted. Owner Desktop/iOS PASS; Android not tested. User-created topics disabled;
+  bot-created topics still work. Unthreaded sends created topics; sends restore deleted topics.
+- Production requires topics on, user-created topics off. No unthreaded resend or dependency on
+  “thread not found”. Unknown conversations become Daily aliases, canonical Mode state is neutral.
+- No builder live Telegram call, production change, secret edit, or privacy promise change.
+
+## Phase 4 — channel-neutral routing, conversations and durable handoffs — 22 October 2026
+
+- Commit: this slice, `Route Modes through channel-neutral conversations and durable handoffs`.
+- Files touched:
+  - .github/workflows/ci.yml
+  - README.md
+  - docs/architecture.md
+  - docs/capability-matrix.md
+  - docs/pre-launch-gap-analysis.md
+  - scripts/check_schema_chain.py
+  - scripts/run_gate_a_eval.py
+  - scripts/smoke_check.py
+  - src/agent/context.py
+  - src/agent/modes.py
+  - src/agent/policies.py
+  - src/agent/runtime.py
+  - src/bot/handlers.py
+  - src/bot/turns.py
+  - src/channels/base.py
+  - src/channels/cli.py
+  - src/channels/telegram.py
+  - src/cli.py
+  - src/evaluation/gate_a.py
+  - src/main.py
+  - src/memory/context.py
+  - src/memory/memory_store.py
+  - src/memory/modes.py
+  - src/memory/sessions.py
+  - src/memory/store.py
+  - src/scheduler/reminders.py
+  - src/schema.py
+  - src/telemetry.py
+  - src/tools/context.py
+  - src/tools/toolsets.py
+  - src/turns.py
+  - tests/fakes.py
+  - tests/sql/app_schema_version.sql
+  - tests/test_reminders.py
+  - tests/test_scheduler.py
+  - tests/test_turn_processing.py
+  - web/src/components/ModeChips.jsx
+  - .scratch/modular-modes/proposals/017-independent-verification.md
+  - .scratch/modular-modes/proposals/issue04-coaching-store-design.md
+  - migrations/017_mode_conversations.sql
+  - scripts/check_mode_handoff_execution.py
+  - scripts/grant_mode.py
+  - src/agent/recommender.py
+  - src/api/modes.py
+  - src/bot/modes.py
+  - src/conversations.py
+  - src/handoffs.py
+  - src/tools/handoff_execution.py
+  - src/tools/handoffs.py
+  - src/tools/recommender.py
+  - tests/sql/assert_017_mode_conversations.sql
+  - tests/test_channel_conversations.py
+  - tests/test_grant_mode_script.py
+  - tests/test_mode_conversation_store.py
+  - tests/test_mode_delivery.py
+  - tests/test_mode_routing.py
+  - tests/test_modes_api.py
+- Protected edits: migrations/017_mode_conversations.sql; scripts/smoke_check.py. No .env,
+  Supabase, deployment, push or production model pin changes.
+- Migration independently reviewed by dev_runtime. Corrections and exact-byte SQL evidence:
+  .scratch/modular-modes/proposals/017-independent-verification.md. Full 37-file CI SQL chain
+  on fresh local PostgreSQL15 passed; schema-chain predecessor/gap checks passed at version17;
+  Activation lock-order probe passed 30 trials/155 calls. Separate fresh DB proved pre017
+  backfill, eight concurrent claims→one winner, expired-token fencing, fixed clock/bound Session,
+  append-only replay and terminal completion. No production DB used.
+- Canonical conversations + neutral alias endpoints. Every topics-enabled Telegram send resolves
+  an explicit conversation, including unpaired/pairing/access errors. Unknown incoming endpoints
+  select Daily without replacing canonical proactive delivery. Startup refuses unsafe production
+  topic settings. CLI and threaded fake share routing/history/grant/handoff contracts.
+- Mode Sessions isolate histories and yesterday summaries; withdrawal refuses instead of silently
+  running Daily. Reminder/recovery delivery re-resolves current primary endpoint and Daily.
+- Confirmation is single-use; persisted public model response steps precede side effects, preserve
+  opaque provider signatures and reject private reasoning. Stable clock, timing preferences,
+  target Session, command receipts and cancellation ID snapshots survive crashes. Recovery shares
+  the live webhook participant lock; CLI recovery shares its input lock. Lease is not a claim of
+  exactly-once external message delivery.
+- Daily instructions and Tool schema golden tests unchanged. Fingerprint closure strengthened to
+  include handlers and newly reachable modules; currency tests were not weakened.
+- Gate A certification: NOT CURRENT. check_gate_a_evidence.py refused because
+  evidence/gate-a/latest.json does not exist. No Gemini request made; final model evaluation
+  belongs to Phase5, no invented passing artifact or fallback evidence.
+- Validation: full suite **892 passed in 9.52s**; Ruff **All checks passed**; scheduler
+  smoke **in-memory APScheduler reminder fired through channel**; diff whitespace clean.
+  Focused routing/Store/currency suite previously **172 passed in 5.69s**, then recovery
+  regressions added; complete suite includes currency and unchanged Daily golden checks.
+- Frontend: ESLint passed; Vite production build passed (1986 modules). Dashboard reads /api/modes.
+- Provisional choices: neutral alias table alongside canonical conversations; retained response
+  steps for durable replay; no threadless fallback. Android and owner end-to-end flow remain
+  unverified. Live --channel smoke now requires linked account/schema to resolve explicit Daily;
+  scheduler smoke remains in memory. Owner applies reviewed migration/deploys separately.

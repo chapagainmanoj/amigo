@@ -4,9 +4,10 @@ The model never sees these values. The Mode runtime builds one per Turn and the 
 passes it to each Tool as `ctx.deps`.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
-from src.channels.base import MessageChannel
+from src.channels.base import ConversationRef, MessageChannel
 from src.memory.store import MemoryStore
 from src.scheduler.reminders import ReminderScheduler
 from src.utils import Clock, default_clock
@@ -25,3 +26,10 @@ class ToolContext:
     timezone: str
     turn_id: str
     clock: Clock = default_clock
+    conversation: ConversationRef | None = None
+    entered_by: str = "command"
+    mode_id: str = "daily"
+    mode_registry: Any = None
+    handoff_id: str | None = None
+    handoff_claim_token: str | None = None
+    handoff_cancel_targets: dict[str, list[str]] = field(default_factory=dict)

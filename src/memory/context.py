@@ -17,9 +17,11 @@ class ContextBuilder:
     def __init__(self, store: MemoryStore):
         self.store = store
 
-    async def get_yesterday_summary(self, user_id: str, timezone: str) -> str | None:
+    async def get_yesterday_summary(
+        self, user_id: str, timezone: str, *, mode_id: str = "daily"
+    ) -> str | None:
         """Get the most recent closed session's summary from yesterday (user's timezone)."""
-        return await self.store.get_yesterday_summary(user_id, timezone)
+        return await self.store.get_yesterday_summary(user_id, timezone, mode_id=mode_id)
 
     async def build_tasks_block(self, user_id: str, timezone: str) -> str | None:
         """Build a concise task status string for context."""

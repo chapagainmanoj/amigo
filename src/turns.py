@@ -114,6 +114,7 @@ def _record_unexecuted(context, error, started):
             turn_id=context.turn_id,
             user_id=context.user["user_id"],
             mode_id=mode_id,
+            entered_by=context.entered_by,
             requested_model=None,
             answering_model=None,
             fallback_used=False,

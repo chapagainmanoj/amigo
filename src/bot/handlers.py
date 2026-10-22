@@ -5,7 +5,8 @@ import logging
 from src.agent.runtime import ModeRuntime
 from src.bot.reminder_actions import ReminderActions
 from src.bot.turns import TurnProcessor
-from src.channels.base import MessageChannel
+from src.channels.base import ConversationRef, MessageChannel
+from src.handoffs import HandoffController
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
 from src.runtime_config import UnsafeProductionConfigurationError, parse_allowed_chat_ids
@@ -37,8 +38,16 @@ class BotHandlers:
             scheduler=reminder_scheduler,
             mode_runtime=mode_runtime,
         )
+        self.handoffs = HandoffController(
+            store, channel, reminder_scheduler, session_mgr, self.turn_processor.mode_runtime
+        )
+        if hasattr(channel, "default_conversation_resolver"):
+            channel.default_conversation_resolver = (
+                self.turn_processor.modes.conversations.ensure_by_chat
+            )
 
-    async def handle_message(self, chat_id: int, text: str, *, update_id: int = 0) -> None:
+    async def handle_message(self, chat_id: int, text: str, *, update_id: int = 0,
+        conversation: ConversationRef | None = None) -> None:
         """Handle incoming text message from user."""
         pairing_attempt = text.startswith("/start pair_")
         if not await self._is_allowed(chat_id, pairing_attempt=pairing_attempt):
@@ -68,14 +77,26 @@ class BotHandlers:
             await self._send_activation_required(chat_id, paired=True)
             return
 
-        await self.turn_processor.handle(chat_id, user, text, update_id=update_id)
+        await self.turn_processor.handle(
+            chat_id, user, text, update_id=update_id, conversation=conversation
+        )
 
-    async def handle_callback(self, chat_id: int, message_id: int, data: str) -> None:
+    async def handle_callback(self, chat_id: int, message_id: int, data: str, *,
+        conversation: ConversationRef | None = None,
+    ) -> None:
         """Handle inline keyboard button tap."""
         if not await self._is_allowed(chat_id):
             await self.channel.send_message(
                 chat_id, "Hey! Amigo isn't open to new users yet. Stay tuned 👋"
             )
+            return
+
+        if data.startswith("handoff:"):
+            user = await self.store.get_user_by_chat_id(chat_id)
+            if user and user.get("supabase_auth_id"):
+                activation = await self.store.get_activation_state(user["supabase_auth_id"])
+                if activation.get("completed"):
+                    await self.handoffs.handle_callback(user, chat_id, data, conversation)
             return
 
         # Legacy onboarding controls must not bypass Dashboard-first Activation.

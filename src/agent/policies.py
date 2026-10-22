@@ -31,3 +31,14 @@ class ActivatedParticipants:
 
     async def allows(self, context: ToolContext, mode: ModeDefinition) -> bool:
         return mode.entitlement == "activated"
+
+
+class GrantedParticipants:
+    """Activated Modes retain their policy; grant Modes require an active operator grant."""
+
+    async def allows(self, context: ToolContext, mode: ModeDefinition) -> bool:
+        if mode.entitlement == "activated":
+            return True
+        return mode.entitlement == "grant" and bool(
+            await context.store.get_active_mode_grant(context.user["user_id"], mode.id)
+        )

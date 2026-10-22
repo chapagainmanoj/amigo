@@ -1,45 +1,130 @@
-"""Telegram implementation of MessageChannel."""
+"""Telegram transport: all Bot API, topic identifiers and update decoding stay here."""
 
+import asyncio
 import logging
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, replace
+from typing import Literal
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 
+from src.channels.base import ChannelCapabilities, ConversationRef, ConversationUnavailableError
 from src.config import settings
 
 logger = logging.getLogger(__name__)
+_CAPABILITIES = ChannelCapabilities(
+    actions=True,
+    delivery_acknowledgement=True,
+    message_editing=True,
+    deep_links=True,
+    notifications=True,
+)
+
+
+@dataclass(frozen=True)
+class IncomingUpdate:
+    update_id: int
+    kind: Literal["message", "callback_query"]
+    chat_id: int
+    conversation: ConversationRef | None
+    text: str | None = None
+    message_id: int | None = None
+    data: str | None = None
+    callback_id: str | None = None
 
 
 class TelegramChannel:
-    """Telegram Bot API implementation of MessageChannel protocol."""
+    """Topics are a transport capability; the application owns their Mode assignments."""
 
-    def __init__(self):
+    channel_id = "telegram"
+    capabilities = _CAPABILITIES
+    default_conversation_resolver: (
+        Callable[[str | int], Awaitable[ConversationRef | None]] | None
+    ) = None
+
+    def __init__(self, *, token: str | None = None):
+        self._token = token
         self._bot: Bot | None = None
+        self._bootstrap: dict[str, ConversationRef] = {}
+        self._conversation_locks: dict[str, asyncio.Lock] = {}
 
     @property
     def bot(self) -> Bot:
-        """Build the Bot on first use rather than at construction.
-
-        python-telegram-bot rejects an empty token outright, so building it in __init__ meant
-        importing src.main required a real token — including during test collection, which never
-        dials Telegram.
-
-        Production is unaffected, but not because the timing is unchanged: validate_runtime_
-        configuration already rejects a malformed TELEGRAM_BOT_TOKEN at import, before anything
-        here is reached. What does change is development, where that check does not run — the
-        app used to refuse to import with a bad token and now starts, logs the failed webhook
-        setup as a warning, and 500s on webhook delivery instead.
-
-        getattr, not self._bot, so an instance built with __new__ (as tests/test_channels.py
-        does) reads as unset rather than raising AttributeError.
-        """
         if getattr(self, "_bot", None) is None:
-            self._bot = Bot(token=settings.telegram_bot_token)
+            self._bot = Bot(token=getattr(self, "_token", None) or settings.telegram_bot_token)
         return self._bot
 
     @bot.setter
     def bot(self, value: Bot) -> None:
-        """Tests substitute a double here; keep assignment working."""
         self._bot = value
+
+    async def initialize(self, *, production: bool = False) -> str | None:
+        info = await self.bot.get_me()
+        topics = getattr(info, "has_topics_enabled", False) is True
+        user_topics = getattr(info, "allows_users_to_create_topics", None)
+        self.capabilities = replace(_CAPABILITIES, threads=topics)
+        self._username = getattr(info, "username", None)
+        logger.info("telegram_topics enabled=%s user_created=%s", topics, user_topics)
+        if not topics or user_topics is not False:
+            if production:
+                raise RuntimeError(
+                    "Telegram requires Threaded Mode on and user-created threads off"
+                )
+            logger.warning("Telegram topic settings differ from the production requirement")
+        return getattr(info, "username", None)
+
+    async def create_conversation(self, chat_id: str | int, name: str) -> ConversationRef:
+        if not self.capabilities.threads:
+            return ConversationRef(self.channel_id, {"chat_id": chat_id})
+        topic = await self.bot.create_forum_topic(chat_id=chat_id, name=name)
+        thread_id = topic.message_thread_id
+        if type(thread_id) is not int or thread_id <= 0:
+            raise ValueError("Telegram returned an invalid conversation")
+        return ConversationRef(self.channel_id, {"chat_id": chat_id, "thread_id": thread_id})
+
+    async def close_conversation(self, chat_id: str | int, conversation: ConversationRef) -> None:
+        thread_id = self._thread_for(chat_id, conversation)
+        if thread_id is not None:
+            await self.bot.close_forum_topic(chat_id=chat_id, message_thread_id=thread_id)
+
+    def _thread_for(self, chat_id, conversation):
+        if conversation.channel != self.channel_id or str(
+            conversation.endpoint.get("chat_id")
+        ) != str(chat_id):
+            raise ValueError("Conversation does not match the channel endpoint")
+        if set(conversation.endpoint) - {"chat_id", "thread_id"}:
+            raise ValueError("Invalid Telegram conversation endpoint")
+        thread_id = conversation.endpoint.get("thread_id")
+        if thread_id is not None and (type(thread_id) is not int or thread_id <= 0):
+            raise ValueError("Invalid Telegram conversation endpoint")
+        return thread_id
+
+    async def _address(self, chat_id, conversation):
+        if conversation is not None:
+            thread_id = self._thread_for(chat_id, conversation)
+            if thread_id is not None or not self.capabilities.threads:
+                return conversation
+            raise ValueError("Threaded Telegram delivery requires a conversation thread")
+        if not self.capabilities.threads:
+            return None
+        resolver = self.default_conversation_resolver
+        if resolver is not None:
+            resolved = await resolver(chat_id)
+            if resolved is not None:
+                if self._thread_for(chat_id, resolved) is None:
+                    raise ValueError("Default conversation requires a thread")
+                return resolved
+        # Pairing/access errors may precede a durable participant identity. Even these replies
+        # need a stable explicit topic: an unaddressed send creates a fresh Telegram topic.
+        if not hasattr(self, "_bootstrap"):
+            self._bootstrap = {}
+            self._conversation_locks = {}
+        key = str(chat_id)
+        async with self._conversation_locks.setdefault(key, asyncio.Lock()):
+            if key not in self._bootstrap:
+                self._bootstrap[key] = await self.create_conversation(chat_id, "Daily")
+            return self._bootstrap[key]
 
     async def send_message(
         self,
@@ -47,26 +132,23 @@ class TelegramChannel:
         text: str,
         *,
         buttons: list[list[dict[str, str]]] | None = None,
+        conversation: ConversationRef | None = None,
     ) -> int | None:
-        """Send message via Telegram. Returns message_id for later editing.
-
-        Uses plain text by default — safer for dynamic LLM/task content.
-        """
-        reply_markup = None
-        if buttons:
-            keyboard = [
-                [InlineKeyboardButton(text=btn["text"], callback_data=btn["callback_data"])
-                 for btn in row]
-                for row in buttons
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
-        msg = await self.bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=reply_markup,
-        )
-        return msg.message_id
+        conversation = await self._address(chat_id, conversation)
+        kwargs = {"chat_id": chat_id, "text": text, "reply_markup": _markup(buttons)}
+        if conversation is not None:
+            thread_id = self._thread_for(chat_id, conversation)
+            if thread_id is not None:
+                kwargs["message_thread_id"] = thread_id
+        try:
+            message = await self.bot.send_message(**kwargs)
+        except BadRequest as error:
+            if conversation is not None and "message thread not found" in str(error).lower():
+                if hasattr(self, "_bootstrap"):
+                    self._bootstrap.pop(str(chat_id), None)
+                raise ConversationUnavailableError(conversation) from None
+            raise
+        return message.message_id
 
     async def edit_message_buttons(
         self,
@@ -74,19 +156,88 @@ class TelegramChannel:
         message_id: int,
         *,
         buttons: list[list[dict[str, str]]] | None = None,
+        conversation: ConversationRef | None = None,
     ) -> None:
-        """Edit inline keyboard on existing message. None removes buttons."""
-        reply_markup = None
-        if buttons:
-            keyboard = [
-                [InlineKeyboardButton(text=btn["text"], callback_data=btn["callback_data"])
-                 for btn in row]
-                for row in buttons
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
+        if conversation is not None:
+            self._thread_for(chat_id, conversation)
+        # Editing is addressed by the existing message ID; Bot API has no thread parameter.
         await self.bot.edit_message_reply_markup(
             chat_id=chat_id,
             message_id=message_id,
-            reply_markup=reply_markup,
+            reply_markup=_markup(buttons),
         )
+
+    async def conversation_from_update(self, data: dict) -> ConversationRef | None:
+        query = data.get("callback_query")
+        message = data.get("message") or (query.get("message") if isinstance(query, dict) else None)
+        if not isinstance(message, dict) or message.get("date") == 0:
+            return None
+        chat = message.get("chat")
+        chat_id = chat.get("id") if isinstance(chat, dict) else None
+        thread_id = message.get("message_thread_id")
+        if type(chat_id) is not int or type(thread_id) is not int or thread_id <= 0:
+            return None
+        return ConversationRef(self.channel_id, {"chat_id": chat_id, "thread_id": thread_id})
+
+    async def decode_update(self, data: dict) -> IncomingUpdate | None:
+        if not isinstance(data, dict) or type(data.get("update_id")) is not int:
+            return None
+        query = data.get("callback_query")
+        message = query.get("message") if isinstance(query, dict) else data.get("message")
+        if not isinstance(message, dict) or message.get("date") == 0:
+            return None  # CallbackQuery may contain an inaccessible message.
+        chat = message.get("chat")
+        chat_id = chat.get("id") if isinstance(chat, dict) else None
+        if type(chat_id) is not int:
+            return None
+        conversation = await self.conversation_from_update(data)
+        if isinstance(query, dict):
+            if not isinstance(query.get("data"), str) or type(message.get("message_id")) is not int:
+                return None
+            if not isinstance(query.get("id"), str):
+                return None
+            return IncomingUpdate(
+                data["update_id"],
+                "callback_query",
+                chat_id,
+                conversation,
+                message_id=message["message_id"],
+                data=query["data"],
+                callback_id=query["id"],
+            )
+        if isinstance(message.get("text"), str):
+            return IncomingUpdate(
+                data["update_id"], "message", chat_id, conversation, text=message["text"]
+            )
+        return None
+
+    async def conversation_link(self, conversation: ConversationRef | None) -> str | None:
+        if conversation is not None and conversation.channel != self.channel_id:
+            return None
+        username = getattr(self, "_username", None)
+        return f"https://t.me/{username}" if username else None
+
+    async def recipient_matches(self, conversation: ConversationRef, recipient: str | int) -> bool:
+        return conversation.channel == self.channel_id and str(
+            conversation.endpoint.get("chat_id")
+        ) == str(recipient)
+
+    async def recipient_for(self, user: dict) -> str | int | None:
+        return user.get("telegram_chat_id")
+
+    async def acknowledge_callback(self, callback_id: str) -> None:
+        await self.bot.answer_callback_query(callback_query_id=callback_id)
+
+
+def _markup(buttons):
+    if not buttons:
+        return None
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(text=button["text"], callback_data=button["callback_data"])
+                for button in row
+            ]
+            for row in buttons
+        ]
+    )

@@ -83,7 +83,7 @@ async def test_telegram_update_id_becomes_stable_turn_id():
     )
     captured_turn_ids = []
 
-    async def capture(context, _text):
+    async def capture(context, _text, *, requested_mode=None):
         captured_turn_ids.append(context.turn_id)
         return "ok"
 

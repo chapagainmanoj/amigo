@@ -10,7 +10,7 @@ from tests.fakes import FakeChannel, FakeStore
 
 class FailingChannel(FakeChannel):
     async def send_message(
-        self, chat_id: str | int, text: str, *, buttons=None
+        self, chat_id: str | int, text: str, *, buttons=None, conversation=None
     ) -> int | None:
         raise RuntimeError("telegram send failed")
 

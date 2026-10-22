@@ -15,7 +15,11 @@ from pydantic_ai import FunctionToolset, RunContext
 
 from src.commands.base import CommandContext, StaleVersionError
 from src.commands.later import ApplyLaterCommand, LaterPolicy
-from src.commands.reminders import ReminderScheduleInput, RescheduleReminderCommand
+from src.commands.reminders import (
+    CancelReminderCommand,
+    ReminderScheduleInput,
+    RescheduleReminderCommand,
+)
 from src.commands.tasks import MoveTaskPlanningDayCommand
 from src.time_resolution import TimeResolution, resolve_reminder_time
 from src.tools.context import ToolContext
@@ -227,9 +231,23 @@ async def cancel_reminders(
         task_id: The task_id to cancel reminders for.
     """
     deps = ctx.deps
-    tool = CancelRemindersTool(deps.store, deps.scheduler)
-    result = await tool.run(task_id=task_id, user_id=deps.user["user_id"])
-    count = len(result["reminder_ids"])
+    if deps.handoff_id:
+        # Replay only the IDs durably bound before dispatch, never a fresh set-based query.
+        targets = deps.handoff_cancel_targets.get(task_id, [])
+        for reminder_id in targets:
+            await CancelReminderCommand(deps.store).run(
+                CommandContext(
+                    actor_user_id=deps.user["user_id"], surface="telegram",
+                    idempotency_key=f"telegram:{deps.turn_id}:cancel-reminder:{reminder_id}",
+                ),
+                reminder_id=reminder_id,
+            )
+            deps.scheduler.cancel_reminder(deps.user["user_id"], reminder_id)
+        count = len(targets)
+    else:
+        tool = CancelRemindersTool(deps.store, deps.scheduler)
+        result = await tool.run(task_id=task_id, user_id=deps.user["user_id"])
+        count = len(result["reminder_ids"])
     return f"Cancelled {count} reminder(s)."
 
 
@@ -287,6 +305,25 @@ async def _schedule_resolved_reminder(
         surface="telegram",
         idempotency_key=f"telegram:{deps.turn_id}:schedule-reminder:{input_fingerprint}",
     )
+    if deps.handoff_id:
+        receipt = await deps.store.get_command_receipt(
+            deps.user["user_id"], context.idempotency_key
+        )
+        if receipt is not None:
+            # A committed schedule may now look like a reschedule. Replay its owned receipt,
+            # never choose a different command from the changed active-Reminder state.
+            reminder = receipt["result"]["reminder"]
+            if (
+                reminder["user_id"] != deps.user["user_id"]
+                or reminder["task_id"] != task["task_id"]
+                or reminder.get("intended_timezone") != resolution.timezone
+            ):
+                raise ValueError("Handoff Reminder receipt mismatch")
+            from datetime import datetime
+
+            if datetime.fromisoformat(reminder["scheduled_time"]) != resolution.utc_instant:
+                raise ValueError("Handoff Reminder receipt time mismatch")
+            return resolution.exact_label
     active = [
         reminder
         for reminder in await deps.store.get_pending_reminders(deps.user["user_id"])

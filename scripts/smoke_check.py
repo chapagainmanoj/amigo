@@ -6,7 +6,9 @@ Usage:
     python scripts/smoke_check.py --all
 
 The channel check sends a real Telegram message using TELEGRAM_BOT_TOKEN and
-SMOKE_TEST_CHAT_ID. The scheduler check is intentionally in-memory: it proves
+SMOKE_TEST_CHAT_ID, resolving the linked participant's Daily conversation through the Store.
+The channel check also requires the configured database/schema.
+The scheduler check is intentionally in-memory: it proves
 APScheduler can fire through the MessageChannel interface without writing to
 production Supabase tables.
 """
@@ -20,17 +22,22 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from telegram import Bot
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.channels.base import ChannelCapabilities  # noqa: E402
 from src.scheduler.reminders import ReminderScheduler  # noqa: E402
 
 
 class SmokeChannel:
     """Recording channel used by the in-memory scheduler smoke check."""
+
+    channel_id = "smoke"
+    capabilities = ChannelCapabilities()
+
+    async def recipient_for(self, user):
+        return user["chat_id"]
 
     def __init__(self):
         self.sent: list[dict] = []
@@ -42,6 +49,7 @@ class SmokeChannel:
         text: str,
         *,
         buttons: list[list[dict[str, str]]] | None = None,
+        conversation=None,
     ) -> int:
         message_id = len(self.sent) + 1
         self.sent.append({
@@ -59,6 +67,7 @@ class SmokeChannel:
         message_id: int,
         *,
         buttons: list[list[dict[str, str]]] | None = None,
+        conversation=None,
     ) -> None:
         return None
 
@@ -78,6 +87,11 @@ class SmokeStore:
                 "updates": [],
             }
         }
+
+    async def get_user_by_id(self, user_id):
+        if user_id == "smoke-user":
+            return {"user_id": user_id, "chat_id": 0, "primary_channel": "smoke"}
+        return None
 
     async def claim_reminder_for_send(
         self, reminder_id: str, user_id: str, idempotency_key: str
@@ -147,15 +161,28 @@ async def smoke_channel() -> None:
     if not chat_id:
         raise RuntimeError("SMOKE_TEST_CHAT_ID is required for --channel")
 
-    bot = Bot(token=token)
-    message = await bot.send_message(
-        chat_id=chat_id,
-        text=(
-            "Amigo smoke check: Telegram channel OK at "
-            f"{datetime.now(UTC).isoformat()}"
-        ),
+    from src.channels.telegram import TelegramChannel
+    from src.config import settings
+    from src.conversations import ModeConversationService
+    from src.memory.store import MemoryStore
+    from src.runtime_config import is_production
+    from src.schema import EXPECTED_SCHEMA_VERSION
+
+    store = MemoryStore()
+    await store.connect()
+    await store.verify_schema_version(EXPECTED_SCHEMA_VERSION)
+    user = await store.get_user_by_chat_id(int(chat_id))
+    if not user:
+        raise RuntimeError("SMOKE_TEST_CHAT_ID must name a linked test participant")
+    channel = TelegramChannel(token=token)
+    await channel.initialize(production=is_production(settings))
+    conversation = await ModeConversationService(store, channel).ensure(user)
+    message_id = await channel.send_message(
+        int(chat_id),
+        "Amigo smoke check: Telegram channel OK at " + datetime.now(UTC).isoformat(),
+        conversation=conversation,
     )
-    print(f"channel: sent Telegram smoke message {message.message_id} to {chat_id}")
+    print(f"channel: sent Telegram smoke message {message_id} to {chat_id}")
 
 
 async def smoke_scheduler() -> None:

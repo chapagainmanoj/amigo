@@ -8,11 +8,11 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from telegram import Update
 
 from src.api.activation import router as activation_router
 from src.api.dashboard import router as dashboard_router
 from src.api.dependencies import get_activated_user
+from src.api.modes import router as modes_router
 from src.api.pairing import router as pairing_router
 from src.api.reminders import router as reminders_router
 from src.api.tasks import router as tasks_router
@@ -66,6 +66,26 @@ update_coordinator = TelegramUpdateCoordinator(store)
 bot_username: str | None = None
 
 
+async def _recover_pending_handoffs() -> None:
+    """Recovery uses the same recipient lock as webhook Turns, without recursive locking."""
+    for pending in await store.list_pending_handoff_executions():
+        user = await store.get_user_by_id(pending["user_id"])
+        if user is None:
+            continue
+        recipient = await channel.recipient_for(user)
+        if recipient is None:
+            continue
+        async with update_coordinator.serializer.hold(recipient):
+            # Pairing or deletion may change while waiting behind the participant's live Turn.
+            user = await store.get_user_by_id(pending["user_id"])
+            if user is None or await channel.recipient_for(user) != recipient:
+                continue
+            auth_id = user.get("supabase_auth_id")
+            if not auth_id or not (await store.get_activation_state(auth_id)).get("completed"):
+                continue
+            await handlers.handoffs.execute(user, pending)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start/stop scheduler and set Telegram webhook on app lifecycle."""
@@ -73,7 +93,16 @@ async def lifespan(app: FastAPI):
     # Startup. Checked here rather than at import: this module is imported during test
     # collection, which never runs an agent, but a process that reaches lifespan intends to.
     require_agent_credentials(settings)
+    # Establish capabilities before schedulers can deliver any message.
+    bot_username = await channel.initialize(production=is_production(settings))
+    app.state.bot_username = bot_username
     await initialize_runtime(store, reminder_scheduler, outbox_worker)
+
+    async def maintain_modes():
+        await handlers.turn_processor.modes.conversations.close_expired()
+        await _recover_pending_handoffs()
+
+    await reminder_scheduler.start_mode_maintenance(maintain_modes)
 
     # Set webhook
     try:
@@ -84,9 +113,6 @@ async def lifespan(app: FastAPI):
         )
         logger.info("Webhook set to %s", webhook_url)
 
-        bot_info = await channel.bot.get_me()
-        bot_username = bot_info.username
-        app.state.bot_username = bot_username
         logger.info("Fetched bot username: %s", bot_username)
     except Exception as e:
         if is_production(settings):
@@ -113,12 +139,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Amigo", lifespan=lifespan)
 app.state.store = store
+app.state.channel = channel
 app.state.bot_username = bot_username
 app.include_router(activation_router)
 app.include_router(dashboard_router)
 app.include_router(pairing_router)
 app.include_router(tasks_router)
 app.include_router(reminders_router)
+app.include_router(modes_router)
 
 # CORS Setup
 origins = [
@@ -142,7 +170,6 @@ app.add_middleware(
 )
 
 
-
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
     """Receive Telegram updates via webhook."""
@@ -152,42 +179,47 @@ async def telegram_webhook(request: Request):
         raise HTTPException(status_code=403, detail="Invalid secret token")
 
     data = await request.json()
-    update = Update.de_json(data, channel.bot)
+    update = await channel.decode_update(data)
+    if update is None:
+        return {"ok": True}
 
-    if update.message and update.message.text:
-        message = update.message
+    if update.kind == "message":
 
         async def process_message() -> None:
             await handlers.handle_message(
-                chat_id=message.chat_id,
-                text=message.text,
+                chat_id=update.chat_id,
+                text=update.text,
                 update_id=update.update_id,
+                conversation=update.conversation,
             )
 
         result = await update_coordinator.run(
             update_id=update.update_id,
-            chat_id=message.chat_id,
+            chat_id=update.chat_id,
             update_kind="message",
             process=process_message,
         )
         return {"ok": True, "outcome": result.outcome}
 
-    if update.callback_query:
-        query = update.callback_query
+    if update.kind == "callback_query":
 
         async def process_callback() -> None:
             await handlers.handle_callback(
-                chat_id=query.message.chat_id,
-                message_id=query.message.message_id,
-                data=query.data,
+                chat_id=update.chat_id,
+                message_id=update.message_id,
+                data=update.data,
+                conversation=update.conversation,
             )
+
+        async def acknowledge() -> None:
+            await channel.acknowledge_callback(update.callback_id)
 
         result = await update_coordinator.run(
             update_id=update.update_id,
-            chat_id=query.message.chat_id,
+            chat_id=update.chat_id,
             update_kind="callback_query",
             process=process_callback,
-            acknowledge=query.answer,
+            acknowledge=acknowledge,
         )
         return {"ok": True, "outcome": result.outcome}
 

@@ -53,6 +53,7 @@ GATE_A_ENTRY_MODULES = (
     "src.memory.memory_store",
     "src.scheduler.reminders",
     "src.turns",
+    "src.bot.handlers",
 )
 INVALIDATING_INPUT_PATHS = (
     "scripts/run_gate_a_eval.py",
@@ -66,17 +67,24 @@ INVALIDATING_INPUT_PATHS = (
     "src/agent/registry.py",
     "src/agent/runtime.py",
     "src/agent/safety.py",
+    "src/bot/handlers.py",
     "src/bot/keyboards.py",
+    "src/bot/modes.py",
+    "src/bot/pairing.py",
+    "src/bot/reminder_actions.py",
+    "src/bot/turns.py",
     "src/channels/base.py",
     "src/commands/base.py",
     "src/commands/later.py",
     "src/commands/reminders.py",
     "src/commands/tasks.py",
     "src/config.py",
+    "src/conversations.py",
     "src/dashboard_snapshot.py",
     "src/db/supabase.py",
     "src/evaluation/gate_a.py",
     "src/evaluation/model_policy.py",
+    "src/handoffs.py",
     "src/memory/activation.py",
     "src/memory/context.py",
     "src/memory/later.py",
@@ -84,20 +92,23 @@ INVALIDATING_INPUT_PATHS = (
     "src/memory/modes.py",
     "src/memory/pairing.py",
     "src/memory/reminders.py",
+    "src/memory/sessions.py",
     "src/memory/store.py",
     "src/memory/tasks.py",
     "src/model_routing.py",
     "src/model_usage.py",
     "src/runtime_config.py",
-    "src/schema.py",
     "src/scheduler/reminders.py",
+    "src/schema.py",
+    "src/telemetry.py",
     "src/time_resolution.py",
     "src/tools/context.py",
+    "src/tools/handoffs.py",
+    "src/tools/handoff_execution.py",
+    "src/tools/observed.py",
     "src/tools/reminders.py",
     "src/tools/tasks.py",
     "src/tools/toolsets.py",
-    "src/tools/observed.py",
-    "src/telemetry.py",
     "src/turns.py",
     "src/utils/__init__.py",
 )
@@ -113,7 +124,13 @@ def tool_schema(mode_id: str = "daily", *, mode_definition=None) -> list[dict]:
     from src.agent.catalogue import build_registry
 
     mode = mode_definition if mode_definition is not None else build_registry()[mode_id]
-    tools = {name: tool for toolset in mode.toolsets for name, tool in toolset.tools.items()}
+    toolsets = list(mode.toolsets)
+    if mode.handoffs:
+        from src.tools.handoffs import HANDOFFS
+
+        if HANDOFFS not in toolsets:
+            toolsets.append(HANDOFFS)
+    tools = {name: tool for toolset in toolsets for name, tool in toolset.tools.items()}
     return [
         {
             "name": name,

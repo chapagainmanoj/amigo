@@ -37,6 +37,7 @@ class TurnRecord:
     input_tokens: int
     output_tokens: int
     estimated_cost_usd: float | None
+    entered_by: str = "command"
 
 
 def estimated_cost(usage, model: str | None) -> float | None:

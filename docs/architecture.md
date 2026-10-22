@@ -8,6 +8,7 @@ amigo/
 │   ├── main.py             # FastAPI app, Telegram webhook, lifecycle
 │   ├── cli.py              # CLI entrypoint for local dev (no Telegram)
 │   ├── turns.py            # Session transcript + Mode execution orchestration
+│   ├── conversations.py    # Channel-neutral Mode conversation resolution/lifecycle
 │   ├── config.py           # Pydantic Settings from .env
 │   ├── __main__.py         # python -m src.cli module entrypoint
 │   ├── agent/              # Pydantic AI agent with tool-calling loop
@@ -54,9 +55,14 @@ amigo/
 - `src/bot/` — Telegram-specific glue. `BotHandlers` routes Pairing deep links first, permits
   Reminder callbacks needed by the Activation test, and requires canonical Activation completion
   before ordinary text reaches Turn processing. Legacy Telegram-only onboarding is unreachable.
-- `src/channels/` — `MessageChannel` Protocol with `TelegramChannel` and
-  `CLIChannel` implementations. All bot code depends on the protocol, never
-  on a concrete channel.
+- `src/channels/` — `MessageChannel`, immutable `ConversationRef` addresses, and explicit
+  capability declarations. Telegram owns topic IDs, Bot API decoding, private-chat deep links,
+  and the defensive unavailable-thread branch; CLI declares no threads and uses in-chat Mode
+  commands. Application code passes opaque conversation references rather than provider thread IDs.
+- `src/conversations.py` — `ModeConversationService` resolves or creates a Mode's channel
+  conversation and closes unavailable specialized conversations. Unknown incoming conversations
+  become additional Daily aliases; the model does not choose provider endpoints. A Mode can have
+  several incoming conversations, rather than assuming one topic per Mode.
 - `src/memory/` — `MemoryStore` (Supabase CRUD), `InMemoryStore`
   (dict-backed dev replacement), `SessionManager`, `ContextBuilder`. Production Store and Auth
   paths use Supabase's native asynchronous client; each Store operation emits content-free
@@ -87,12 +93,24 @@ amigo/
   construction and synchronous Gate A schema capture. All ordinary Mode policy, registry,
   runtime, and Turn-orchestrator methods are asynchronous.
 - **Fail-closed startup**: The Supabase Store must report the exact application schema version
-  (currently 16) before the scheduler, durable-outbox drain, Reminder reload, or Telegram webhook
+  (currently 17) before the scheduler, durable-outbox drain, Reminder reload, or Telegram webhook
   starts.
-- **Dormant Mode authority schema**: migrations 015–016 order crossed Pairing locks and add
-  Session-active-Mode, trial-grant, immutable grant-event, and confirmed-handoff primitives. The
-  schema is adopted, but participant-facing switching remains unavailable until its Store, policy,
-  command, Tool, and callback application slice is implemented and reviewed.
+- **Mode authority and addressing**: migrations 015–017 order crossed Pairing locks and add
+  Session-active-Mode, trial-grant, immutable grant-event, confirmed-handoff, and channel-neutral
+  conversation primitives. `mode_conversations` binds an owned Mode to a channel's opaque JSON
+  endpoint; linked endpoint IDs are not participant identity. Sessions and history are scoped by
+  `(user_id, mode_id)`. Confirmed handoffs use leased execution claims with stable replay keys;
+  confirmation and execution are separate durable transitions. Only Daily is live. Application,
+  migration and owner test-bot evidence must be reviewed before deployment.
+- **Capability-based routing**: threaded channels map incoming conversations to Modes; unknown
+  addresses map to Daily. Non-threaded channels use `/mode` and `/daily`, and Telegram retains
+  these commands for older clients. Both paths use the same Mode/entitlement resolver. An expired
+  grant or withdrawn Mode is refused in its conversation instead of silently executing Daily.
+- **Explicit threaded delivery**: Telegram production requires Threaded Mode enabled and
+  user-created threads disabled. Each outgoing message carries a conversation; a deleted private
+  topic may be restored by Telegram on send. Reminders resolve the participant's primary channel
+  and Daily address at delivery time, keeping provider endpoints out of durable outbox payloads.
+  The current implementation supports Telegram and local CLI, not a new primary-channel switcher.
 - **Canonical Activation**: Normal dashboard APIs and Telegram Turns remain locked until durable
   acknowledgement, Pairing, validated profile, actual test-Reminder delivery, and Telegram
   Done/Skip/Later evidence produce a completed Activation state. The dashboard snapshot embeds
@@ -215,7 +233,9 @@ graph TD
 
 | Abstraction | Location | Purpose |
 |-------------|----------|---------|
-| `MessageChannel` | `channels/base.py` | Protocol for sending messages (Telegram, CLI) |
+| `MessageChannel` | `channels/base.py` | Capability-based delivery and conversation lifecycle (Telegram, CLI) |
+| `ConversationRef` | `channels/base.py` | Immutable channel plus opaque endpoint |
+| `ModeConversationService` | `conversations.py` | Owned Mode/address resolution and grant-expiry maintenance |
 | `ToolContext` | `tools/context.py` | Per-Turn dependency injection for Tools |
 | Store (duck-typed) | `memory/store.py` | `MemoryStore`, `InMemoryStore` |
 | `ModeDefinition` | `agent/modes.py` | A Mode declared as data |
@@ -227,9 +247,12 @@ graph TD
 
 ### Adding a new channel
 
-1. Create `src/channels/your_channel.py` implementing `MessageChannel`.
-2. Wire it in a new entrypoint or add a branch in `main.py`.
-3. No changes needed in `bot/`, `agent/`, or `scheduler/`.
+1. Create `src/channels/your_channel.py` implementing `MessageChannel`, its capabilities, opaque
+   conversation addressing/lifecycle, participant recipient resolution, and deep-link behavior.
+2. Declare the explicit in-chat command fallback when threads are unsupported. Provider-specific
+   update parsing and endpoint identifiers remain inside the channel adapter.
+3. Wire it in a new entrypoint. Decision 16's demand and cross-channel release gates still apply;
+   implementing the protocol does not authorize another production channel.
 
 ### Adding a new LLM provider
 
@@ -251,6 +274,15 @@ applicable model-evaluation gate before release.
 2. The function receives `RunContext[ToolContext]` and performs side effects through a Command.
    Its name, docstring, and signature become the schema the model sees, and changing Daily's is
    a Gate A invalidating change.
+
+### Mode access and dashboard
+
+`GET /api/modes` uses the activated participant's identity and owned grants/conversations to expose
+availability, grant expiry and channel-owned chat links. It cannot grant access or enable a Mode.
+`scripts/grant_mode.py` is the operator grant/revoke entry point: a reason is mandatory, active
+trial grants are capped at five per Mode, default expiry is 14 days, and only live Modes can be
+granted. Successful grants ensure their conversation; scheduler maintenance closes unavailable
+specialized conversations. Planned catalogue entries remain non-actionable in dashboard chips.
 
 ### Adding a new Mode
 
@@ -339,8 +371,8 @@ No Supabase writes. Safe for CI/CD.
   separation decision (superseded by ADR 0002).
 - [ADR 0002](adr/0002-agentic-tool-calling-loop.md) — Agentic tool-calling
   loop replacing the classify→extract→resolve pipeline.
-- [ADR 0003](adr/0003-mode-topics.md) — Proposed: one Telegram topic per Mode
-  in the participant's private chat.
+- [ADR 0003](adr/0003-mode-topics.md) — Accepted: Telegram topics behind channel-neutral Mode
+  conversations; owner spike passed on Desktop and iOS, Android untested.
 - [pre-launch implementation plan](pre-launch-implementation-plan.md) — Current release roadmap
   and implementation sequence.
 - [staging performance evidence](staging-performance-evidence.md) — Controlled before/after
@@ -357,4 +389,6 @@ No Supabase writes. Safe for CI/CD.
 - [migrations/015_ordered_pairing_locks.sql](../migrations/015_ordered_pairing_locks.sql)
   — Total-order identity locking for concurrent Pairing.
 - [migrations/016_session_modes_grants_handoffs.sql](../migrations/016_session_modes_grants_handoffs.sql)
-  — Dormant Session Mode, trial-grant, audit, and confirmed-handoff authority schema.
+  — Session Mode, trial-grant, audit, and confirmed-handoff authority schema.
+- [migrations/017_mode_conversations.sql](../migrations/017_mode_conversations.sql)
+  — Channel-neutral conversation addresses, Mode-scoped Sessions, and handoff execution claims.

@@ -6,10 +6,12 @@ This module never authorizes model arguments, executes a carried request, or que
 
 import asyncio
 import copy
+import json
 import re
 import uuid
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Literal, NotRequired, TypedDict
 
 from src.utils import utc_now
@@ -48,11 +50,33 @@ class ModeHandoff(TypedDict):
     expires_at: str
     resolved_at: str | None
     resolution: Literal["confirmed", "declined", "expired", "unavailable"] | None
+    execution_claimed_at: str | None
+    execution_claim_token: str | None
+    execution_worker_id: str | None
+    execution_session_id: str | None
+    execution_clock_at: str | None
+    execution_attempts: int
+    executed_at: str | None
+    execution_plan: list[dict]
 
 
 class ModeResult(TypedDict):
     status: Literal["invalid", "unavailable", "set", "pending", "confirmed", "declined", "expired"]
     handoff: NotRequired[ModeHandoff]
+
+
+def _json_identity(value: object) -> str:
+    """Match JSONB equality without conflating booleans with numbers."""
+    def normalize(value):
+        if isinstance(value, dict):
+            return {key: normalize(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [normalize(item) for item in value]
+        if type(value) is float and value.is_integer():
+            return int(Decimal(str(value)))
+        return value
+
+    return json.dumps(normalize(value), sort_keys=True, allow_nan=False)
 
 
 async def _valid_mode(value: str | None) -> bool:
@@ -71,6 +95,8 @@ class LocalModeState:
         self.grants: dict[str, ModeGrant] = {}
         self.events: list[dict] = []
         self.handoffs: dict[str, ModeHandoff] = {}
+        self.conversations: dict[tuple[str, str, str], dict] = {}
+        self.endpoints: dict[tuple[str, str], dict] = {}
         self.lock = asyncio.Lock()
 
     async def _event(self, grant: ModeGrant, action: str, operator: str, reason: str) -> None:
@@ -267,6 +293,9 @@ class LocalModeState:
                 expires_at=(now + MODE_HANDOFF_TTL).isoformat(),
                 resolved_at=None,
                 resolution=None,
+                execution_claimed_at=None, execution_claim_token=None, execution_worker_id=None,
+                execution_session_id=None, execution_clock_at=None, execution_attempts=0,
+                executed_at=None, execution_plan=[],
             )
             self.handoffs[row["handoff_id"]] = row
             return {"status": "pending", "handoff": copy.deepcopy(row)}
@@ -322,3 +351,137 @@ class LocalModeState:
                 )
                 return {"status": "confirmed", "handoff": copy.deepcopy(row)}
             return {"status": resolution}
+
+
+    async def get_conversation(self, user_id: str, mode_id: str, channel: str) -> dict | None:
+        async with self.lock:
+            row = self.conversations.get((user_id, mode_id, channel))
+            return copy.deepcopy(row) if row and row["closed_at"] is None else None
+
+    async def mode_by_conversation(self, user_id: str, channel: str, endpoint: dict) -> str | None:
+        key = _json_identity(endpoint)
+        async with self.lock:
+            row = self.endpoints.get((channel, key))
+            return row["mode_id"] if row and row["user_id"] == user_id else None
+
+    async def save_conversation(
+        self, users: Iterable[dict], user_id: str, mode_id: str, channel: str,
+        endpoint: dict, alias: bool,
+    ) -> dict:
+        if (not await _valid_mode(mode_id) or not await _valid_mode(channel)
+                or type(endpoint) is not dict or not endpoint):
+            raise ValueError("Invalid Mode conversation")
+        key = _json_identity(endpoint)
+        async with self.lock:
+            if not any(user["user_id"] == user_id for user in users):
+                raise ValueError("Invalid conversation owner")
+            previous = self.endpoints.get((channel, key))
+            if previous and (previous["user_id"], previous["mode_id"]) != (user_id, mode_id):
+                raise ValueError("Conversation endpoint already assigned")
+            canonical = self.conversations.get((user_id, mode_id, channel))
+            if not alias and canonical and canonical["closed_at"] is None:
+                return copy.deepcopy(canonical)
+            row = previous or dict(user_id=user_id, mode_id=mode_id, channel=channel,
+                                   endpoint=copy.deepcopy(endpoint),
+                                   created_at=utc_now().isoformat(),
+                                   closed_at=None)
+            row["closed_at"] = None
+            self.endpoints[channel, key] = row
+            canonical_key = (user_id, mode_id, channel)
+            if not alias or canonical_key not in self.conversations:
+                self.conversations[canonical_key] = row
+            return copy.deepcopy(row)
+
+    async def close_conversation(self, user_id: str, mode_id: str, channel: str) -> None:
+        async with self.lock:
+            for row in self.endpoints.values():
+                if (row["user_id"], row["mode_id"], row["channel"]) == (user_id, mode_id, channel):
+                    row["closed_at"] = utc_now().isoformat()
+
+    async def list_conversations(self, user_id: str | None) -> list[dict]:
+        async with self.lock:
+            return copy.deepcopy([row for row in self.conversations.values()
+                                  if user_id is None or row["user_id"] == user_id])
+
+    async def claim_execution(
+        self, sessions: dict[str, dict], user_id: str, handoff_id: str, worker_id: str,
+        execution_session_id: str | None,
+    ) -> dict:
+        if not worker_id or not worker_id.strip():
+            return {"status": "invalid"}
+        async with self.lock:
+            row = self.handoffs.get(handoff_id)
+            if not row or row["user_id"] != user_id or row["resolution"] != "confirmed":
+                return {"status": "unavailable"}
+            if row.get("executed_at"):
+                return {"status": "executed"}
+            now = await _time(utc_now())
+            if (row.get("execution_claimed_at") and
+                    await _time(row["execution_claimed_at"]) + timedelta(minutes=5) > now):
+                return {"status": "busy"}
+            bound_id = row.get("execution_session_id") or execution_session_id
+            session = sessions.get(bound_id)
+            if (not session or session["user_id"] != user_id
+                    or (session.get("ended_at") is not None and not row.get("execution_session_id"))
+                    or session.get("mode_id", "daily") != row["target_mode_id"]
+                    or (row.get("execution_session_id") and execution_session_id is not None
+                        and execution_session_id != row["execution_session_id"])):
+                return {"status": "unavailable"}
+            if (row["target_mode_id"] != "daily" and row["target_grant_required"]
+                    and not await self._active_grant(user_id, row["target_mode_id"], now)):
+                return {"status": "unavailable"}
+            row.update(execution_session_id=bound_id, execution_claimed_at=now.isoformat(),
+                       execution_claim_token=str(uuid.uuid4()), execution_worker_id=worker_id,
+                       execution_attempts=row.get("execution_attempts", 0) + 1,
+                       execution_clock_at=row.get("execution_clock_at") or now.isoformat(),
+                       execution_plan=row.get("execution_plan", []))
+            return {"status": "claimed", "handoff": copy.deepcopy(row)}
+
+    async def save_execution_plan(
+        self, user_id: str, handoff_id: str, claim_token: str, plan: list[dict],
+    ) -> bool:
+        if type(plan) is not list or len(plan) > 32:
+            return False
+        json.dumps(plan, allow_nan=False)
+        async with self.lock:
+            row = self.handoffs.get(handoff_id)
+            if not await self._owns_execution(row, user_id, claim_token):
+                return False
+            old = row.get("execution_plan", [])
+            if _json_identity(plan) == _json_identity(old):
+                return True
+            if len(plan) != len(old) + 1 or _json_identity(plan[:-1]) != _json_identity(old):
+                return False
+            row["execution_plan"] = copy.deepcopy(plan)
+            return True
+
+    async def _owns_execution(self, row: dict | None, user_id: str, token: str) -> bool:
+        return bool(row and row["user_id"] == user_id and row.get("execution_claim_token") == token
+                    and row.get("executed_at") is None and row.get("execution_claimed_at")
+                    and await _time(row["execution_claimed_at"]) + timedelta(minutes=5)
+                    > await _time(utc_now()))
+
+    async def complete_execution(self, user_id: str, handoff_id: str, token: str) -> bool:
+        async with self.lock:
+            row = self.handoffs.get(handoff_id)
+            if not await self._owns_execution(row, user_id, token):
+                return False
+            row["executed_at"] = (await _time(utc_now())).isoformat()
+            return True
+
+    async def pending_executions(self, users: Iterable[dict], limit: int) -> list[dict]:
+        async with self.lock:
+            now = await _time(utc_now())
+            profiles = {user["user_id"]: user for user in users}
+            result = []
+            for row in self.handoffs.values():
+                if (row["resolution"] != "confirmed" or row.get("executed_at")
+                        or (row.get("execution_claimed_at") and
+                            await _time(row["execution_claimed_at"]) + timedelta(minutes=5) > now)):
+                    continue
+                result.append({"user_id": row["user_id"], "handoff_id": row["handoff_id"],
+                               "execution_session_id": row.get("execution_session_id"),
+                               "target_mode_id": row["target_mode_id"],
+                               "telegram_chat_id": profiles.get(row["user_id"], {}).get(
+                                   "telegram_chat_id")})
+            return result[:max(1, min(limit, 100))]

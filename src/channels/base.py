@@ -1,13 +1,85 @@
-"""MessageChannel protocol — swap delivery channels without touching agent code."""
+"""Channel-neutral conversation addresses, capability declarations and delivery protocol."""
 
-from typing import Protocol
+import json
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Any, Protocol
+
+
+def _freeze(value):
+    if isinstance(value, dict):
+        return MappingProxyType({key: _freeze(item) for key, item in value.items()})
+    if isinstance(value, list):
+        return tuple(_freeze(item) for item in value)
+    return value
+
+
+@dataclass(frozen=True)
+class ConversationRef:
+    """An immutable channel endpoint; provider identifiers never become participant identity."""
+
+    channel: str
+    endpoint: Mapping[str, Any]
+
+    def __post_init__(self):
+        if (
+            not isinstance(self.channel, str)
+            or not self.channel
+            or self.channel != self.channel.strip()
+        ):
+            raise ValueError("Conversation requires a channel")
+        if not isinstance(self.endpoint, Mapping) or not all(
+            isinstance(key, str) for key in self.endpoint
+        ):
+            raise ValueError("Conversation endpoint requires a JSON object")
+        try:
+            copied = json.loads(json.dumps(dict(self.endpoint), allow_nan=False))
+        except (TypeError, ValueError):
+            raise ValueError("Conversation endpoint requires JSON values") from None
+        object.__setattr__(self, "endpoint", _freeze(copied))
+
+
+def endpoint_dict(conversation: ConversationRef) -> dict:
+    """Thaw an immutable reference to a detached JSON endpoint for Store serialization."""
+    def thaw(value):
+        if isinstance(value, Mapping):
+            return {key: thaw(item) for key, item in value.items()}
+        if isinstance(value, tuple):
+            return [thaw(item) for item in value]
+        return value
+
+    return thaw(conversation.endpoint)
+
+
+@dataclass(frozen=True)
+class ChannelCapabilities:
+    """Supported behavior and explicit fallback for unsupported conversation threads."""
+
+    threads: bool = False
+    inbound_text: bool = True
+    outbound_text: bool = True
+    actions: bool = False
+    delivery_acknowledgement: bool = False
+    message_editing: bool = False
+    audio: bool = False
+    deep_links: bool = False
+    notifications: bool = False
+    accessibility: bool = True
+    fallback: str = "in_chat_mode_commands"
+
+
+class ConversationUnavailableError(RuntimeError):
+    """Delivery needs an application-level conversation repair; never resend unaddressed."""
+
+    def __init__(self, conversation: ConversationRef):
+        super().__init__("Conversation is unavailable")
+        self.conversation = conversation
 
 
 class MessageChannel(Protocol):
-    """Abstract interface for messaging channels.
-
-    Agent sends messages through this without knowing if it's Telegram, WhatsApp, or native app.
-    """
+    channel_id: str
+    capabilities: ChannelCapabilities
 
     async def send_message(
         self,
@@ -15,19 +87,8 @@ class MessageChannel(Protocol):
         text: str,
         *,
         buttons: list[list[dict[str, str]]] | None = None,
-    ) -> int | None:
-        """Send a text message, optionally with inline keyboard buttons.
-
-        Args:
-            chat_id: Channel-specific user/chat identifier
-            text: Message content
-            buttons: Optional grid of buttons, each with "text" and "callback_data"
-                     Example: [[{"text": "Done ✅", "callback_data": "done:uuid"}]]
-
-        Returns:
-            Message ID if available (for later editing), else None.
-        """
-        ...
+        conversation: ConversationRef | None = None,
+    ) -> int | None: ...
 
     async def edit_message_buttons(
         self,
@@ -35,6 +96,19 @@ class MessageChannel(Protocol):
         message_id: int,
         *,
         buttons: list[list[dict[str, str]]] | None = None,
-    ) -> None:
-        """Edit inline keyboard on an existing message. Pass buttons=None to remove keyboard."""
-        ...
+        conversation: ConversationRef | None = None,
+    ) -> None: ...
+
+    async def create_conversation(self, chat_id: str | int, name: str) -> ConversationRef: ...
+
+    async def close_conversation(
+        self, chat_id: str | int, conversation: ConversationRef
+    ) -> None: ...
+
+    async def conversation_link(self, conversation: ConversationRef | None) -> str | None: ...
+
+    async def recipient_for(self, user: dict) -> str | int | None: ...
+
+    async def recipient_matches(
+        self, conversation: ConversationRef, recipient: str | int
+    ) -> bool: ...

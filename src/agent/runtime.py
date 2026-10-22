@@ -32,9 +32,9 @@ from src.agent.modes import (
     TurnFacts,
 )
 from src.agent.policies import (
-    ActivatedParticipants,
     EntitlementPolicy,
     ExplicitThenDefault,
+    GrantedParticipants,
     RoutingPolicy,
 )
 from src.agent.registry import ModeRegistry
@@ -112,7 +112,7 @@ class ModeRuntime:
     ):
         self.registry = registry
         self.routing = routing or ExplicitThenDefault()
-        self.entitlements = entitlements or ActivatedParticipants()
+        self.entitlements = entitlements or GrantedParticipants()
         self._agents: dict[str, Agent[ToolContext, str]] = {}
         self._models: dict[tuple[str, bool], Model] = {}
         self._states_safety_core: dict[str, bool] = {}
@@ -143,6 +143,7 @@ class ModeRuntime:
 
     async def instructions_for(self, mode: ModeDefinition, context: ToolContext) -> str:
         """The Safety Core, the Mode's own instructions, then its Turn Context sections."""
+        context.mode_id = mode.id
         user = context.user
         timezone = user.get("timezone") or "UTC"
         facts = TurnFacts(
@@ -231,6 +232,13 @@ class ModeRuntime:
             self._models[cache_key] = model
         return model
 
+    async def execution_model_for(self, mode: ModeDefinition, context: ToolContext) -> Any:
+        """The resolved primary model, preserving explicit test/evaluation substitution."""
+        override = self._model_override.get()
+        if override:
+            return override[0]
+        return await self.model_for(mode=mode, context=context)
+
     async def agent_for(self, mode: ModeDefinition, *, fallback=False) -> Agent[ToolContext, str]:
         """One cached agent per Mode, offered only that Mode's Toolsets."""
         cache_key = mode.id + (":fallback" if fallback else "")
@@ -285,6 +293,8 @@ class ModeRuntime:
             else:
                 message_history.append(ModelResponse(parts=[TextPart(content=message.content)]))
 
+        context.mode_id = mode.id
+        context.mode_registry = self.registry
         agent = await self.agent_for(mode)
         requested = await self.model_for(mode=mode, context=context, resolve_only=True)
         override = self._model_override.get()
@@ -369,6 +379,7 @@ class ModeRuntime:
                     turn_id=context.turn_id,
                     user_id=context.user["user_id"],
                     mode_id=mode.id,
+                    entered_by=context.entered_by,
                     requested_model=requested,
                     answering_model=answering,
                     fallback_used=fallback_used,
@@ -393,7 +404,13 @@ def provider_unavailable(error: Exception) -> bool:
 
 def _presented(mode: ModeDefinition) -> AbstractToolset[ToolContext]:
     """The Mode's Toolsets as one Toolset, presented in the Mode's declared Tool order."""
-    combined: AbstractToolset[ToolContext] = CombinedToolset(list(mode.toolsets))
+    toolsets = list(mode.toolsets)
+    if mode.handoffs:
+        from src.tools.handoffs import HANDOFFS
+
+        if HANDOFFS not in toolsets:
+            toolsets.append(HANDOFFS)
+    combined: AbstractToolset[ToolContext] = CombinedToolset(toolsets)
     if not mode.tool_order:
         return combined
     rank = {name: index for index, name in enumerate(mode.tool_order)}

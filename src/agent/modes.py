@@ -73,6 +73,7 @@ class ModeDefinition:
     handoffs: tuple[str, ...] = ()
     eval_suite: str | None = None
     invalidating_inputs: tuple[str, ...] = ()
+    limits: str = "Amigo is experimental and cannot provide clinical care or monitoring."
 
     def __post_init__(self):
         if not _MODE_ID.match(self.id):

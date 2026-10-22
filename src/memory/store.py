@@ -1,5 +1,6 @@
 """Supabase CRUD operations for all entities."""
 
+import json
 import logging
 from datetime import UTC, datetime
 from functools import wraps
@@ -86,7 +87,20 @@ class MemoryStore:
         result = await self.db.rpc("get_app_schema_version").execute()
         return require_schema_version(result.data, expected)
 
+    @_observe_database_call
+    async def get_command_receipt(self, user_id: str, idempotency_key: str) -> dict | None:
+        result = await (self.db.table("command_receipts").select("payload_hash, result")
+                        .eq("user_id", user_id).eq("idempotency_key", idempotency_key)
+                        .maybe_single().execute())
+        return result.data if result and result.data else None
+
     # ── User Profiles ──
+
+    @_observe_database_call
+    async def get_user_by_id(self, user_id: str) -> dict | None:
+        result = await (self.db.table("user_profiles").select("*").eq("user_id", user_id)
+                        .maybe_single().execute())
+        return result.data if result and result.data else None
 
     @_observe_database_call
     async def get_user_by_chat_id(self, chat_id: int) -> dict | None:
@@ -161,12 +175,13 @@ class MemoryStore:
     # ── Sessions ──
 
     @_observe_database_call
-    async def get_active_session(self, user_id: str) -> dict | None:
+    async def get_active_session(self, user_id: str, mode_id: str = "daily") -> dict | None:
         """Get the current open session (ended_at is NULL)."""
         result = await (
             self.db.table("sessions")
             .select("*")
             .eq("user_id", user_id)
+            .eq("mode_id", mode_id)
             .is_("ended_at", "null")
             .order("started_at", desc=True)
             .limit(1)
@@ -176,13 +191,17 @@ class MemoryStore:
         return result.data if result else None
 
     @_observe_database_call
-    async def create_session(self, user_id: str, session_type: str = "casual") -> dict:
+    async def create_session(
+        self, user_id: str, session_type: str = "casual", mode_id: str = "daily"
+    ) -> dict:
         """Start a new session."""
         result = await (
             self.db.table("sessions")
             .insert({
                 "user_id": user_id,
                 "session_type": session_type,
+                "mode_id": mode_id,
+                "active_mode_id": None if mode_id == "daily" else mode_id,
             })
             .execute()
         )
@@ -316,6 +335,82 @@ class MemoryStore:
         return result.data[0]
 
     @_observe_database_call
+    async def get_mode_conversation(self, user_id: str, mode_id: str, channel: str) -> dict | None:
+        result = await (self.db.table("mode_conversations").select("*").eq("user_id", user_id)
+                        .eq("mode_id", mode_id).eq("channel", channel).is_("closed_at", "null")
+                        .maybe_single().execute())
+        return result.data if result and result.data else None
+
+    @_observe_database_call
+    async def get_mode_by_conversation(
+        self, user_id: str, channel: str, endpoint: dict
+    ) -> str | None:
+        result = await (self.db.table("mode_conversation_endpoints").select("mode_id")
+                        .eq("user_id", user_id).eq("channel", channel)
+                        .eq("endpoint", json.dumps(endpoint, sort_keys=True, allow_nan=False))
+                        .maybe_single().execute())
+        return result.data["mode_id"] if result and result.data else None
+
+    @_observe_database_call
+    async def save_mode_conversation(
+        self, user_id: str, mode_id: str, channel: str, endpoint: dict, *, alias: bool = False,
+    ) -> dict:
+        result = await self.db.rpc("save_mode_conversation", {
+            "p_user_id": user_id, "p_mode_id": mode_id, "p_channel": channel,
+            "p_endpoint": endpoint, "p_alias": alias,
+        }).execute()
+        return result.data
+
+    @_observe_database_call
+    async def close_mode_conversation(self, user_id: str, mode_id: str, channel: str) -> None:
+        await self.db.rpc("close_mode_conversation", {
+            "p_user_id": user_id, "p_mode_id": mode_id, "p_channel": channel,
+        }).execute()
+
+    @_observe_database_call
+    async def list_mode_conversations(self, user_id: str | None = None) -> list[dict]:
+        query = self.db.table("mode_conversations").select("*")
+        if user_id is not None:
+            query = query.eq("user_id", user_id)
+        result = await query.execute()
+        return result.data or []
+
+    @_observe_database_call
+    async def claim_handoff_execution(
+        self, user_id: str, handoff_id: str, worker_id: str, *,
+        execution_session_id: str | None = None,
+    ) -> dict:
+        result = await self.db.rpc("claim_handoff_execution", {
+            "p_user_id": user_id, "p_handoff_id": handoff_id, "p_worker_id": worker_id,
+            "p_execution_session_id": execution_session_id,
+        }).execute()
+        return result.data
+
+    @_observe_database_call
+    async def save_handoff_execution_plan(
+        self, user_id: str, handoff_id: str, claim_token: str, plan: list[dict],
+    ) -> bool:
+        result = await self.db.rpc("save_handoff_execution_plan", {
+            "p_user_id": user_id, "p_handoff_id": handoff_id,
+            "p_claim_token": claim_token, "p_plan": plan,
+        }).execute()
+        return bool(result.data)
+
+    @_observe_database_call
+    async def complete_handoff_execution(
+        self, user_id: str, handoff_id: str, claim_token: str,
+    ) -> bool:
+        result = await self.db.rpc("complete_handoff_execution", {
+            "p_user_id": user_id, "p_handoff_id": handoff_id, "p_claim_token": claim_token,
+        }).execute()
+        return bool(result.data)
+
+    @_observe_database_call
+    async def list_pending_handoff_executions(self, limit: int = 25) -> list[dict]:
+        result = await self.db.rpc("list_pending_handoff_executions", {"p_limit": limit}).execute()
+        return result.data or []
+
+    @_observe_database_call
     async def get_session_messages(self, session_id: str) -> list[dict]:
         """Get all messages in a session, ordered by time."""
         result = await (
@@ -328,13 +423,16 @@ class MemoryStore:
         return result.data
 
     @_observe_database_call
-    async def has_session_on_local_day(self, user_id: str, timezone: str) -> bool:
+    async def has_session_on_local_day(
+        self, user_id: str, timezone: str, mode_id: str = "daily"
+    ) -> bool:
         """Return whether the user has any session that started today locally."""
         start_utc, end_utc = local_day_utc_range(timezone)
         result = await (
             self.db.table("sessions")
             .select("session_id")
             .eq("user_id", user_id)
+            .eq("mode_id", mode_id)
             .gte("started_at", start_utc.isoformat())
             .lt("started_at", end_utc.isoformat())
             .limit(1)
@@ -343,7 +441,9 @@ class MemoryStore:
         return bool(result.data)
 
     @_observe_database_call
-    async def get_yesterday_summary(self, user_id: str, timezone: str) -> str | None:
+    async def get_yesterday_summary(
+        self, user_id: str, timezone: str, mode_id: str = "daily"
+    ) -> str | None:
         """Get the most recent closed session summary from yesterday locally."""
         yesterday = yesterday_in_tz(timezone)
         start_utc, end_utc = local_day_utc_range(timezone, yesterday)
@@ -351,6 +451,7 @@ class MemoryStore:
             self.db.table("sessions")
             .select("context_summary")
             .eq("user_id", user_id)
+            .eq("mode_id", mode_id)
             .gte("started_at", start_utc.isoformat())
             .lt("started_at", end_utc.isoformat())
             .not_.is_("context_summary", "null")

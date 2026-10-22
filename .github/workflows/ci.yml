@@ -75,6 +75,8 @@ jobs:
             -f tests/sql/assert_015_ordered_pairing_locks.sql \
             -f migrations/016_session_modes_grants_handoffs.sql \
             -f tests/sql/assert_016_session_modes_grants_handoffs.sql \
+            -f migrations/017_mode_conversations.sql \
+            -f tests/sql/assert_017_mode_conversations.sql \
             -f tests/sql/app_schema_version.sql
 
       - name: Prove the Activation functions cannot deadlock

@@ -33,7 +33,8 @@ class SessionManager:
         self.clock = clock
 
     async def get_or_create_session(
-        self, user_id: str, timeout_minutes: int = 120, timezone: str = "UTC"
+        self, user_id: str, timeout_minutes: int = 120, timezone: str = "UTC",
+        *, mode_id: str = "daily"
     ) -> tuple[dict, bool]:
         """Get active session or create a new one.
 
@@ -45,7 +46,7 @@ class SessionManager:
         Returns:
             (session_dict, is_new_session)
         """
-        active = await self.store.get_active_session(user_id)
+        active = await self.store.get_active_session(user_id, mode_id=mode_id)
 
         if active:
             last_activity = datetime.fromisoformat(active["last_activity_at"])
@@ -65,7 +66,9 @@ class SessionManager:
             if last_activity_local.date() < user_now.date():
                 logger.info("Closing session %s — midnight boundary", active["session_id"])
                 await self.store.close_session(active["session_id"])
-                session = await self.store.create_session(user_id, "morning_planning")
+                session = await self.store.create_session(
+                    user_id, "morning_planning", mode_id=mode_id
+                )
                 return session, True
 
             # Check inactivity timeout
@@ -76,7 +79,7 @@ class SessionManager:
                     gap.total_seconds() // 60,
                 )
                 await self.store.close_session(active["session_id"])
-                session = await self.store.create_session(user_id)
+                session = await self.store.create_session(user_id, mode_id=mode_id)
                 return session, True
 
             # Session still active — touch it
@@ -84,11 +87,13 @@ class SessionManager:
             return active, False
 
         # No active session — determine type from the user's local day.
-        is_first_today = not await self.store.has_session_on_local_day(user_id, timezone)
+        is_first_today = not await self.store.has_session_on_local_day(
+            user_id, timezone, mode_id=mode_id
+        )
         session_type = self.classify_session_type(
             self.clock.now_in_tz(timezone).hour, is_first_today
         )
-        session = await self.store.create_session(user_id, session_type)
+        session = await self.store.create_session(user_id, session_type, mode_id=mode_id)
         return session, True
 
     async def should_close(self, message: str) -> bool:

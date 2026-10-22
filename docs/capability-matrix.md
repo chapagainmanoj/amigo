@@ -1,6 +1,6 @@
 # Amigo Capability Matrix
 
-**Last verified against the repository:** 2026-09-02
+**Last reviewed against the repository:** 2026-10-22
 **Release scope:** Invitation-only beta  
 **Canonical beta promise:** Tell Amigo what you need to do. It turns the conversation into a Task
 and sends a Telegram Reminder at the time you choose, with Done, Skip, or Later controls.
@@ -10,11 +10,13 @@ the current repository; it does not mean production reliability, security, or us
 have passed. A beta experiment must be presented as experimental. A roadmap item must never be
 described in the present tense.
 
-The schema chain is complete through migration 016, so the worktree is bootable. Migration 016's
-Session Mode, grant, and handoff primitives are dormant until the application slice is implemented
-and reviewed; they do not make Mode switching a shipped capability. The Activation application
-code is still not in the “shipped” column: it has no clean-account staging evidence, which is a
-separate gate from having the schema.
+The checked-in schema chain reaches migration 017 and the application requires exact version 17.
+The channel-neutral Mode routing, isolated Sessions, grants, confirmed handoffs, and dashboard
+availability implementation are release-gated pending integration review and complete owner
+application-flow evidence. The owner's topic spike passed on Desktop and iOS; Android was not
+tested. No Supabase migration or production deployment is asserted. Daily remains the only live
+Mode; Coach, Reflect and Recommender are Planned. Activation also remains release-gated pending
+clean-account staging evidence.
 
 | Shipped in the current prototype | Beta experiment or release-gated | Roadmap, not available |
 |---|---|---|
@@ -30,7 +32,7 @@ separate gate from having the schema.
 | Dashboard realtime refresh from Supabase | Free 30-day invitation-beta offer and founder-operated support | Native mobile apps; a PWA requires its own demand gate |
 | `/feedback` capture | Eight-person external beta and willingness-to-pay research | Multi-machine scheduling and paid billing |
 | Local CLI development mode | English output with code-mixed input comprehension | Automatic sentiment-based intervention or emotional profiling |
-| Reproducible dashboard install, lint, and production build | — | — |
+| Reproducible dashboard install, lint, and production build | Channel-neutral Mode conversations, `/mode` commands, grant maintenance, isolated Sessions, confirmed handoff execution, and authenticated Mode chips | — |
 
 ## Important Limits in the Current Prototype
 
@@ -40,6 +42,10 @@ separate gate from having the schema.
   durable personal Memory product.
 - Dashboard and Telegram now share the canonical Task and Reminder command paths locally, but the
   cross-surface flow still needs staging evidence before it can pass the release gate.
+- A Telegram production release requires Threaded Mode on and user-created threads off. Every
+  threaded send needs an explicit conversation; deleting a topic does not unsubscribe its Mode.
+- Dashboard Mode chips show server availability and grant expiry. Planned or unentitled Modes
+  have no actionable link; a visible name does not mean the Mode can run.
 - Python tests use fakes and CI exercises migrations/RLS on PostgreSQL. They do not prove Telegram,
   Gemini, Supabase Auth, realtime delivery, and Render work together.
 - The current project is open source under AGPL-3.0, but supported self-hosting is not a shipped
