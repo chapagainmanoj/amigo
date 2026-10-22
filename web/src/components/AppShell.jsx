@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { LayoutDashboard, Link2, LogOut, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Link2, LogOut, Menu, NotebookText, X } from 'lucide-react'
 import { supabase, apiRequest } from '../supabase'
 import DashboardView from './DashboardView'
 import ConnectView from './ConnectView'
 import ActivationJourney from './ActivationJourney'
+import CoachingRecords from './CoachingRecords'
 
 export default function AppShell({ session }) {
   const [activeView, setActiveView] = useState('dashboard')
@@ -99,6 +100,16 @@ export default function AppShell({ session }) {
             <span style={{ fontWeight: 500 }}>Dashboard</span>
           </button>
           
+          <button
+            type="button"
+            onClick={() => navigateTo('coaching')}
+            className={`nav-item ${effectiveView === 'coaching' ? 'nav-item--active' : ''}`}
+            aria-current={effectiveView === 'coaching' ? 'page' : undefined}
+          >
+            <NotebookText size={20} aria-hidden="true" />
+            <span style={{ fontWeight: 500 }}>Coaching records</span>
+          </button>
+
           <button 
             onClick={() => navigateTo('connect')}
             className={`nav-item ${effectiveView === 'connect' ? 'nav-item--active' : ''}`}
@@ -130,7 +141,9 @@ export default function AppShell({ session }) {
               <strong>Connect Telegram to continue.</strong> Pair your account to chat with Amigo, schedule reminders, and view your dashboard.
             </div>
           )}
-          {effectiveView === 'dashboard' ? (
+          {effectiveView === 'coaching' ? (
+            <CoachingRecords />
+          ) : effectiveView === 'dashboard' ? (
             <DashboardView pairedUser={pairedUser} />
           ) : (
             <ConnectView pairedUser={pairedUser} onPairSuccess={checkPairing} />

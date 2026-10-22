@@ -424,3 +424,17 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   Assertion SHA256 b8d181f65df9cfcc2d62bba28d999d3b16cda524214b1b096a6971a0f99b5993.
 - Gate A currency/Daily golden included in full suite; production certification still absent.
   No new provisional policy, admission enablement, deployment or external data changes.
+
+## Phase 5 follow-up — Coaching records dashboard
+
+- Prior fix committed 5bff2b4. This slice: web/src/components/CoachingRecords.jsx,
+  CoachingRecords.css, AppShell.jsx; proposals/coaching-records-ui-verification.md and fictional
+  desktop/mobile captures/results under .impeccable/review/coaching-records/.
+- Owned Program history, JSON export, explicit scoped deletion confirmation, uncertain-delete
+  refresh, loading/empty/error recovery. Conversation Messages/provider copies explicitly remain.
+- Web ESLint zero warnings; Vite8.3.5 build passed (1988 modules). Local fictional API/auth browser
+  checks passed at 1440px and390px: history/export/delete/retry, no overflow or browser errors.
+  Independent visual/source review: SHIP, no material findings; skill detector returned [].
+- Protected files: none. Backend remains 1151 passing/Ruff clean; no Turn source changes in this
+  UI slice, Gate A currency inputs unchanged. Existing absent release certification not replaced.
+- Preserve incumbent dashboard design. Coach admission remains OFF; no broader privacy promise.

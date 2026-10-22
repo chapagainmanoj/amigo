@@ -1,0 +1,28 @@
+[
+  {
+    "viewport": "desktop",
+    "width": 1440,
+    "height": 1000,
+    "overflow": false,
+    "history": 4,
+    "export": true,
+    "confirmation": true,
+    "deleteFailurePreserved": true,
+    "deleteSuccessScoped": true,
+    "errorRetry": true,
+    "pageErrors": []
+  },
+  {
+    "viewport": "mobile",
+    "width": 390,
+    "height": 844,
+    "overflow": false,
+    "history": 4,
+    "export": true,
+    "confirmation": true,
+    "deleteFailurePreserved": true,
+    "deleteSuccessScoped": true,
+    "errorRetry": true,
+    "pageErrors": []
+  }
+]
