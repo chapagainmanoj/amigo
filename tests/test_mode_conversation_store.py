@@ -132,7 +132,13 @@ async def test_bound_session_cannot_change_and_survives_closed_session_rollover(
         handoff,
         "retry",
         execution_session_id=replacement["session_id"],
-    ) == {"status": "unavailable"}
+    ) == {"status": "unavailable", "terminal": True}
+    assert await api.claim_handoff_execution(user, handoff, "retry") == {"status": "failed"}
+    handoff, target = await confirmed(api, user)
+    assert (await api.claim_handoff_execution(
+        user, handoff, "worker", execution_session_id=target
+    ))["status"] == "claimed"
+    clock["now"] += timedelta(minutes=6)
     await api.close_session(target)
     recovered = await api.claim_handoff_execution(user, handoff, "retry")
     assert recovered["status"] == "claimed"
@@ -146,7 +152,7 @@ async def test_bound_session_cannot_change_and_survives_closed_session_rollover(
         second,
         "first",
         execution_session_id=second_target,
-    ) == {"status": "unavailable"}
+    ) == {"status": "unavailable", "terminal": True}
 
 
 async def test_supabase_execution_and_conversation_rpc_contract():

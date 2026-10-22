@@ -909,6 +909,16 @@ class MemoryStore:
         return bool(result.data)
 
     @_observe_database_call
+    async def fail_handoff_execution(
+        self, user_id: str, handoff_id: str, claim_token: str, reason: str,
+    ) -> bool:
+        result = await self.db.rpc("fail_handoff_execution", {
+            "p_user_id": user_id, "p_handoff_id": handoff_id,
+            "p_claim_token": claim_token, "p_reason": reason,
+        }).execute()
+        return bool(result.data)
+
+    @_observe_database_call
     async def list_pending_handoff_executions(self, limit: int = 25) -> list[dict]:
         result = await self.db.rpc("list_pending_handoff_executions", {"p_limit": limit}).execute()
         return result.data or []

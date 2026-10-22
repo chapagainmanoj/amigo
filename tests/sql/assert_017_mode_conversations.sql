@@ -42,7 +42,7 @@ BEGIN
  IF public.claim_handoff_execution(u,h,'worker',dst)->>'status' <> 'unavailable' THEN
    RAISE EXCEPTION 'unconfirmed payload was claimable'; END IF;
  PERFORM public.resolve_mode_handoff(u,src,h,TRUE);
- IF public.claim_handoff_execution(u,h,'worker',wrong_dst)->>'status' <> 'unavailable' THEN
+ IF public.claim_handoff_execution(other_u,h,'worker',wrong_dst)->>'status' <> 'unavailable' THEN
    RAISE EXCEPTION 'execution bound cross-owner Session'; END IF;
  r:=public.claim_handoff_execution(u,h,'worker',dst);
  IF r->>'status' <> 'claimed' OR r->'handoff'->>'carried_request' <> 'Fictional carried request' THEN
@@ -75,6 +75,52 @@ BEGIN
  IF public.claim_handoff_execution(u,h,'late')->>'status' <> 'executed' THEN
    RAISE EXCEPTION 'completed handoff replay accepted'; END IF;
 END $$;
+DO $$
+DECLARE u UUID; outsider UUID; src UUID; dst UUID; wrong_dst UUID; h UUID; last_h UUID;
+ row RECORD; r JSONB; old_token UUID; token UUID; i INT; n INT;
+BEGIN
+ INSERT INTO public.user_profiles(telegram_chat_id) VALUES(91017003) RETURNING user_id INTO u;
+ INSERT INTO public.user_profiles(telegram_chat_id) VALUES(91017004) RETURNING user_id INTO outsider;
+ INSERT INTO public.sessions(user_id,mode_id) VALUES(u,'coach') RETURNING session_id INTO src;
+ INSERT INTO public.sessions(user_id,mode_id) VALUES(u,'daily') RETURNING session_id INTO dst;
+ INSERT INTO public.sessions(user_id,mode_id) VALUES(u,'coach') RETURNING session_id INTO wrong_dst;
+ FOR i IN 1..26 LOOP
+   INSERT INTO public.mode_handoffs(user_id,session_id,source_mode_id,target_mode_id,
+     source_grant_required,target_grant_required,carried_request,created_at,expires_at,
+     resolved_at,resolution) VALUES(u,src,'coach','daily',FALSE,FALSE,'Fictional request',
+     clock_timestamp()+i*interval '1 microsecond',clock_timestamp()+interval '5 minutes',
+     clock_timestamp(),'confirmed') RETURNING handoff_id INTO last_h;
+ END LOOP;
+ SELECT count(*) INTO n FROM public.list_pending_handoff_executions();
+ IF n<>25 THEN RAISE EXCEPTION 'recovery first page not full'; END IF;
+ FOR row IN SELECT * FROM public.list_pending_handoff_executions() LOOP
+   r:=public.claim_handoff_execution(u,row.handoff_id,'drain',wrong_dst);
+   IF r->>'status'<>'unavailable' OR (r->>'terminal')::boolean IS NOT TRUE THEN
+     RAISE EXCEPTION 'unavailable claim was not terminal'; END IF;
+ END LOOP;
+ SELECT count(*) INTO n FROM public.list_pending_handoff_executions();
+ IF n<>1 OR NOT EXISTS(SELECT 1 FROM public.list_pending_handoff_executions() WHERE handoff_id=last_h)
+ THEN RAISE EXCEPTION 'unavailable rows stalled the LIMIT25 recovery queue'; END IF;
+ r:=public.claim_handoff_execution(u,last_h,'first',dst);
+ old_token:=(r->'handoff'->>'execution_claim_token')::UUID;
+ UPDATE public.mode_handoffs SET execution_claimed_at=clock_timestamp()-interval '6 minutes'
+ WHERE handoff_id=last_h;
+ IF public.fail_handoff_execution(u,last_h,old_token,'execution_failed') THEN
+   RAISE EXCEPTION 'expired failure token accepted'; END IF;
+ r:=public.claim_handoff_execution(u,last_h,'recovery');
+ token:=(r->'handoff'->>'execution_claim_token')::UUID;
+ IF public.fail_handoff_execution(outsider,last_h,token,'execution_failed')
+ OR public.fail_handoff_execution(u,last_h,old_token,'execution_failed')
+ OR public.fail_handoff_execution(u,last_h,token,'private exception text')
+ OR NOT public.fail_handoff_execution(u,last_h,token,'execution_failed')
+ OR public.fail_handoff_execution(u,last_h,token,'execution_failed')
+ OR public.complete_handoff_execution(u,last_h,token)
+ OR public.save_handoff_execution_plan(u,last_h,token,'[{"late":true}]') THEN
+   RAISE EXCEPTION 'terminal failure was not owned, fenced and single use'; END IF;
+ IF public.claim_handoff_execution(u,last_h,'retry')->>'status'<>'failed'
+ OR EXISTS(SELECT 1 FROM public.list_pending_handoff_executions()) THEN
+   RAISE EXCEPTION 'terminal failed handoff remained recoverable'; END IF;
+END $$;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000017001',TRUE);
 DO $$ BEGIN
@@ -94,7 +140,8 @@ DO $$ DECLARE t TEXT; f TEXT; BEGIN
  FOREACH f IN ARRAY ARRAY[
   'save_mode_conversation(uuid,text,text,jsonb,boolean)', 'close_mode_conversation(uuid,text,text)',
   'claim_handoff_execution(uuid,uuid,text,uuid)', 'save_handoff_execution_plan(uuid,uuid,uuid,jsonb)',
-  'complete_handoff_execution(uuid,uuid,uuid)', 'list_pending_handoff_executions(integer)'] LOOP
+  'complete_handoff_execution(uuid,uuid,uuid)', 'fail_handoff_execution(uuid,uuid,uuid,text)',
+  'list_pending_handoff_executions(integer)'] LOOP
   IF has_function_privilege('anon','public.'||f,'EXECUTE')
     OR has_function_privilege('authenticated','public.'||f,'EXECUTE')
     OR NOT has_function_privilege('service_role','public.'||f,'EXECUTE') THEN

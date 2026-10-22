@@ -57,6 +57,8 @@ class ModeHandoff(TypedDict):
     execution_clock_at: str | None
     execution_attempts: int
     executed_at: str | None
+    execution_failed_at: str | None
+    execution_failure_reason: str | None
     execution_plan: list[dict]
 
 
@@ -296,6 +298,7 @@ class LocalModeState:
                 execution_claimed_at=None, execution_claim_token=None, execution_worker_id=None,
                 execution_session_id=None, execution_clock_at=None, execution_attempts=0,
                 executed_at=None, execution_plan=[],
+                execution_failed_at=None, execution_failure_reason=None,
             )
             self.handoffs[row["handoff_id"]] = row
             return {"status": "pending", "handoff": copy.deepcopy(row)}
@@ -415,6 +418,8 @@ class LocalModeState:
                 return {"status": "unavailable"}
             if row.get("executed_at"):
                 return {"status": "executed"}
+            if row.get("execution_failed_at"):
+                return {"status": "failed"}
             now = await _time(utc_now())
             if (row.get("execution_claimed_at") and
                     await _time(row["execution_claimed_at"]) + timedelta(minutes=5) > now):
@@ -426,10 +431,14 @@ class LocalModeState:
                     or session.get("mode_id", "daily") != row["target_mode_id"]
                     or (row.get("execution_session_id") and execution_session_id is not None
                         and execution_session_id != row["execution_session_id"])):
-                return {"status": "unavailable"}
+                row.update(execution_failed_at=now.isoformat(),
+                           execution_failure_reason="session_unavailable")
+                return {"status": "unavailable", "terminal": True}
             if (row["target_mode_id"] != "daily" and row["target_grant_required"]
                     and not await self._active_grant(user_id, row["target_mode_id"], now)):
-                return {"status": "unavailable"}
+                row.update(execution_failed_at=now.isoformat(),
+                           execution_failure_reason="target_unavailable")
+                return {"status": "unavailable", "terminal": True}
             row.update(execution_session_id=bound_id, execution_claimed_at=now.isoformat(),
                        execution_claim_token=str(uuid.uuid4()), execution_worker_id=worker_id,
                        execution_attempts=row.get("execution_attempts", 0) + 1,
@@ -457,7 +466,8 @@ class LocalModeState:
 
     async def _owns_execution(self, row: dict | None, user_id: str, token: str) -> bool:
         return bool(row and row["user_id"] == user_id and row.get("execution_claim_token") == token
-                    and row.get("executed_at") is None and row.get("execution_claimed_at")
+                    and row.get("executed_at") is None and row.get("execution_failed_at") is None
+                    and row.get("execution_claimed_at")
                     and await _time(row["execution_claimed_at"]) + timedelta(minutes=5)
                     > await _time(utc_now()))
 
@@ -469,6 +479,17 @@ class LocalModeState:
             row["executed_at"] = (await _time(utc_now())).isoformat()
             return True
 
+    async def fail_execution(self, user_id: str, handoff_id: str, token: str, reason: str) -> bool:
+        if reason not in {"execution_failed", "attempts_exhausted", "target_unavailable"}:
+            return False
+        async with self.lock:
+            row = self.handoffs.get(handoff_id)
+            if not await self._owns_execution(row, user_id, token):
+                return False
+            row.update(execution_failed_at=(await _time(utc_now())).isoformat(),
+                       execution_failure_reason=reason)
+            return True
+
     async def pending_executions(self, users: Iterable[dict], limit: int) -> list[dict]:
         async with self.lock:
             now = await _time(utc_now())
@@ -476,6 +497,7 @@ class LocalModeState:
             result = []
             for row in self.handoffs.values():
                 if (row["resolution"] != "confirmed" or row.get("executed_at")
+                        or row.get("execution_failed_at")
                         or (row.get("execution_claimed_at") and
                             await _time(row["execution_claimed_at"]) + timedelta(minutes=5) > now)):
                     continue

@@ -102,11 +102,14 @@ ALTER TABLE public.mode_handoffs
   ADD COLUMN execution_clock_at TIMESTAMPTZ,
   ADD COLUMN execution_attempts INT NOT NULL DEFAULT 0 CHECK (execution_attempts >= 0),
   ADD COLUMN executed_at TIMESTAMPTZ,
+  ADD COLUMN execution_failed_at TIMESTAMPTZ,
+  ADD COLUMN execution_failure_reason TEXT CHECK (execution_failure_reason IN
+    ('session_unavailable','target_unavailable','execution_failed','attempts_exhausted')),
   ADD COLUMN execution_plan JSONB NOT NULL DEFAULT '[]'::jsonb
     CHECK (jsonb_typeof(execution_plan) = 'array' AND jsonb_array_length(execution_plan) <= 32),
   ADD FOREIGN KEY (execution_session_id, user_id) REFERENCES public.sessions(session_id, user_id);
 CREATE INDEX mode_handoffs_execution_pending ON public.mode_handoffs(execution_claimed_at)
-  WHERE resolution = 'confirmed' AND executed_at IS NULL;
+  WHERE resolution = 'confirmed' AND executed_at IS NULL AND execution_failed_at IS NULL;
 
 CREATE FUNCTION public.claim_handoff_execution(
   p_user_id UUID, p_handoff_id UUID, p_worker_id TEXT, p_execution_session_id UUID DEFAULT NULL
@@ -129,6 +132,8 @@ BEGIN
     WHERE user_id=p_user_id AND handoff_id=p_handoff_id AND resolution='confirmed' FOR UPDATE;
   IF NOT FOUND THEN RETURN jsonb_build_object('status', 'unavailable'); END IF;
   IF v_handoff.executed_at IS NOT NULL THEN RETURN jsonb_build_object('status', 'executed'); END IF;
+  IF v_handoff.execution_failed_at IS NOT NULL THEN
+    RETURN jsonb_build_object('status', 'failed'); END IF;
   v_now := clock_timestamp();
   IF v_handoff.execution_claimed_at > v_now - interval '5 minutes' THEN
     RETURN jsonb_build_object('status', 'busy'); END IF;
@@ -139,10 +144,16 @@ BEGIN
          AND v_handoff.execution_session_id <> v_session_id)
      OR (v_handoff.execution_session_id IS NOT NULL AND p_execution_session_id IS NOT NULL
          AND v_handoff.execution_session_id <> p_execution_session_id)
-     OR (v_handoff.target_mode_id <> 'daily' AND v_handoff.target_grant_required AND NOT EXISTS (
+     THEN
+    UPDATE public.mode_handoffs SET execution_failed_at=v_now,
+      execution_failure_reason='session_unavailable' WHERE handoff_id=p_handoff_id;
+    RETURN jsonb_build_object('status','unavailable','terminal',TRUE); END IF;
+  IF (v_handoff.target_mode_id <> 'daily' AND v_handoff.target_grant_required AND NOT EXISTS (
        SELECT 1 FROM public.mode_grants WHERE user_id=p_user_id AND mode_id=v_handoff.target_mode_id
          AND revoked_at IS NULL AND expires_at > v_now)) THEN
-    RETURN jsonb_build_object('status', 'unavailable'); END IF;
+    UPDATE public.mode_handoffs SET execution_failed_at=v_now,
+      execution_failure_reason='target_unavailable' WHERE handoff_id=p_handoff_id;
+    RETURN jsonb_build_object('status','unavailable','terminal',TRUE); END IF;
   UPDATE public.mode_handoffs SET execution_claimed_at=v_now,
     execution_claim_token=pg_catalog.gen_random_uuid(), execution_worker_id=p_worker_id,
     execution_session_id=v_session_id, execution_clock_at=coalesce(execution_clock_at, v_now),
@@ -156,7 +167,8 @@ DECLARE v_row public.mode_handoffs%ROWTYPE; BEGIN
   IF p_plan IS NULL OR jsonb_typeof(p_plan) <> 'array' OR jsonb_array_length(p_plan) > 32 THEN
     RETURN FALSE; END IF;
   SELECT * INTO v_row FROM public.mode_handoffs WHERE user_id=p_user_id AND handoff_id=p_handoff_id
-    AND execution_claim_token=p_claim_token AND executed_at IS NULL FOR UPDATE;
+    AND execution_claim_token=p_claim_token AND executed_at IS NULL
+    AND execution_failed_at IS NULL FOR UPDATE;
   IF NOT FOUND OR v_row.execution_claimed_at <= clock_timestamp()-interval '5 minutes'
     THEN RETURN FALSE; END IF;
   IF p_plan = v_row.execution_plan THEN RETURN TRUE; END IF;
@@ -169,11 +181,27 @@ CREATE FUNCTION public.complete_handoff_execution(p_user_id UUID, p_handoff_id U
 RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE v_row public.mode_handoffs%ROWTYPE; BEGIN
   SELECT * INTO v_row FROM public.mode_handoffs WHERE user_id=p_user_id AND handoff_id=p_handoff_id
-    AND execution_claim_token=p_claim_token AND executed_at IS NULL FOR UPDATE;
+    AND execution_claim_token=p_claim_token AND executed_at IS NULL
+    AND execution_failed_at IS NULL FOR UPDATE;
   IF NOT FOUND OR v_row.execution_claimed_at <= clock_timestamp()-interval '5 minutes'
     THEN RETURN FALSE; END IF;
   UPDATE public.mode_handoffs SET executed_at=clock_timestamp() WHERE handoff_id=p_handoff_id;
   RETURN TRUE;
+END $$;
+CREATE FUNCTION public.fail_handoff_execution(
+ p_user_id UUID,p_handoff_id UUID,p_claim_token UUID,p_reason TEXT
+) RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_row public.mode_handoffs%ROWTYPE; BEGIN
+ IF p_reason IS NULL OR p_reason NOT IN ('execution_failed','attempts_exhausted','target_unavailable')
+ THEN RETURN FALSE; END IF;
+ SELECT * INTO v_row FROM public.mode_handoffs WHERE user_id=p_user_id AND handoff_id=p_handoff_id
+   AND execution_claim_token=p_claim_token AND executed_at IS NULL
+   AND execution_failed_at IS NULL FOR UPDATE;
+ IF NOT FOUND OR v_row.execution_claimed_at <= clock_timestamp()-interval '5 minutes'
+ THEN RETURN FALSE; END IF;
+ UPDATE public.mode_handoffs SET execution_failed_at=clock_timestamp(),execution_failure_reason=p_reason
+ WHERE handoff_id=p_handoff_id;
+ RETURN TRUE;
 END $$;
 CREATE FUNCTION public.list_pending_handoff_executions(p_limit INT DEFAULT 25)
 RETURNS TABLE(user_id UUID, handoff_id UUID, execution_session_id UUID, target_mode_id TEXT,
@@ -181,7 +209,7 @@ RETURNS TABLE(user_id UUID, handoff_id UUID, execution_session_id UUID, target_m
 LANGUAGE sql SECURITY DEFINER SET search_path = '' AS $$
   SELECT h.user_id, h.handoff_id, h.execution_session_id, h.target_mode_id, u.telegram_chat_id
   FROM public.mode_handoffs h JOIN public.user_profiles u ON u.user_id=h.user_id
-  WHERE h.resolution='confirmed' AND h.executed_at IS NULL
+  WHERE h.resolution='confirmed' AND h.executed_at IS NULL AND h.execution_failed_at IS NULL
     AND (h.execution_claimed_at IS NULL OR h.execution_claimed_at <= clock_timestamp()-interval '5 minutes')
   ORDER BY h.created_at LIMIT greatest(1, least(p_limit,100));
 $$;
@@ -190,13 +218,15 @@ REVOKE ALL ON FUNCTION public.save_mode_conversation(UUID,TEXT,TEXT,JSONB,BOOLEA
  public.close_mode_conversation(UUID,TEXT,TEXT),
  public.claim_handoff_execution(UUID,UUID,TEXT,UUID),
  public.save_handoff_execution_plan(UUID,UUID,UUID,JSONB),
- public.complete_handoff_execution(UUID,UUID,UUID), public.list_pending_handoff_executions(INT)
+ public.complete_handoff_execution(UUID,UUID,UUID),
+ public.fail_handoff_execution(UUID,UUID,UUID,TEXT), public.list_pending_handoff_executions(INT)
  FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.save_mode_conversation(UUID,TEXT,TEXT,JSONB,BOOLEAN),
  public.close_mode_conversation(UUID,TEXT,TEXT),
  public.claim_handoff_execution(UUID,UUID,TEXT,UUID),
  public.save_handoff_execution_plan(UUID,UUID,UUID,JSONB),
- public.complete_handoff_execution(UUID,UUID,UUID), public.list_pending_handoff_executions(INT)
+ public.complete_handoff_execution(UUID,UUID,UUID),
+ public.fail_handoff_execution(UUID,UUID,UUID,TEXT), public.list_pending_handoff_executions(INT)
  TO service_role;
 DO $$ BEGIN
  IF to_regclass('public.mode_conversations') IS NULL
@@ -208,6 +238,7 @@ DO $$ BEGIN
     OR to_regprocedure('public.claim_handoff_execution(uuid,uuid,text,uuid)') IS NULL
     OR to_regprocedure('public.complete_handoff_execution(uuid,uuid,uuid)') IS NULL
     OR to_regprocedure('public.save_handoff_execution_plan(uuid,uuid,uuid,jsonb)') IS NULL
+    OR to_regprocedure('public.fail_handoff_execution(uuid,uuid,uuid,text)') IS NULL
  THEN RAISE EXCEPTION '017 objects were not created'; END IF;
  INSERT INTO public.schema_migrations(version) VALUES(17);
 END $$;

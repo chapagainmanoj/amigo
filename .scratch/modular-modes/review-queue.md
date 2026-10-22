@@ -678,3 +678,13 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   off; if enabled user-created threads must be off. Android remains untested. No execution here.
 - Documentation checked against schema21/CI migration order. Latest full1353passed20.53s,
   Ruff/diff clean; currency unchanged. Final combined SQL chain follows remaining SQL fixes.
+
+### Review fix4 — terminal unavailable recovery claims
+
+- Author4068b5f; protected017 and assert017, modes.py/all3Stores, handoff terminal/Store tests,
+  independent evidence proposal. Unavailable owned claim records terminal reason/time; stale
+  leases cannot finalize; failed rows leave LIMIT25 recovery queue and cannot replay/complete.
+- Independent usage_gate fresh45-file CI chain PASS at017SHA745aab3d…; ownership/livelease/
+  stale-token/25blocked→26th queue drain checks PASS. Reviewer cluster stopped.
+- Root full1362passed20.34s; Ruff/diff clean,111currency/Daily golden included. Author scheduler
+  smoke passed. Two-attempt cap/one notice follow separately in fix3. No release certification.

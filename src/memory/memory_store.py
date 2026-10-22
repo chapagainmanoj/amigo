@@ -634,6 +634,11 @@ class InMemoryStore:
     ) -> bool:
         return await self._mode_state.complete_execution(user_id, handoff_id, claim_token)
 
+    async def fail_handoff_execution(
+        self, user_id: str, handoff_id: str, claim_token: str, reason: str,
+    ) -> bool:
+        return await self._mode_state.fail_execution(user_id, handoff_id, claim_token, reason)
+
     async def list_pending_handoff_executions(self, limit: int = 25) -> list[dict]:
         return await self._mode_state.pending_executions(self._users.values(), limit)
 
