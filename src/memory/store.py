@@ -632,6 +632,7 @@ class MemoryStore:
 
     @_observe_database_call
     async def claim_scheduler_effects(self, limit: int, worker_id: str) -> list[dict]:
+        """Delegate UTC-instant availability, lease expiry and ordering to the TIMESTAMPTZ RPC."""
         result = await self.db.rpc(
             "claim_scheduler_outbox",
             {"p_limit": limit, "p_worker_id": worker_id},

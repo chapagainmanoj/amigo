@@ -41,6 +41,15 @@ def _new_id() -> str:
     return str(uuid.uuid4())
 
 
+def _utc_timestamp(value: str | datetime) -> datetime:
+    """Interpret legacy naive timestamps as UTC; preserve explicitly offset instants."""
+    instant = datetime.fromisoformat(value) if isinstance(value, str) else value
+    return (
+        instant.replace(tzinfo=ZoneInfo("UTC"))
+        if instant.tzinfo is None else instant.astimezone(ZoneInfo("UTC"))
+    )
+
+
 def _elapsed_ms(later: str, earlier: str) -> int:
     later_time = datetime.fromisoformat(later)
     earlier_time = datetime.fromisoformat(earlier)
@@ -736,16 +745,16 @@ class InMemoryStore:
 
     async def claim_scheduler_effects(self, limit: int, worker_id: str) -> list[dict]:
         claimed = []
-        now = utc_now()
+        now = _utc_timestamp(utc_now())
         for effect in sorted(
-            self._scheduler_outbox.values(), key=lambda item: item["created_at"]
+            self._scheduler_outbox.values(), key=lambda item: _utc_timestamp(item["created_at"])
         ):
             abandoned = (
                 effect["status"] == "processing"
                 and effect.get("claimed_at")
-                and now - datetime.fromisoformat(effect["claimed_at"]) > timedelta(minutes=5)
+                and now - _utc_timestamp(effect["claimed_at"]) > timedelta(minutes=5)
             )
-            available = datetime.fromisoformat(effect["available_at"]) <= now
+            available = _utc_timestamp(effect["available_at"]) <= now
             if (
                 (effect["status"] != "pending" or not available)
                 and not abandoned

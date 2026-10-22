@@ -113,3 +113,71 @@
   tokens. ADR remains Accepted, pending spike. Phase 4 not started; no migrations written/applied.
 - Gemini total 0 requests/0 tokens. No push, deploy, Supabase migration, .env edit, real-participant
   Claude pin, or CBT personal input. Phase 5/6 implementation remains outstanding.
+
+## Phase 3 review fixes — 2026-10-22
+
+Owner review findings at the end of give-me-a-plan-wild-unicorn.md addressed before any
+owner topic spike or Phase 4 implementation. One commit per finding; no protected-file edits.
+
+1. **Gemini accounting — `a526d5c`**
+   - Files: src/agent/runtime.py, src/model_usage.py, tests/test_model_usage.py.
+   - Production factory builds exact plain GoogleModel for google/google-gla, including after a
+     development instance was cached. Runtime cache is separated by production status.
+   - Development and explicit eval runner retain LoggedGoogleModel; it uses public request /
+     ModelResponse.usage, with no overrides of Pydantic AI private methods. Provider failures,
+     malformed provider responses and cancellation retain metadata-only error/unknown-token counts.
+     Local validation errors are not logged as provider requests.
+   - All mkdir/open/write/close work runs through asyncio.to_thread. Thread regression proves
+     writes occur outside the event-loop thread. Production request test proves logger not called.
+   - Red regressions: 7 failed / 4 passed before fix (production type/cache, synchronous I/O,
+     public-result accounting). Independent review found malformed-response accounting gap;
+     actual public request + mocked SDK malformed-response regression now passes.
+
+2. **Claude environment — `cdcc962`**
+   - Files: src/agent/claude_cli_model.py, tests/test_dev_models.py;
+     CBT MVP model_selector.py, test_model_selector.py.
+   - Both subprocesses share an allowlist: PATH, HOME, USER, LANG, TERM, CLAUDE_CODE_OAUTH_TOKEN.
+     Only explicit subscription OAuth auth is retained; no application keys or provider overrides.
+     CBT's output-token setting is a fixed trusted value, not inherited environment input.
+   - Tests assert SUPABASE_SERVICE_KEY, TELEGRAM_BOT_TOKEN, GOOGLE_API_KEY, ANTHROPIC_API_KEY,
+     arbitrary secrets and provider endpoint/auth overrides never reach subprocesses.
+     Focused runtime/harness selection tests: 48 passed in 1.23s; touched-file Ruff clean.
+
+3. **Spike token — `e226738`**
+   - Files: scripts/spike_private_topics.py, tests/test_topic_spike.py,
+     .scratch/modular-modes/proposals/topic-spike-runbook.md.
+   - Token read only from TEST_BOT_TOKEN process environment. --token removed; obsolete invocation
+     fails without echoing arguments. Missing/blank test token and matching production token refused.
+     --test-bot remains mandatory. Runbook avoids token values in command arguments/history.
+   - Focused spike tests: 31 passed. Help output confirms no --token option. No bot calls executed.
+
+4. **Local scheduler timestamps — this commit, `Normalize scheduler outbox claim timestamps to UTC`**
+   - Files: src/memory/memory_store.py, src/memory/store.py, tests/fakes.py,
+     tests/test_scheduler_effect_timestamps.py;
+     .scratch/scheduler-effect-timestamps/issues/01-normalize-local-outbox-claim-timestamps.md;
+     this review queue.
+   - Local issue opened, reproduced, fixed and closed with evidence. Actual Activation outbox claim
+     reproduced compare/subtract TypeErrors; mixed offsets also reproduced wrong oldest-first order.
+     Red regression: 10 failed, 3 passed in 0.12s. Green regression: 13 passed; focused
+     Activation/scheduler group 51 passed in 1.01s.
+   - Both local Stores normalize current/available/claimed/created timestamps to UTC instants;
+     legacy naive values mean UTC. Tests cover real Activation rows, naive/aware clocks, offsets,
+     future eligibility, lease expiry/boundary, chronological limits, attempts and detached results.
+   - MemoryStore keeps exact claim_scheduler_outbox RPC; docstring clarified. Adapter contract test
+     verifies delegation/returned offset rows/null handling. This is mocked adapter coverage, not
+     a new PostgreSQL execution. No migration or new reachable module required.
+
+**Final integrated verification (all four fixes):**
+
+- `.venv/bin/python -m pytest tests/ -q`: **766 passed in 8.88s**.
+- Gate A currency: **111 passed in 5.61s**; currency test source unchanged.
+- Separate fictional CBT harness: **57 passed in 0.87s**.
+- Ruff src/tests/scripts + CBT harness: **All checks passed!**
+- Scheduler smoke: **in-memory APScheduler reminder fired through channel**.
+- git diff --check clean. Daily instructions/Tool schema unchanged; golden tests passed.
+- No live Gate A certification or model requests. Gemini total remains 0 requests/0 tokens.
+  No production usage file write, .env edit, push, deploy, Supabase migration, participant Claude
+  pin or CBT personal input. All runtime evidence tests use mocks/temporary metadata paths.
+
+**STOP:** spike script ready for owner run with TEST_BOT_TOKEN, --test-bot and private --chat-id.
+ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client observations required.
