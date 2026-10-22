@@ -106,8 +106,8 @@ amigo/
   addresses map to Daily. Non-threaded channels use `/mode` and `/daily`, and Telegram retains
   these commands for older clients. Both paths use the same Mode/entitlement resolver. An expired
   grant or withdrawn Mode is refused in its conversation instead of silently executing Daily.
-- **Explicit threaded delivery**: Telegram production requires Threaded Mode enabled and
-  user-created threads disabled. Each outgoing message carries a conversation; a deleted private
+- **Explicit threaded delivery**: Telegram supports production in-chat Mode commands when topics
+  are off. With Threaded Mode enabled, user-created threads must be disabled. Each outgoing message carries a conversation; a deleted private
   topic may be restored by Telegram on send. Reminders resolve the participant's primary channel
   and Daily address at delivery time, keeping provider endpoints out of durable outbox payloads.
   The current implementation supports Telegram and local CLI, not a new primary-channel switcher.

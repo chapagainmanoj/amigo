@@ -60,18 +60,29 @@ class TelegramChannel:
         self._bot = value
 
     async def initialize(self, *, production: bool = False) -> str | None:
-        info = await self.bot.get_me()
+        try:
+            info = await self.bot.get_me()
+        except Exception as error:
+            self.capabilities = replace(_CAPABILITIES, threads=False)
+            self._username = None
+            if production:
+                raise RuntimeError("Telegram capability check failed") from None
+            logger.warning(
+                "Telegram capability check failed; in-chat Mode commands remain available (%s)",
+                type(error).__name__,
+            )
+            return None
         topics = getattr(info, "has_topics_enabled", False) is True
         user_topics = getattr(info, "allows_users_to_create_topics", None)
         self.capabilities = replace(_CAPABILITIES, threads=topics)
         self._username = getattr(info, "username", None)
         logger.info("telegram_topics enabled=%s user_created=%s", topics, user_topics)
-        if not topics or user_topics is not False:
-            if production:
-                raise RuntimeError(
-                    "Telegram requires Threaded Mode on and user-created threads off"
-                )
-            logger.warning("Telegram topic settings differ from the production requirement")
+        if not topics:
+            logger.warning("Telegram topics disabled; using in-chat Mode commands")
+        elif user_topics is not False:
+            if production and user_topics is True:
+                raise RuntimeError("Telegram Threaded Mode requires user-created threads off")
+            logger.warning("Telegram user-created threads should be disabled")
         return getattr(info, "username", None)
 
     async def create_conversation(self, chat_id: str | int, name: str) -> ConversationRef:

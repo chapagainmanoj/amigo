@@ -42,7 +42,7 @@ clean-account staging evidence.
   durable personal Memory product.
 - Dashboard and Telegram now share the canonical Task and Reminder command paths locally, but the
   cross-surface flow still needs staging evidence before it can pass the release gate.
-- A Telegram production release requires Threaded Mode on and user-created threads off. Every
+- Telegram production supports topics off; if enabled, user-created threads must be off. Every
   threaded send needs an explicit conversation; deleting a topic does not unsubscribe its Mode.
 - Dashboard Mode chips show server availability and grant expiry. Planned or unentitled Modes
   have no actionable link; a visible name does not mean the Mode can run.

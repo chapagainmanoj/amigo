@@ -198,8 +198,8 @@ unknown conversations enter Daily. Channels without threads use `/mode`, `/mode 
 by Mode-scoped Session, and handoffs need participant confirmation before carrying the selected
 request to a target Mode.
 
-For Telegram, enable Threaded Mode and disable user-created threads in BotFather before deploying
-this routing. Production startup rejects unsafe topic settings. Every threaded delivery needs an
+Telegram may keep Threaded Mode off and use in-chat Mode commands. If the owner enables topics,
+user-created threads must be off; production startup rejects that unsafe combination. Every threaded delivery needs an
 explicit conversation; Reminders resolve the current primary-channel Daily conversation when they
 send. Deleting a private topic does not stop delivery: Telegram can restore it on the next send.
 The owner's test bot verified Desktop and iOS behavior; Android and the complete application flow

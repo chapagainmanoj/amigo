@@ -27,9 +27,10 @@ access/Activation errors, feedback, Turn replies and Reminders. Messages lacking
 conversation resolve/create the canonical Daily conversation before sending. Reminders resolve
 Daily on the primary messaging channel at delivery time; outbox payloads do not gain thread IDs.
 
-Startup checks the bot capability settings. Production requires topic mode on and user-created
-threads off. Development warns on unsupported settings and uses the non-threaded command path
-when topics are unavailable. No threadless resend is permitted in a topics-enabled chat.
+Startup checks the bot capability settings. Topics off uses in-chat Mode commands, including
+in production, with a warning. Production refuses only when topics are on and user-created
+threads are also on; an unavailable user-created flag is warned about. Outside production, a failed capability check warns and leaves
+the non-threaded command path available. No threadless resend is permitted in a topics-enabled chat.
 
 Handoffs remain participant-confirmed and treat carried requests as untrusted. History stays
 isolated by Mode Session. Closing expired/revoked Mode conversations preserves history; deleting

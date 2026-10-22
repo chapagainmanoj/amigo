@@ -610,3 +610,15 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Review findings and both Owner decisions blocks read fully. All1–20 tracked for this repair
   series. Handoff/017, budget/019 and Memory/020 changes isolated in managed checkouts; each SQL
   change requires independent review before its separate develop integration commit.
+
+### Review fix1 — topics-off startup remains available
+
+- Files src/channels/telegram.py, tests/test_channel_conversations.py, README.md,
+  docs/architecture.md, docs/capability-matrix.md, docs/adr/0003-mode-topics.md. Protected:none.
+- Topics off now warns and uses in-chat Mode commands in production and development. Refuse only
+  topics-on plus user-created-on; unknown user-created flag warns. Development getMe failure
+  warns without provider details and leaves command mode available; production lookup failure
+  still refuses. grant_mode.py shares this same initializer.
+- Full1326passed20.31s; focused channel/operator/currency checks passed; Ruff/diff clean.
+  Daily golden/schema and111 currency tests unchanged. Gate A evidence remains uncertified.
+  SQL unchanged in this fix; combined full-chain verification follows SQL repair integrations.

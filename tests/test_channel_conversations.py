@@ -45,7 +45,7 @@ def test_conversation_rejects_non_json_endpoint(endpoint):
 
 
 @pytest.mark.parametrize(
-    ("topics", "user_threads"), [(False, False), (True, True), (False, True), (True, None)]
+    ("topics", "user_threads"), [(True, True)]
 )
 async def test_production_refuses_unsafe_topic_settings(topics, user_threads):
     channel = TelegramChannel()
@@ -86,7 +86,7 @@ async def test_development_warns_for_unthreaded_bot(caplog):
     )
     await channel.initialize()
     assert not channel.capabilities.threads
-    assert "production requirement" in caplog.text
+    assert "topics disabled" in caplog.text
 
 
 async def test_explicit_conversation_is_the_only_delivery_thread():
@@ -236,3 +236,38 @@ async def test_flat_update_has_no_thread_reference():
         }
     )
     assert decoded.conversation is None
+
+
+@pytest.mark.parametrize("user_threads", [True, False, None])
+async def test_production_topics_off_uses_in_chat_commands(user_threads, caplog):
+    channel = TelegramChannel()
+    channel.bot = SimpleNamespace(get_me=AsyncMock(return_value=SimpleNamespace(
+        username="test_bot", has_topics_enabled=False,
+        allows_users_to_create_topics=user_threads,
+    )))
+    assert await channel.initialize(production=True) == "test_bot"
+    assert channel.capabilities.threads is False
+    assert "in-chat Mode commands" in caplog.text
+
+
+@pytest.mark.parametrize("production", [True, False])
+async def test_get_me_failure_only_blocks_production(production, caplog):
+    channel = threaded_channel()
+    channel.bot.get_me = AsyncMock(side_effect=RuntimeError("provider-private-detail"))
+    if production:
+        with pytest.raises(RuntimeError, match="capability check failed"):
+            await channel.initialize(production=True)
+    else:
+        assert await channel.initialize(production=False) is None
+    assert not channel.capabilities.threads
+    assert "provider-private-detail" not in caplog.text
+
+
+async def test_unknown_user_topic_flag_warns_without_claiming_it_is_enabled(caplog):
+    channel = TelegramChannel()
+    channel.bot = SimpleNamespace(get_me=AsyncMock(return_value=SimpleNamespace(
+        username="test_bot", has_topics_enabled=True,
+    )))
+    assert await channel.initialize(production=True) == "test_bot"
+    assert channel.capabilities.threads
+    assert "user-created threads" in caplog.text
