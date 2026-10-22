@@ -45,18 +45,16 @@ async def safety_tier(text: str) -> SafetyTier:
         value,
     ):
         return "immediate"
-    # Explicit negation of the current thought is not itself a crisis disclosure. Clause-local
-    # matching prevents a later affirmative disclosure being erased by an earlier negation.
-    for clause in re.split(r"[.!?;\n]|\bbut\b", value):
-        if re.search(r"\b(?:not|never|no longer) (?:currently )?(?:thinking|planning)", clause):
-            continue
-        if re.search(
+    # Only negate the matched disclosure, not other thoughts in the same sentence.
+    for disclosure in re.finditer(
             r"\b(?:(?:thinking|thoughts) (?:about|of) (?:suicide|killing myself|"
             r"hurting myself|self[- ]harm)|(?:i (?:want|plan|intend) to|"
             r"i(?:'m| am) going to) (?:kill|hurt) myself|i(?:'m| am) suicidal|"
             r"i (?:don't|do not) want to live)\b",
-            clause,
-        ):
+            value,
+    ):
+        prefix = value[max(0, disclosure.start() - 60):disclosure.start()]
+        if not re.search(r"\b(?:not|never|no|no longer) (?:currently )?$", prefix):
             return "explicit"
     if re.search(r"\b(?:i (?:can't|cannot) go on|no point (?:in living|anymore))\b", value):
         return "ambiguous"

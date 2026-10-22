@@ -245,6 +245,8 @@ def test_authored_fiction_suite_and_deterministic_scripts_cover_the_contract():
     ("I can't go on", "ambiguous"),
     ("I am thinking about suicide", "explicit"),
     ("I am not thinking about suicide, but I want to hurt myself", "explicit"),
+    ("I'm not thinking clearly and I want to kill myself", "explicit"),
+    ("I'm not thinking about suicide, I want to kill myself", "explicit"),
     ("An attempt is in progress and there is immediate danger", "immediate"),
 ])
 async def test_known_safety_statements_have_deterministic_routes(text, tier):
