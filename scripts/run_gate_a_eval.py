@@ -282,7 +282,8 @@ async def _run_execution(
         )
         latency_ms = round((time.perf_counter() - turn_started) * 1_000, 2)
         messages = result.messages
-        trace, response = extract_trace(messages)
+        trace, _ = extract_trace(messages)
+        response = result.output
         observed_models.update(observed_model_names(messages))
         usage = result.usage
         total_input += usage.input_tokens

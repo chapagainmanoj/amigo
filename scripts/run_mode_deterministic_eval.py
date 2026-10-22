@@ -64,7 +64,10 @@ async def evaluate_mode(mode, *, candidate=False) -> list[str]:
             result = await orchestrator.run_turn(
                 context, turn.message, requested_mode=mode.id, model=FunctionModel(scripted)
             )
-            trace, response = extract_trace(result.messages)
+            if entry.get("application_response") and result.messages:
+                failures.append(f"{mode.id}/{case_id}: safety response called a model")
+            trace, _ = extract_trace(result.messages)
+            response = result.output
             score = score_turn(
                 turn,
                 trace=trace,

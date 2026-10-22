@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from src.agent.modes import ModeUnavailableError
 from src.conversations import ModeConversationService
 from src.tools.context import ToolContext
+from src.wellbeing import reflect_safety_response
 
 
 @dataclass
@@ -54,6 +55,9 @@ class ModeController:
             ):
                 return PreparedModeTurn(context, selected, "Use /mode, /mode <id>, or /daily.")
             selected = "daily" if command == "/daily" else parts[1]
+        safety_reply = await reflect_safety_response(selected, text)
+        if safety_reply is not None:
+            return PreparedModeTurn(context, selected, safety_reply)
         try:
             mode = await self.runtime.resolve(context, selected)
         except ModeUnavailableError as error:

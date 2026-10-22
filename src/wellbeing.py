@@ -5,6 +5,7 @@ are supplied by this module. The default policy denies processing. Only trusted 
 code may supply consent/readiness evidence; participant text and model output cannot authorize it.
 """
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -27,6 +28,48 @@ REFLECT_CONSENT_NOTICE = (
     "Declining leaves Daily available; /daily exits at any time."
 )
 SafetyTier = Literal["ordinary", "ambiguous", "explicit", "immediate"]
+
+
+async def safety_tier(text: str) -> SafetyTier:
+    """Conservative English routing rules, never a diagnosis or a clinical risk assessment.
+
+    Known urgent statements bypass generation. These rules cannot recognize every expression
+    of danger; qualified review and the remaining Reflect admission gates are still mandatory.
+    """
+    value = text.casefold().replace("’", "'")
+    if re.search(
+        r"\b(attempt (?:is )?in progress|immediate danger|"
+        r"(?:i(?:'m| am) )?(?:about to kill myself|have taken an overdose)|"
+        r"i(?:'m| am) going to (?:kill|hurt) myself (?:right )?now|"
+        r"i (?:just )?(?:took an overdose|swallowed (?:all |a bottle of )?(?:my )?pills))\b",
+        value,
+    ):
+        return "immediate"
+    # Explicit negation of the current thought is not itself a crisis disclosure. Clause-local
+    # matching prevents a later affirmative disclosure being erased by an earlier negation.
+    for clause in re.split(r"[.!?;\n]|\bbut\b", value):
+        if re.search(r"\b(?:not|never|no longer) (?:currently )?(?:thinking|planning)", clause):
+            continue
+        if re.search(
+            r"\b(?:(?:thinking|thoughts) (?:about|of) (?:suicide|killing myself|"
+            r"hurting myself|self[- ]harm)|(?:i (?:want|plan|intend) to|"
+            r"i(?:'m| am) going to) (?:kill|hurt) myself|i(?:'m| am) suicidal|"
+            r"i (?:don't|do not) want to live)\b",
+            clause,
+        ):
+            return "explicit"
+    if re.search(r"\b(?:i (?:can't|cannot) go on|no point (?:in living|anymore))\b", value):
+        return "ambiguous"
+    return "ordinary"
+
+
+async def reflect_safety_response(mode_id: str | None, text: str) -> str | None:
+    """Deterministic safety response, available even while Reflect processing is disabled."""
+    if mode_id != "reflect":
+        return None
+    from src.mode_readiness import wellbeing_policy
+
+    return await wellbeing_policy.referral(await safety_tier(text))
 
 
 def _utc(instant: datetime) -> datetime:

@@ -236,3 +236,54 @@ def test_authored_fiction_suite_and_deterministic_scripts_cover_the_contract():
             assert "create_task" in turn.prohibited_tools
     scripted = json.loads((root / "evals/reflect/v1/deterministic.json").read_text())
     assert {case.id for case in suite.cases} == {case["case_id"] for case in scripted["cases"]}
+
+
+@pytest.mark.parametrize(("text", "tier"), [
+    ("I am disappointed I missed my walk", "ordinary"),
+    ("That deadline is killing me", "ordinary"),
+    ("I am not thinking about suicide", "ordinary"),
+    ("I can't go on", "ambiguous"),
+    ("I am thinking about suicide", "explicit"),
+    ("I am not thinking about suicide, but I want to hurt myself", "explicit"),
+    ("An attempt is in progress and there is immediate danger", "immediate"),
+])
+async def test_known_safety_statements_have_deterministic_routes(text, tier):
+    from src.wellbeing import safety_tier
+
+    assert await safety_tier(text) == tier
+
+
+@pytest.mark.parametrize("entry", ["handle_turn", "run_turn", "prepare"])
+async def test_reflect_danger_bypasses_disabled_mode_model_and_sensitive_storage(entry):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from src.bot.modes import ModeController
+    from src.tools.context import ToolContext
+    from src.turns import SessionTurnOrchestrator
+    from tests.fakes import FakeChannel, FakeScheduler, FakeStore
+
+    store, channel = FakeStore(), FakeChannel()
+    user = await store.create_user(71001)
+    context = ToolContext(
+        store=store, scheduler=FakeScheduler(), channel=channel, user=user,
+        session_id="unused", chat_id=71001, timezone="UTC", turn_id="safety-test",
+    )
+    runtime = SimpleNamespace(resolve=AsyncMock(side_effect=AssertionError("No model admission")))
+    text = "I am about to kill myself"
+    if entry == "prepare":
+        from src.memory.sessions import SessionManager
+
+        controller = ModeController(store, channel, FakeScheduler(), SessionManager(store), runtime)
+        controller.conversations.select = AsyncMock(return_value="reflect")
+        result = await controller.prepare(71001, user, text, 1)
+        output = result.response
+    else:
+        result = await getattr(SessionTurnOrchestrator(runtime), entry)(
+            context, text, requested_mode="reflect"
+        )
+        output = result if isinstance(result, str) else result.output
+    assert STATIC_EMERGENCY_REFERRAL in output
+    assert "country" in output
+    assert not store.messages
+    runtime.resolve.assert_not_awaited()

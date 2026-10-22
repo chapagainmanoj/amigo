@@ -765,3 +765,18 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Independent usage_gate fresh45-file SQL chain + owner/token/role/lease/content/dedup/thirdclaim/
   notice fences PASS017SHA09e0a285…;42focusedPASS2.54s. Rootfull1401passed22.69s/Ruff/diffclean;
  111currency/Dailygolden included. Author scheduler smoke passed. No release certification.
+
+### Review fix9 — deterministic Reflect safety routing
+
+- Files wellbeing.py, bot/modes.py, turns.py, both eval runners, Reflect deterministic fixture
+  and tests. Protected/SQL:none; wellbeing already in source fingerprint closure.
+- Known immediate/explicit/ambiguous English statements use static CrisisRegistry responses
+  before Reflect admission, transcript persistence or model access. Empty/stale resource registry
+  supplies general local guidance and asks country; never infers location or invents contacts.
+  Ordinary disappointment/idioms and explicit negation remain ordinary. Same route in command,
+  threaded and direct orchestration paths; default Reflect admission still off.
+- These bounded routing rules are not clinical assessment or comprehensive detection; qualified
+  wellbeing review and other consent/privacy gates remain mandatory before enabling Reflect.
+-165Reflect/candidate/currency tests passed11.36s; Ruff/diffclean. Three fixture safety cases now
+  require application output without model messages. Runners score actual result.output, including
+  static replies. No historical artifact rescoring/model requests/Gate A release certification.

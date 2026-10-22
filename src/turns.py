@@ -8,6 +8,8 @@ import logging
 import time
 from typing import Any
 
+from pydantic_ai.usage import RunUsage
+
 from src.agent.modes import ModeDefinition, ModeUnavailableError
 from src.agent.runtime import (
     FAILURE_REPLY,
@@ -19,6 +21,7 @@ from src.agent.runtime import (
 from src.memory.context import ContextBuilder
 from src.telemetry import TurnRecord, emit_turn_record, record_count
 from src.tools.context import ToolContext
+from src.wellbeing import reflect_safety_response
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,9 @@ class SessionTurnOrchestrator:
     ) -> ModeRunResult:
         """Run a Turn with transcript persistence, propagating execution failures."""
         started = time.perf_counter()
+        safety_reply = await reflect_safety_response(requested_mode, text)
+        if safety_reply is not None:
+            return ModeRunResult(safety_reply, [], RunUsage())
         initial_count = record_count.get()
         try:
             mode = await self.runtime.resolve(context, requested_mode)
@@ -53,6 +59,9 @@ class SessionTurnOrchestrator:
     ) -> str:
         """Run one Turn and always return something the participant can read."""
         started = time.perf_counter()
+        safety_reply = await reflect_safety_response(requested_mode, text)
+        if safety_reply is not None:
+            return safety_reply
         initial_count = record_count.get()
         try:
             mode = await self.runtime.resolve(context, requested_mode)
