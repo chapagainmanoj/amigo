@@ -90,6 +90,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/evaluation/gate_a.py",
     "src/evaluation/model_policy.py",
     "src/handoffs.py",
+    "src/maintenance.py",
     "src/memory/activation.py",
     "src/memory/coaching.py",
     "src/memory/context.py",

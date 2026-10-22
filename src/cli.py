@@ -20,6 +20,7 @@ from src.commands.activation import CreateActivationTestCommand
 from src.commands.base import CommandContext
 from src.commands.tasks import ResolveTaskCommand
 from src.config import settings
+from src.maintenance import run_isolated_steps
 from src.memory.memory_store import InMemoryStore
 from src.memory.sessions import SessionManager
 from src.observability import quiet_routine_logs
@@ -159,8 +160,13 @@ async def run_cli(onboard: bool = False):
     serializer = ParticipantTurnSerializer()
 
     async def maintain_modes():
-        await handlers.memory.service.prune()
-        await handlers.handoffs.recover(serializer)
+        async def recover():
+            await handlers.handoffs.recover(serializer)
+
+        await run_isolated_steps([
+            ("memory_prune", handlers.memory.service.prune),
+            ("handoff_recovery", recover),
+        ])
 
     # Start the scheduler so reminders fire in the terminal
     reminder_scheduler.start()

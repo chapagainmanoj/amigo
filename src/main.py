@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from functools import partial
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -22,6 +23,7 @@ from src.bot.handlers import BotHandlers
 from src.bot.update_claims import TelegramUpdateCoordinator
 from src.channels.telegram import TelegramChannel
 from src.config import settings
+from src.maintenance import run_isolated_steps
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
 from src.mode_readiness import coach_readiness
@@ -76,21 +78,40 @@ bot_username: str | None = None
 async def _recover_pending_handoffs() -> None:
     """Recovery uses the same recipient lock as webhook Turns, without recursive locking."""
     for pending in await store.list_pending_handoff_executions():
+        await run_isolated_steps([("handoff_row", partial(_recover_one_handoff, pending))])
+
+
+async def _recover_one_handoff(pending):
+    user = await store.get_user_by_id(pending["user_id"])
+    if user is None:
+        return
+    recipient = await channel.recipient_for(user)
+    if recipient is None:
+        return
+    async with update_coordinator.serializer.hold(recipient):
         user = await store.get_user_by_id(pending["user_id"])
-        if user is None:
-            continue
-        recipient = await channel.recipient_for(user)
-        if recipient is None:
-            continue
-        async with update_coordinator.serializer.hold(recipient):
-            # Pairing or deletion may change while waiting behind the participant's live Turn.
-            user = await store.get_user_by_id(pending["user_id"])
-            if user is None or await channel.recipient_for(user) != recipient:
-                continue
-            auth_id = user.get("supabase_auth_id")
-            if not auth_id or not (await store.get_activation_state(auth_id)).get("completed"):
-                continue
-            await handlers.handoffs.execute(user, pending)
+        if user is None or await channel.recipient_for(user) != recipient:
+            return
+        auth_id = user.get("supabase_auth_id")
+        if not auth_id or not (await store.get_activation_state(auth_id)).get("completed"):
+            return
+        await handlers.handoffs.execute(user, pending)
+
+
+async def _refresh_coach_admission():
+    coaching_worker.admission_enabled = False
+    coaching_worker.admission_enabled = await coach_readiness.complete()
+
+
+async def _maintain_modes():
+    await run_isolated_steps([
+        ("memory_prune", handlers.memory.service.prune),
+        ("close_expired_modes", handlers.turn_processor.modes.conversations.close_expired),
+        ("handoff_recovery", _recover_pending_handoffs),
+        ("coach_readiness", _refresh_coach_admission),
+        ("coach_reconcile", coaching_worker.reconcile),
+        ("coach_delivery", coaching_worker.drain_once),
+    ])
 
 
 @asynccontextmanager
@@ -105,15 +126,7 @@ async def lifespan(app: FastAPI):
     app.state.bot_username = bot_username
     await initialize_runtime(store, reminder_scheduler, outbox_worker)
 
-    async def maintain_modes():
-        await handlers.memory.service.prune()
-        await handlers.turn_processor.modes.conversations.close_expired()
-        await _recover_pending_handoffs()
-        coaching_worker.admission_enabled = await coach_readiness.complete()
-        await coaching_worker.reconcile()
-        await coaching_worker.drain_once()
-
-    await reminder_scheduler.start_mode_maintenance(maintain_modes)
+    await reminder_scheduler.start_mode_maintenance(_maintain_modes)
 
     # Set webhook
     try:

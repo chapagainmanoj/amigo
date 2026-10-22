@@ -1,9 +1,11 @@
 """Channel-neutral conversation addressing, with provider mechanics delegated to channels."""
 
 import asyncio
+from functools import partial
 from weakref import WeakKeyDictionary
 
 from src.channels.base import ConversationRef, endpoint_dict
+from src.maintenance import run_isolated_steps
 
 # Services used by handlers, grant operations and delivery share creation locks for one Store.
 _CREATION_LOCKS: WeakKeyDictionary = WeakKeyDictionary()
@@ -64,24 +66,33 @@ class ModeConversationService:
 
         registry = build_registry()
         for row in await self.store.list_mode_conversations():
-            if row["channel"] != self.channel.channel_id or row.get("closed_at") is not None:
-                continue
-            if row["mode_id"] == "daily":
-                continue
-            try:
-                mode = registry[row["mode_id"]]
-            except Exception:
-                mode = None
-            grant = await self.store.get_active_mode_grant(row["user_id"], row["mode_id"])
-            if mode and mode.status == "live" and (mode.entitlement != "grant" or grant):
-                continue
+            await run_isolated_steps([
+                ("close_conversation_row", partial(self._close_unavailable, row, registry))
+            ])
+
+    async def _close_unavailable(self, row, registry):
+        if row["channel"] != self.channel.channel_id or row.get("closed_at") is not None:
+            return
+        if row["mode_id"] == "daily":
+            return
+        from src.agent.modes import UnknownModeError
+
+        try:
+            mode = registry[row["mode_id"]]
+        except UnknownModeError:
+            mode = None
+        grant = await self.store.get_active_mode_grant(row["user_id"], row["mode_id"])
+        if mode and mode.status == "live" and (mode.entitlement != "grant" or grant):
+            return
+        try:
             user = await self.store.get_user_by_id(row["user_id"])
-            if user is None:
-                continue
-            ref = ConversationRef(row["channel"], row["endpoint"])
-            recipient = await self.channel.recipient_for(user)
-            if recipient is not None and await self.channel.recipient_matches(ref, recipient):
-                await self.channel.close_conversation(recipient, ref)
+            if user is not None:
+                ref = ConversationRef(row["channel"], row["endpoint"])
+                recipient = await self.channel.recipient_for(user)
+                if recipient is not None and await self.channel.recipient_matches(ref, recipient):
+                    await self.channel.close_conversation(recipient, ref)
+        finally:
+            # Revocation is canonical even when the provider rejects closing its linked topic.
             await self.store.close_mode_conversation(
                 row["user_id"], row["mode_id"], row["channel"]
             )

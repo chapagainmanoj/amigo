@@ -654,3 +654,17 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Focused transcript/Memory/currency tests passed; Ruff/diff clean. Prior full1346passed;
   next combined full suite includes these two new cases. Protected/SQL files:none.
   Daily prompt/Tool schema unchanged; no model/Gate A certification fabricated.
+
+### Review fix2/15 — maintenance failure isolation
+
+- Files src/maintenance.py, src/main.py, src/cli.py, src/conversations.py,
+  src/evaluation/gate_a.py, tests/test_mode_maintenance.py. Protected/SQL:none.
+- Independent maintenance stages and conversation/handoff rows continue after errors; error logs
+  carry stage and exception class only. Canonical conversation closes even if provider close fails.
+  Failed readiness disables Coach admission. Cancellation propagates. Memory prune is isolated.
+- Full1353passed20.53s; focused maintenance/currency116passed12.63s; Ruff/diff clean.
+  Added reachable maintenance module to fingerprint closure; currency checker unchanged.
+  Daily golden/schema included; no current release Gate A certification. SQL unchanged here.
+- Evidence correction for fix13: independent73pytest count used default import mode and may have
+  resolved main checkout; exclude that count from isolated review evidence. Independent frozen
+  45-file SQL chain, source/API/UI review, author90focused and root1346full remain valid.
