@@ -43,3 +43,37 @@ a side effect. Anything that writes still goes through a confirmed handoff.
   (issue 08).
 
 ## Comments
+
+## 22 October 2026 — Phase 6 triage, provisional — owner review
+
+Recommended outcome: **Do Not Build internal Mode delegation**. No runtime delegation,
+read-only Tool marking, nested model calls, or new cross-Mode data permission added.
+Issue remains open for owner review of this triage record; this is not an automatic-routing
+approval or a claim that the specialized Modes passed their external demand gates.
+
+Concrete coverage:
+
+- The issue's “what is on today?” example is an owned Store read already expressible by a
+  declared `todays_tasks` Turn Context provider (`src/agent/context.py`). Coach currently declares
+  only its Coaching Program provider; giving Coach Task context still needs explicit minimal
+  data approval. The provider's existence does not grant that access.
+- An ordinary Task/Reminder request from Coach already uses `propose_handoff` → visible
+  participant confirmation → Daily's own Session/Tools/Commands. Undeclared targets and
+  cross-owner callbacks deny; decline/expiry/withdrawal run no target Turn.
+- Mode-scoped transcripts and summaries remain isolated; confirmed payload alone crosses.
+  Durable replay recovers the exact target plan without duplicating Tasks/Reminders.
+
+Verification: `.venv/bin/python -m pytest tests/test_mode_routing.py
+ tests/test_mode_candidates.py tests/test_coaching_application.py -q` → **89 passed, 1.99s**.
+This covers both threaded/command channels, Mode Tool boundaries, undeclared handoff targets,
+confirmation racing/double taps, cross-owner/withdrawal denials, history/summary isolation,
+Task/Reminder crash replay, and actual Coach Tool/controller boundaries. Fictional inputs only.
+
+Missing evidence: no reproducible participant job requiring another Mode's independent reasoning
+without a visible switch; no demonstrated failure of a minimal approved context provider or
+confirmed handoff; no approved additional data-sharing scope; no measured benefit against added
+latency/token/failure/privacy cost. Decisions14/23/28 preserve explicit selection and deny silent
+cross-Mode data flow; decisions26/30 concern Memory demand/technology and provide no delegation
+approval. Reopen only with these artifacts and the bounded controls listed in the proposal.
+
+Detailed record: [phase6-07-delegation-triage.md](../proposals/phase6-07-delegation-triage.md).

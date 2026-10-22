@@ -438,3 +438,16 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Protected files: none. Backend remains 1151 passing/Ruff clean; no Turn source changes in this
   UI slice, Gate A currency inputs unchanged. Existing absent release certification not replaced.
 - Preserve incumbent dashboard design. Coach admission remains OFF; no broader privacy promise.
+
+## Phase 6 — Issue07 delegation triage
+
+- Parent48a164f; files: issues/07-delegate-between-modes.md and
+  proposals/phase6-07-delegation-triage.md. Protected files: none.
+- Provisional — owner review: Do Not Build an inter-Mode delegation graph. Existing owned context
+  providers are an available mechanism, not approval to expose Daily Tasks to Coach. Confirmed
+  handoffs already cover ordinary Task/Reminder actions with isolated Sessions and crash replay.
+- Evidence: routing/candidate/Coach application tests89 passed1.99s; latest combined worktree
+  full suite1305 passed10.51s, Ruff/scheduler smoke passed. Daily golden and111 currency tests pass.
+  No code in this documentation slice changes Gate A inputs; release certification remains absent.
+- Open: recurring participant job, concrete failing existing flow, approved data contract and
+  measured benefit. No demand/trial evidence or permanent owner decision manufactured.
