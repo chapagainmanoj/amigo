@@ -11,6 +11,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from src.evaluation.meaning import ResponseMeaning, has_meaning
+
 MUTATING_TOOLS = {
     "apply_later",
     "cancel_reminders",
@@ -88,6 +90,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/dashboard_snapshot.py",
     "src/db/supabase.py",
     "src/evaluation/gate_a.py",
+    "src/evaluation/meaning.py",
     "src/evaluation/model_policy.py",
     "src/handoffs.py",
     "src/maintenance.py",
@@ -258,6 +261,8 @@ class ResponseProperties(BaseModel):
     must_include_all: list[str] = Field(default_factory=list)
     must_not_include: list[str] = Field(default_factory=list)
     max_sentences: int = Field(default=5, ge=1)
+    required_meanings: list[ResponseMeaning] = Field(default_factory=list)
+    forbidden_meanings: list[ResponseMeaning] = Field(default_factory=list)
 
 
 class ExpectedState(BaseModel):
@@ -386,6 +391,10 @@ def load_suite(path: Path) -> GateASuite:
     return GateASuite.model_validate_json(path.read_text())
 
 
+class ModeEvalCase(EvalCase):
+    id: str = Field(pattern=r"^[a-z][a-z0-9_]*-(task|life|nonmut|hard)-\d{2}$")
+
+
 class ModeEvalSuite(BaseModel):
     """Shared case/scoring format; each Mode authors its own coverage and thresholds."""
 
@@ -396,7 +405,7 @@ class ModeEvalSuite(BaseModel):
     timezone: str
     repetitions: Literal[3]
     thresholds: dict[str, float]
-    cases: list[EvalCase] = Field(min_length=1)
+    cases: list[ModeEvalCase] = Field(min_length=1)
 
     @model_validator(mode="after")
     def validate_contract(self):
@@ -695,6 +704,12 @@ def _response_checks(response: str, expected: ResponseProperties) -> tuple[bool,
     for item in expected.must_not_include:
         if _response_phrase_present(item, response):
             failures.append(f"response contains prohibited phrase: {item}")
+    for meaning in expected.required_meanings:
+        if not has_meaning(response, meaning):
+            failures.append(f"response lacks required meaning: {meaning}")
+    for meaning in expected.forbidden_meanings:
+        if has_meaning(response, meaning):
+            failures.append(f"response expresses prohibited meaning: {meaning}")
     sentences = [item for item in re.split(r"[.!?]+", response) if item.strip()]
     if len(sentences) > expected.max_sentences:
         failures.append(

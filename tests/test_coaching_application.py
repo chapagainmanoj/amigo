@@ -106,9 +106,10 @@ async def test_real_draft_tool_only_exact_participant_callback_activates_once(co
     row, approval = await env.draft()
     assert row["state"] == "draft" and row["starts_at"] is None
     assert len(approval.encode()) <= 64
-    env.script.tool("activate_program", {"program_id": row["program_id"]})
-    env.script.text("Only your approval button starts the program.")
-    await env.send("Show the approval again.")
+    calls = len(env.script.requests)
+    await env.send("/program")
+    assert len(env.script.requests) == calls
+    assert "approval" in env.channel.last_text.lower()
     assert (await env.store.get_coaching_program(env.owner["user_id"]))["state"] == "draft"
     await env.callback(approval, chat=48102)
     assert (await env.store.get_coaching_program(env.owner["user_id"]))["state"] == "draft"

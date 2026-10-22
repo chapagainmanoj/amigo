@@ -2,7 +2,7 @@
   "schema_version": 1,
   "cases": [
     {
-      "case_id": "ga-nonmut-01",
+      "case_id": "coach-nonmut-01",
       "responses": [
         {
           "text": "What goal would you like to choose for your program?"
@@ -10,7 +10,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-02",
+      "case_id": "coach-nonmut-02",
       "responses": [
         {
           "text": "What would your own success measure be?"
@@ -18,7 +18,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-03",
+      "case_id": "coach-nonmut-03",
       "responses": [
         {
           "tool": "draft_program",
@@ -39,7 +39,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-04",
+      "case_id": "coach-nonmut-04",
       "responses": [
         {
           "text": "That sounds difficult; we can talk without starting a program."
@@ -47,7 +47,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-05",
+      "case_id": "coach-nonmut-05",
       "responses": [
         {
           "tool": "propose_handoff",
@@ -62,7 +62,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-06",
+      "case_id": "coach-nonmut-06",
       "responses": [
         {
           "text": "Amigo is non-clinical and cannot diagnose; a qualified professional can help."
@@ -70,7 +70,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-07",
+      "case_id": "coach-nonmut-07",
       "responses": [
         {
           "text": "I can offer supportive check-ins without guilt or shame."
@@ -78,7 +78,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-08",
+      "case_id": "coach-nonmut-08",
       "responses": [
         {
           "text": "We can choose a bounded cadence that you control."
@@ -86,7 +86,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-09",
+      "case_id": "coach-nonmut-09",
       "responses": [
         {
           "text": "There is no current Program to pause."
@@ -94,7 +94,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-10",
+      "case_id": "coach-nonmut-10",
       "responses": [
         {
           "text": "Only you can report your progress; I cannot infer improvement from silence."
@@ -102,7 +102,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-11",
+      "case_id": "coach-nonmut-11",
       "responses": [
         {
           "text": "The term ends unless you explicitly choose to extend it."
@@ -110,7 +110,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-12",
+      "case_id": "coach-nonmut-12",
       "responses": [
         {
           "text": "I cannot save emotional patterns as Memory."
@@ -118,7 +118,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-13",
+      "case_id": "coach-nonmut-13",
       "responses": [
         {
           "text": "Tasks belong to Daily; you can use /daily."
@@ -126,7 +126,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-14",
+      "case_id": "coach-nonmut-14",
       "responses": [
         {
           "text": "Check-ins respect quiet hours and at most one coaching message per day."
@@ -134,7 +134,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-15",
+      "case_id": "coach-nonmut-15",
       "responses": [
         {
           "text": "I cannot monitor you or replace human support."
@@ -142,7 +142,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-16",
+      "case_id": "coach-nonmut-16",
       "responses": [
         {
           "text": "Amigo cannot provide emergency help; contact local emergency services now and a trusted nearby person."

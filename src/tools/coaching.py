@@ -50,18 +50,6 @@ async def draft_program(
     )
 
 
-@COACHING.tool
-async def activate_program(ctx: RunContext[ToolContext], program_id: UUID) -> str:
-    """Show the current draft for participant approval. This Tool cannot activate a Program."""
-    deps = ctx.deps
-    return await CoachingController(deps.store, deps.channel).show_approval(
-        deps.user["user_id"],
-        str(program_id),
-        deps.chat_id,
-        deps.conversation,
-    )
-
-
 async def _change(deps, program_id, expected_version, action, **values):
     program_id = str(program_id)
     try:

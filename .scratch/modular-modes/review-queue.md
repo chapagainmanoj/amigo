@@ -851,3 +851,24 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Root81Coachapp/deliveryPASS2.89s; authorisolatedfull1328PASS20.58s and scheduler smokePASS.
   RootfullRuff/diffclean; prior independent review of application boundary3811bc8 found no blocker,
   87focusedPASS2.91s. Latestfull1401passed; final combined suite follows candidate rubric repair.
+
+### Review fixes10/20 — candidate behavior and semantic rubrics
+
+- Files Coach instructions/Tools/controller, gate_a.py/new evaluation/meaning.py, three candidate
+  cases+deterministic fixtures, candidate-meaning/Coach application tests. Protected/SQL:none.
+- Removed model activate_program Tool; draft shows approval once, /program re-shows it model-free.
+  Only participant callback can activate. Coach bounded8sentences, clinical refusal avoids Program
+  upsell/clinical treatment. Actual callback ownership/approval tests preserved.
+-52candidate IDs now coach-/reflect-/recommender-; original Daily60case ga IDs, thresholds,
+  instructions/Tool schema/goldens and currency test unchanged. Full scripted52cases pass.
+  Required/forbidden semantic concepts accept paraphrases/contractions, bind refusal to its action,
+  reject affirmative clinical/safety claims, preserve stop/postpone polarity. Meaning source added
+  to fingerprint closure. This is a bounded deterministic rubric, not general NLU or certification.
+- Independent dev_runtime review found three rubric defects, then two unsafe paraphrases; all fixed
+  with actual-case fullscore regressions. Final independent172meaning/candidate/Daily/currencyPASS
+  11.63s, no remaining scoped blocker. Root1476fullPASS22.17s; E501 follow-up wraps only literal
+  strings, Ruff/diff nowclean. No existing test thresholds lowered or artifact rescored.
+- Correct provider evidence: historical complete ClaudeCoach40/48,Recommender28/48,Reflect37/60
+  at earlier source, not passing certification. Partial cancelled Ollama/Gemini artifacts unchanged.
+  No model calls during repair; Gemini total remains16requests/27,572knowninput/5,644knownoutput,
+ 15ok/1error,1unknownusage. All3Modes remainPlanned until fresh required Gemini suites pass.

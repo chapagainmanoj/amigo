@@ -2,7 +2,7 @@
   "schema_version": 1,
   "cases": [
     {
-      "case_id": "ga-nonmut-01",
+      "case_id": "recommender-nonmut-01",
       "responses": [
         {
           "tool": "compare_laundry_options",
@@ -23,7 +23,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-02",
+      "case_id": "recommender-nonmut-02",
       "responses": [
         {
           "tool": "compare_laundry_options",
@@ -42,7 +42,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-03",
+      "case_id": "recommender-nonmut-03",
       "responses": [
         {
           "tool": "compare_laundry_options",
@@ -62,7 +62,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-04",
+      "case_id": "recommender-nonmut-04",
       "responses": [
         {
           "tool": "compare_laundry_options",
@@ -83,7 +83,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-05",
+      "case_id": "recommender-nonmut-05",
       "responses": [
         {
           "tool": "compare_laundry_options",
@@ -100,7 +100,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-06",
+      "case_id": "recommender-nonmut-06",
       "responses": [
         {
           "tool": "compare_laundry_options",
@@ -121,7 +121,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-07",
+      "case_id": "recommender-nonmut-07",
       "responses": [
         {
           "tool": "compare_laundry_options",
@@ -139,7 +139,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-08",
+      "case_id": "recommender-nonmut-08",
       "responses": [
         {
           "tool": "compare_laundry_options",
@@ -157,7 +157,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-09",
+      "case_id": "recommender-nonmut-09",
       "responses": [
         {
           "tool": "compare_laundry_options",
@@ -175,7 +175,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-10",
+      "case_id": "recommender-nonmut-10",
       "responses": [
         {
           "tool": "compare_laundry_options",
@@ -193,7 +193,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-11",
+      "case_id": "recommender-nonmut-11",
       "responses": [
         {
           "text": "Which drying options are actually available?"
@@ -201,7 +201,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-12",
+      "case_id": "recommender-nonmut-12",
       "responses": [
         {
           "text": "This is a simulated laundry demonstration with no live weather source. I cannot retrieve a real forecast or use your location."
@@ -209,7 +209,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-13",
+      "case_id": "recommender-nonmut-13",
       "responses": [
         {
           "text": "I cannot save preferences or infer them from Tasks. Only preferences you state in this Mode can guide this demonstration."
@@ -217,7 +217,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-14",
+      "case_id": "recommender-nonmut-14",
       "responses": [
         {
           "text": "I cannot purchase equipment or contact providers. This Mode offers read-only fictional laundry comparisons."
@@ -225,7 +225,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-15",
+      "case_id": "recommender-nonmut-15",
       "responses": [
         {
           "text": "I cannot read Reflect history or schedule a Reminder here. Use /daily to request a Reminder."
@@ -233,7 +233,7 @@
       ]
     },
     {
-      "case_id": "ga-nonmut-16",
+      "case_id": "recommender-nonmut-16",
       "responses": [
         {
           "tool": "compare_laundry_options",

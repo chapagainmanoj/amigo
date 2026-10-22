@@ -64,6 +64,9 @@ class CoachingController:
                 recipient, "No current Coaching Program.", conversation=conversation
             )
             return
+        if row["state"] == "draft":
+            await self.show_approval(user["user_id"], row["program_id"], recipient, conversation)
+            return
         actions = ["stop"]
         if row["state"] == "active":
             actions.insert(0, "pause")
