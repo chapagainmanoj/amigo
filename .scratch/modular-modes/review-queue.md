@@ -780,3 +780,14 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 -165Reflect/candidate/currency tests passed11.36s; Ruff/diffclean. Three fixture safety cases now
   require application output without model messages. Runners score actual result.output, including
   static replies. No historical artifact rescoring/model requests/Gate A release certification.
+
+### Review fix11 / 017 — per-participant conversation serialization
+
+- Authord0cf36b; protected017, reproducible SQL probe and independent review proposal.
+- Mode conversation writes serialize per owner rather than global Daily. Guarded endpoint upsert
+  rejects a concurrent foreign owner instead of reopening their row. Existing backfill already
+  covers every Session, including closed ones; independent pre017 seed verifies both paths.
+- Independent usage_gate fresh45SQL chain PASS017SHA9aa3d1bc…; ownerA lock blockedA whileB
+  completed; forced two-owner absent-endpoint race rejected loser without foreign mutation;
+  close/reopen/closed-owner probes PASS. Root303conversation/lock/currency passed11.32s;
+  Ruff/diffclean. Latestfull1401passed; no Gate A release certification or live migration apply.

@@ -56,8 +56,8 @@ BEGIN
      OR p_channel IS NULL OR p_channel !~ '^[a-z][a-z0-9_]{0,31}$'
      OR p_endpoint IS NULL OR jsonb_typeof(p_endpoint) <> 'object' OR p_endpoint = '{}'::jsonb
      OR p_alias IS NULL THEN RAISE EXCEPTION 'invalid_mode_conversation'; END IF;
-  -- A single namespace lock makes canonical replacement/alias registration atomic across tables.
-  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('amigo-conversations', 0));
+  -- Serialize each owner without blocking unrelated participants.
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('amigo-conversations:'||p_user_id, 0));
   SELECT * INTO v_endpoint FROM public.mode_conversation_endpoints
     WHERE channel = p_channel AND endpoint = p_endpoint FOR UPDATE;
   IF FOUND AND (v_endpoint.user_id <> p_user_id OR v_endpoint.mode_id <> p_mode_id) THEN
@@ -70,7 +70,12 @@ BEGIN
   END IF;
   INSERT INTO public.mode_conversation_endpoints(user_id, mode_id, channel, endpoint)
     VALUES(p_user_id, p_mode_id, p_channel, p_endpoint)
-    ON CONFLICT(channel, endpoint) DO UPDATE SET closed_at = NULL RETURNING * INTO v_endpoint;
+    ON CONFLICT(channel, endpoint) DO UPDATE SET closed_at = NULL
+      WHERE public.mode_conversation_endpoints.user_id=p_user_id
+        AND public.mode_conversation_endpoints.mode_id=p_mode_id
+      RETURNING * INTO v_endpoint;
+  -- Different owners can race on a previously absent endpoint despite their separate locks.
+  IF NOT FOUND THEN RAISE EXCEPTION 'conversation_endpoint_conflict'; END IF;
   IF NOT p_alias THEN
     INSERT INTO public.mode_conversations(user_id, mode_id, channel, endpoint, created_at)
       VALUES(p_user_id, p_mode_id, p_channel, p_endpoint, v_endpoint.created_at)
@@ -87,7 +92,7 @@ BEGIN
 END $$;
 CREATE FUNCTION public.close_mode_conversation(p_user_id UUID, p_mode_id TEXT, p_channel TEXT)
 RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$ BEGIN
-  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('amigo-conversations', 0));
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('amigo-conversations:'||p_user_id, 0));
   UPDATE public.mode_conversation_endpoints SET closed_at = clock_timestamp()
     WHERE user_id=p_user_id AND mode_id=p_mode_id AND channel=p_channel;
   UPDATE public.mode_conversations SET closed_at = clock_timestamp()

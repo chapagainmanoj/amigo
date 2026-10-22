@@ -1,0 +1,9 @@
+# Review fix 11 — SQL conversation isolation
+
+Separate SQL slice after review-fix03. `save_mode_conversation` and `close_mode_conversation` now serialize on the owner UUID, avoiding the global namespace lock. Endpoint uniqueness remains global. An upsert predicate rechecks endpoint owner and Mode after a unique-key wait: racing owners that both observed an absent endpoint cannot reopen another owner's row or create a foreign canonical reference. The loser raises conversation_endpoint_conflict.
+
+The existing `UPDATE public.sessions SET mode_id = coalesce(active_mode_id, 'daily')` already covers every Session, including closed rows; no backfill code edit needed. Fresh pre017 fixtures prove closed activecoach becomes coach and open NULL-active becomes daily.
+
+Author proof: `/Users/mano/Workspace/amigo/.venv/bin/python /tmp/amigo-item11-verify.py`; fresh45-file CI SQL chain passed. Held ownerA advisory lock blocks A save (150ms statement timeout), while B save completes under1s. Forced absent-endpoint race rejects loser without endpoint/canonical corruption. Cluster /private/tmp/amigo-item11-042bee0b stopped. Reproducible driver retained under proposals/probes/review-fix-11-conversation-isolation.py; uses disposable local PostgreSQL only.
+
+SQL017 SHA2569aa3d1bc883d66bd004b051aa9e24e24a019ddbdd0aee6caa87a4f3642015dcb. Protected edit migrations/017_mode_conversations.sql. No Store API, runtime, Daily prompt/schema, production, secrets or privacy changes. Independent usage_gate PASS samehash: fresh45 chain with distinct closedCoach/NULLactiveDaily fixtures; held-A/B isolation; forced absent-endpoint race; close/reopen new canonical; closed endpoint still rejects foreign ownership. Driver /tmp/amigo-independent-handoff-item11.py; cluster /tmp/amigo-independent-item11-5216rqpa stopped. Local conversation/lock tests178 passed0.36s; git diff --check clean. Parent owns channel/operator/ensure-race remainder of item11.
