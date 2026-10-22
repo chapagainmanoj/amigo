@@ -57,7 +57,7 @@ class ModeController:
         try:
             mode = await self.runtime.resolve(context, selected)
         except ModeUnavailableError as error:
-            if not is_mode_command and control is not None:
+            if not is_mode_command and control is not None and selected != "daily":
                 await self.store.set_active_mode(user_id, control["session_id"], "daily")
             return PreparedModeTurn(context, selected or "daily", error.participant_message)
         except Exception:
@@ -70,9 +70,11 @@ class ModeController:
         )
         context.session_id = session["session_id"]
         # 016's trusted source check is kept in sync with the fixed Mode-scoped Session.
-        result = await self.store.set_active_mode(
-            user_id, session["session_id"], selected, grant_required=mode.entitlement == "grant"
-        )
+        result = {"status": "set"}
+        if (session.get("active_mode_id") or "daily") != selected:
+            result = await self.store.set_active_mode(
+                user_id, session["session_id"], selected, grant_required=mode.entitlement == "grant"
+            )
         if result["status"] != "set":
             return PreparedModeTurn(
                 context, selected, f"{mode.name} isn't available on your account."
@@ -80,9 +82,11 @@ class ModeController:
         if is_mode_command:
             if control is None:
                 control, _ = await self.sessions.get_or_create_session(user_id, timezone=timezone)
-            await self.store.set_active_mode(
-                user_id, control["session_id"], selected, grant_required=mode.entitlement == "grant"
-            )
+            if (control.get("active_mode_id") or "daily") != selected:
+                await self.store.set_active_mode(
+                    user_id, control["session_id"], selected,
+                    grant_required=mode.entitlement == "grant",
+                )
             context.conversation = await self.conversations.ensure(user, selected, chat_id=chat_id)
             return PreparedModeTurn(
                 context, selected, f"{mode.name}: {mode.purpose}\n{mode.limits}"

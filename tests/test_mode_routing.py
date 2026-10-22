@@ -624,3 +624,23 @@ async def test_scheduler_recovery_shares_webhook_turn_lock_and_rechecks_current_
         )
     else:
         execute.assert_not_awaited()
+
+
+async def test_unchanged_mode_never_writes_active_selector(env, monkeypatch):
+    setter = AsyncMock(wraps=env.store.set_active_mode)
+    monkeypatch.setattr(env.store, "set_active_mode", setter)
+    daily = await env.enter("daily")
+    setter.assert_not_awaited()
+    env.script.text()
+    await env.send("Ordinary Daily", daily)
+    setter.assert_not_awaited()
+    coach = await env.enter("coach")
+    assert setter.await_count >= 1
+    setter.reset_mock()
+    await env.enter("coach")
+    env.script.text()
+    await env.send("Ordinary Coach", coach)
+    setter.assert_not_awaited()
+    await env.store.revoke_mode_grant(env.user["user_id"], "coach", "owner", "test")
+    await env.send("Revoked Coach", coach)
+    assert "isn't available" in env.channel.last_text

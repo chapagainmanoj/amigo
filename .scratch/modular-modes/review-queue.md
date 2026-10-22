@@ -722,3 +722,12 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   requested-reminder/recovery invariants. Two auxiliary scripted Daily Gate A scorer cases pass;
   original60case suite, Daily instructions/Tool schema/goldens and111currency unchanged.
   No real model calls or Gate A release certification.
+
+### Review fix7 — skip unchanged Mode selectors
+
+- Files src/bot/modes.py, tests/test_mode_routing.py; protected/SQL:none.
+- Compare owned Session selector before set_active_mode for fixed Mode Sessions and command
+  control Session. Ordinary Daily/Coach Turns and repeated commands avoid writes/global lock.
+  Runtime entitlement remains checked on every Turn; revoked grants still refuse.
+- Threaded+command regressions/currency163passed12.44s; fullRuff/diffclean. Latestfull1352passed;
+  no changes to Daily prompts/Tools/currency checker and no release certification.
