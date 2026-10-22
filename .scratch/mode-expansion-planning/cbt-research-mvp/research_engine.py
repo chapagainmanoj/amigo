@@ -1,7 +1,7 @@
 """Synthetic-only research MVP: provisional questions, not a reviewed CBT protocol."""
 
 from dataclasses import dataclass, replace
-from typing import Literal
+from typing import Literal, Protocol
 
 VERSION = "synthetic-question-engine-v1"
 MAX_QUESTIONS = 4  # Provisional engineering choice, not approved personal protocol.
@@ -84,11 +84,23 @@ class ScriptedProvider:
         return sequence[len(state.asked)]
 
 
+class SelectorProvider(Protocol):
+    async def choose(self, state: RunState) -> str: ...
+
+
 class ResearchEngine:
     """One explicit synthetic fixture per run, with hard selection and question budgets."""
 
-    def __init__(self, provider: ScriptedProvider | None = None):
+    def __init__(self, provider: SelectorProvider | None = None):
         self.provider = provider or ScriptedProvider()
+        self._stopped = False
+
+    async def stop(self) -> RunState:
+        self._stopped = True
+        stop = getattr(self.provider, "stop", None)
+        if stop is not None:
+            await stop()
+        return RunState(status="stopped")
 
     async def start(self, fixture_id: str, strategy: Strategy = "fixed") -> RunState:
         if fixture_id not in FIXTURES or strategy not in {"fixed", "adaptive"}:
@@ -97,7 +109,7 @@ class ResearchEngine:
 
     async def advance(self, state: RunState, action: str) -> RunState:
         if action == "stop":
-            return RunState(status="stopped")
+            return await self.stop()
         if state.status != "asking":
             return state
         if action not in {"answer", "skip"}:
@@ -109,13 +121,19 @@ class ResearchEngine:
         return await self._next(state)
 
     async def _next(self, state: RunState) -> RunState:
+        if self._stopped:
+            return RunState(status="stopped")
         if len(state.asked) >= MAX_QUESTIONS or state.selections >= MAX_QUESTIONS:
             return replace(state, status="complete", question_id=None)
         state = replace(state, selections=state.selections + 1)
         try:
             question_id = await self.provider.choose(state)
         except Exception:
+            if self._stopped:
+                return RunState(status="stopped")
             return replace(state, status="failed", question_id=None, error="provider_failed")
+        if self._stopped:
+            return RunState(status="stopped")
         if question_id not in QUESTIONS or question_id in state.asked:
             return replace(state, status="failed", question_id=None, error="question_not_permitted")
         return replace(state, status="asking", question_id=question_id,

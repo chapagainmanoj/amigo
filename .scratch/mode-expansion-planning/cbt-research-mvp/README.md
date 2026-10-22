@@ -111,11 +111,47 @@ plan](../cbt-research-plan.md), [open protocol](../decisions/05-cbt-research-pro
 
 ### 2026-10-22 — Handoff absorbed; model ladder authorized
 
-`gemini_selector.py` remains unfinished, untested live, and not wired to a runner. Phase 1
-finishes it as `model_selector.py`: Claude subscription CLI for development, Ollama offline,
+`gemini_selector.py` was unfinished when the handoff was absorbed. Phase 1 replaces it
+with `model_selector.py`: Claude subscription CLI for development, Ollama offline,
 Gemini final fictional eval batches only, async client, strict eligible IDs, bounded output,
 zero retries, coordinated stop, and mock transport/privacy/cancellation tests. The old
 8-request batch cap is superseded by this ladder and metadata-only Gemini usage logging.
 No live requests have occurred. Personal input remains disabled; no clinical or provider
 retention validation is claimed. Earlier external-processing gates are superseded only for
 these authorized fictional final eval batches, not personal use.
+
+### Phase 1 completed — fictional model ladder
+
+`model_selector.py` replaces `gemini_selector.py`. The existing CLI remains scripted unless
+`--model` is supplied. Model-backed development defaults to `claude-cli:sonnet` in the factory;
+choose `ollama:qwen3.5:4b` explicitly for the offline backup. There is no automatic fallback or
+retry. Claude uses the subscription CLI with `ANTHROPIC_API_KEY` removed, tools/MCP disabled,
+no persisted session, and a bounded output setting. The harness never reads `.env`.
+
+```bash
+# Development: fictional fixtures only
+.venv/bin/python -B .scratch/mode-expansion-planning/cbt-research-mvp/research_cli.py \
+  --model claude-cli:sonnet --case recipe --strategy adaptive
+# Explicit offline backup
+.venv/bin/python -B .scratch/mode-expansion-planning/cbt-research-mvp/research_cli.py \
+  --model ollama:qwen3.5:4b --case meeting
+# Final fictional eval only; GOOGLE_API_KEY supplied in the process environment
+.venv/bin/python -B .scratch/mode-expansion-planning/cbt-research-mvp/research_cli.py \
+  --model gemini-3.5-flash --final-eval
+```
+
+Gemini uses `client.aio`, no tools, disabled automatic function calls, a 64-token output cap,
+one SDK transport attempt, and a twenty-second outer timeout. Every attempted dispatch counts
+against the four-per-run ceiling, including invalid output, timeout, cancellation, and failure.
+The earlier eight-request batch cap is removed. Gemini attempts append only request/token/status
+metadata through `src.model_usage` to `.scratch/gemini-usage.jsonl`; the fictional contents,
+question IDs, credentials, and provider exception text never enter that log. Raw replies are
+never printed. Only exact, unique-key JSON containing one currently eligible `question_id` is
+accepted; repeated, extra, invalid, or out-of-order IDs terminate selection.
+
+`ResearchEngine.stop()` now stops the selector and clears state together, including an in-flight
+selection. A stopped engine cannot restart or accept a late response. Make a new engine/selector
+for a new fictional run. No personal-input field or production transcript access was added.
+Historical offline-only claims above describe the earlier slice; this section is the current
+fictional-provider boundary. Mock transport checks validate software behavior, not provider
+retention or clinical safety. No live request was needed for this implementation.

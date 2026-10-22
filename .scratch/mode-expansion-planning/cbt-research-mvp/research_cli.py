@@ -3,13 +3,29 @@
 import argparse
 import asyncio
 import json
+import os
 from dataclasses import asdict
 
 from research_engine import FIXTURES, VERSION, ResearchEngine
 
 
-async def run(fixture_id: str, strategy: str, interactive: bool) -> str:
-    engine = ResearchEngine()
+async def run(
+    fixture_id: str,
+    strategy: str,
+    interactive: bool,
+    model: str = "scripted",
+    final_eval: bool = False,
+) -> str:
+    provider = None
+    if model != "scripted":
+        from model_selector import build_selector
+
+        provider = await build_selector(
+            model,
+            final_eval=final_eval,
+            api_key=os.environ.get("GOOGLE_API_KEY", ""),
+        )
+    engine = ResearchEngine(provider)
     state = await engine.start(fixture_id, strategy)
     print(f"\n{VERSION}: {fixture_id} / {strategy}")
     print(FIXTURES[fixture_id].event)
@@ -39,8 +55,14 @@ async def main() -> None:
     parser.add_argument("--case", choices=FIXTURES, default="meeting")
     parser.add_argument("--strategy", choices=("fixed", "adaptive", "compare"), default="compare")
     parser.add_argument("--interactive", action="store_true")
+    parser.add_argument(
+        "--model",
+        default="scripted",
+        help="scripted, claude-cli:sonnet, ollama:qwen3.5:4b, gemini-3.5-flash",
+    )
+    parser.add_argument("--final-eval", action="store_true")
     args = parser.parse_args()
-    print("PROVISIONAL RESEARCH MVP — no personal input, model/API, transcript, or Amigo Tools.")
+    print("PROVISIONAL RESEARCH MVP — fictional input only; no transcripts or Amigo Tools.")
     print("One fictional situation per run; questions/takeaway optional. No expert validation.")
     if args.interactive:
         print("Do not paste personal text: terminal echo/scrollback is not a private surface.")
@@ -55,7 +77,7 @@ async def main() -> None:
                 return
             if key.strip().lower() != "c":
                 return
-        status = await run(args.case, strategy, args.interactive)
+        status = await run(args.case, strategy, args.interactive, args.model, args.final_eval)
         if status == "stopped":
             return
 
