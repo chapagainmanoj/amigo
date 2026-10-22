@@ -111,7 +111,9 @@ class TelegramChannel:
     async def _address(self, chat_id, conversation):
         if conversation is not None:
             thread_id = self._thread_for(chat_id, conversation)
-            if thread_id is not None or not self.capabilities.threads:
+            if not self.capabilities.threads:
+                return None
+            if thread_id is not None:
                 return conversation
             raise ValueError("Threaded Telegram delivery requires a conversation thread")
         if not self.capabilities.threads:

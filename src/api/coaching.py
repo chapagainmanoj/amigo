@@ -61,9 +61,11 @@ async def delete_coaching(
 async def inspect_coaching_workflow(
     user: Annotated[dict, Depends(get_activated_user)],
     store: Annotated[object, Depends(get_store)],
-    program_id: str | None = None,
+    program_id: uuid.UUID | None = None,
 ):
     return JSONResponse(
-        await coaching_workflow_status(store, user["user_id"], program_id),
+        await coaching_workflow_status(
+            store, user["user_id"], str(program_id) if program_id is not None else None
+        ),
         headers={"Cache-Control": "no-store"},
     )

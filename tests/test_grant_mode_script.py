@@ -1,6 +1,6 @@
 """Operator access stays in Store policy; only successful grants create conversations."""
 
-from datetime import timedelta
+from datetime import UTC, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -64,7 +64,7 @@ async def test_invalid_expiry_creates_no_conversation(operator_setup):
     store, channel, users, service, registry = operator_setup
     result = await apply_mode_access(
         store, channel, users[0], "coach", "owner", "Trial", registry=registry,
-        expires_at=utc_now() + timedelta(days=15),
+        expires_at=utc_now().replace(tzinfo=UTC) + timedelta(days=15),
     )
     assert result["status"] == "invalid"
     service.ensure.assert_not_awaited()
@@ -78,3 +78,14 @@ async def test_planned_mode_cannot_be_granted(operator_setup):
             store, channel, users[0], "coach", "owner", "Trial", registry=registry,
         )
     assert store._mode_state.grants == {}
+
+
+async def test_naive_expiry_is_rejected_before_store_mutation(operator_setup):
+    store, channel, users, service, registry = operator_setup
+    with pytest.raises(ValueError, match="timezone offset"):
+        await apply_mode_access(
+            store, channel, users[0], "coach", "owner", "Trial", registry=registry,
+            expires_at=utc_now(),
+        )
+    assert not store._mode_state.grants
+    service.ensure.assert_not_awaited()

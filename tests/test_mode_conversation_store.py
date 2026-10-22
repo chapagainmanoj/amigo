@@ -311,3 +311,29 @@ async def test_adapter_receipt_lookup_filters_participant_and_exact_key():
     assert query.eq.call_args_list == [
         (("user_id", "owner"),), (("idempotency_key", "stable-key"),)
     ]
+
+
+@pytest.mark.parametrize("cleanup_fails", [False, True])
+async def test_ensure_returns_race_winner_and_retires_only_its_new_resource(cleanup_fails):
+    from unittest.mock import AsyncMock
+
+    from src.channels.base import ConversationRef
+    from src.conversations import ModeConversationService
+
+    created = ConversationRef("fake", {"chat_id": 1, "conversation_id": 2})
+    winner = {"endpoint": {"chat_id": 1, "conversation_id": 3}}
+    from tests.fakes import FakeStore
+
+    store = FakeStore()
+    store.get_mode_conversation = AsyncMock(return_value=None)
+    store.save_mode_conversation = AsyncMock(return_value=winner)
+    from tests.fakes import FakeChannel
+
+    channel = FakeChannel(threads=True, channel_id="fake")
+    channel.create_conversation = AsyncMock(return_value=created)
+    channel.close_conversation = AsyncMock(
+        side_effect=RuntimeError("private") if cleanup_fails else None
+    )
+    result = await ModeConversationService(store, channel).ensure({"user_id": "owner"}, chat_id=1)
+    assert dict(result.endpoint) == winner["endpoint"]
+    channel.close_conversation.assert_awaited_once_with(1, created)

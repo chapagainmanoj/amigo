@@ -294,3 +294,13 @@ async def test_pause_stop_controls_cannot_mutate_other_owner(coach_app):
     for action in ("pause", "stop"):
         await env.callback(coaching_callback(action, row["program_id"], row["version"]), chat=48102)
         assert await env.store.get_coaching_program(env.owner["user_id"]) == row
+
+
+def test_program_tools_require_uuid_identifiers():
+    from src.evaluation.gate_a import tool_schema
+
+    tools = tool_schema("coach")
+    owned = [tool for tool in tools if "program_id" in tool["parameters"].get("properties", {})]
+    assert owned
+    for tool in owned:
+        assert tool["parameters"]["properties"]["program_id"]["format"] == "uuid"

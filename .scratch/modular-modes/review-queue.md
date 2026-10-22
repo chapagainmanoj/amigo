@@ -829,3 +829,15 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   cleanup. Content-free warning labels. Later eligible Program/check-in still reconciles/sends.
 - Root50deliverytestsPASS0.14s; author74focusedPASS2.64s; fullRuff/diffclean.
   Latestfull1401passed,168currency/suggestion checks pass; no Gate A release certification.
+
+### Review fix11 / application boundaries
+
+- Files conversations.py, channels/telegram.py, bot/modes.py, tools/coaching.py,
+  api/coaching.py, grant_mode.py and conversation/channel/operator/Coach tests. Protected/SQL:none.
+- Cross-process ensure loser closes only its own created resource and returns persisted winner,
+  even provider cleanup fails. Topics-off ignores stale thread for sends. Unexpected Mode/operator
+  failures log exception type only. Naive operator expiry rejected before mutation. Program Tool
+  and workflow API ids typedUUID; values normalized to strings at Store/command boundary.
+-103focusedPASS2.58s; fullRuff/diffclean. Cleanup fail/success, no thread echo, timezone rejection
+  and UUID schema tests included. Same-process creation locks retained. Latestfull1401passed;
+  final combined suite/currency follows pending019/021 and eval rubric fixes.

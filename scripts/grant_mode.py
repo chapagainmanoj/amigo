@@ -29,13 +29,14 @@ async def apply_mode_access(
     registry=None,
 ) -> dict:
     """Store owns grant TTL/cap enforcement; channel addressing remains in its service."""
-    from src.conversations import ModeConversationService
-
     from src.agent.catalogue import build_registry
+    from src.conversations import ModeConversationService
 
     mode = await (registry or build_registry()).get(mode_id)
     if not operator.strip() or not reason.strip() or mode_id == "daily":
         raise ValueError("An operator, reason and specialized Mode are required")
+    if expires_at is not None and expires_at.utcoffset() is None:
+        raise ValueError("Expiry must include a timezone offset")
     if not revoke and mode.status != "live":
         raise ValueError("Mode must be live before granting access")
     service = ModeConversationService(store, channel)
@@ -86,7 +87,8 @@ async def main(argv=None) -> int:
         print(json.dumps({"mode_id": args.mode, "status": result["status"]}))
         success = result["status"] in {"granted", "already_active", "revoked", "not_active"}
         return 0 if success else 1
-    except Exception:
+    except Exception as error:
+        logging.getLogger(__name__).error("Mode access operation failed: %s", type(error).__name__)
         print("Mode access operation failed; inspect canonical access before retrying.")
         return 1
 

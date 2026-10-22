@@ -1,11 +1,14 @@
 """One application resolver for threaded conversations and explicit in-chat Mode commands."""
 
+import logging
 from dataclasses import dataclass
 
 from src.agent.modes import ModeUnavailableError
 from src.conversations import ModeConversationService
 from src.tools.context import ToolContext
 from src.wellbeing import reflect_safety_response
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -64,9 +67,10 @@ class ModeController:
             if not is_mode_command and control is not None and selected != "daily":
                 await self.store.set_active_mode(user_id, control["session_id"], "daily")
             return PreparedModeTurn(context, selected or "daily", error.participant_message)
-        except Exception:
+        except Exception as error:
             from src.agent.runtime import FAILURE_REPLY
 
+            logger.error("Mode resolution failed: %s", type(error).__name__)
             return PreparedModeTurn(context, selected or "daily", FAILURE_REPLY)
         selected = mode.id
         session, _ = await self.sessions.get_or_create_session(

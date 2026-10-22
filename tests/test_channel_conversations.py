@@ -269,3 +269,11 @@ async def test_unknown_user_topic_flag_warns_without_claiming_it_is_enabled(capl
     assert await channel.initialize(production=True) == "test_bot"
     assert channel.capabilities.threads
     assert "user-created threads" in caplog.text
+
+
+async def test_topics_off_does_not_echo_stored_thread():
+    channel = threaded_channel()
+    channel.capabilities = ChannelCapabilities(threads=False)
+    ref = ConversationRef("telegram", {"chat_id": 123, "thread_id": 227})
+    await channel.send_message(123, "Command mode reply", conversation=ref)
+    assert "message_thread_id" not in channel.bot.send_message.await_args.kwargs

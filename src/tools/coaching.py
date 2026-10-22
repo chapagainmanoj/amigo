@@ -1,5 +1,7 @@
 """Coaching Tools: one owned Program, explicit intent, and no Task/Reminder capability."""
 
+from uuid import UUID
+
 from pydantic_ai import FunctionToolset, RunContext
 
 from src.coaching import CoachingCommands, CoachingController, command_hash
@@ -49,18 +51,19 @@ async def draft_program(
 
 
 @COACHING.tool
-async def activate_program(ctx: RunContext[ToolContext], program_id: str) -> str:
+async def activate_program(ctx: RunContext[ToolContext], program_id: UUID) -> str:
     """Show the current draft for participant approval. This Tool cannot activate a Program."""
     deps = ctx.deps
     return await CoachingController(deps.store, deps.channel).show_approval(
         deps.user["user_id"],
-        program_id,
+        str(program_id),
         deps.chat_id,
         deps.conversation,
     )
 
 
 async def _change(deps, program_id, expected_version, action, **values):
+    program_id = str(program_id)
     try:
         result = await CoachingCommands(deps.store).change(
             _context(
@@ -80,7 +83,7 @@ async def _change(deps, program_id, expected_version, action, **values):
 @COACHING.tool
 async def record_progress(
     ctx: RunContext[ToolContext],
-    program_id: str,
+    program_id: UUID,
     expected_version: int,
     participant_report: str,
 ) -> str:
@@ -92,7 +95,7 @@ async def record_progress(
 
 @COACHING.tool
 async def pause_program(
-    ctx: RunContext[ToolContext], program_id: str, expected_version: int
+    ctx: RunContext[ToolContext], program_id: UUID, expected_version: int
 ) -> str:
     """Pause the owned Program immediately when explicitly requested."""
     return await _change(ctx.deps, program_id, expected_version, "pause")
@@ -100,14 +103,16 @@ async def pause_program(
 
 @COACHING.tool
 async def resume_program(
-    ctx: RunContext[ToolContext], program_id: str, expected_version: int
+    ctx: RunContext[ToolContext], program_id: UUID, expected_version: int
 ) -> str:
     """Resume an explicitly requested paused Program within its existing approved term."""
     return await _change(ctx.deps, program_id, expected_version, "resume")
 
 
 @COACHING.tool
-async def stop_program(ctx: RunContext[ToolContext], program_id: str, expected_version: int) -> str:
+async def stop_program(
+    ctx: RunContext[ToolContext], program_id: UUID, expected_version: int
+) -> str:
     """Stop the owned Program immediately when requested; stopped Programs cannot resume."""
     return await _change(ctx.deps, program_id, expected_version, "stop")
 
@@ -115,7 +120,7 @@ async def stop_program(ctx: RunContext[ToolContext], program_id: str, expected_v
 @COACHING.tool
 async def extend_program(
     ctx: RunContext[ToolContext],
-    program_id: str,
+    program_id: UUID,
     expected_version: int,
     days: int,
 ) -> str:
@@ -126,7 +131,7 @@ async def extend_program(
 @COACHING.tool
 async def record_weekly_choice(
     ctx: RunContext[ToolContext],
-    program_id: str,
+    program_id: UUID,
     expected_version: int,
     choice: str,
 ) -> str:
@@ -139,7 +144,7 @@ async def record_weekly_choice(
 @COACHING.tool
 async def revise_program(
     ctx: RunContext[ToolContext],
-    program_id: str,
+    program_id: UUID,
     expected_version: int,
     goal: str,
     success_measure: str,
@@ -148,6 +153,7 @@ async def revise_program(
 ) -> str:
     """Revise an explicitly requested draft; approval of the exact revised summary is required."""
     deps = ctx.deps
+    program_id = str(program_id)
     config = dict(
         goal=goal,
         success_measure=success_measure,

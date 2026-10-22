@@ -1,6 +1,7 @@
 """Channel-neutral conversation addressing, with provider mechanics delegated to channels."""
 
 import asyncio
+import logging
 from functools import partial
 from weakref import WeakKeyDictionary
 
@@ -9,6 +10,7 @@ from src.maintenance import run_isolated_steps
 
 # Services used by handlers, grant operations and delivery share creation locks for one Store.
 _CREATION_LOCKS: WeakKeyDictionary = WeakKeyDictionary()
+logger = logging.getLogger(__name__)
 
 
 class ModeConversationService:
@@ -36,6 +38,12 @@ class ModeConversationService:
             saved = await self.store.save_mode_conversation(
                 user["user_id"], mode_id, channel_id, endpoint_dict(created)
             )
+            if saved["endpoint"] != endpoint_dict(created):
+                # Another process won the canonical insert. Retire only our new resource.
+                try:
+                    await self.channel.close_conversation(recipient, created)
+                except Exception as error:
+                    logger.warning("Conversation race cleanup failed: %s", type(error).__name__)
             return ConversationRef(channel_id, saved["endpoint"])
 
     async def ensure_by_chat(self, chat_id):
