@@ -30,25 +30,31 @@ def _functions() -> dict[str, str]:
     bodies: dict[str, str] = {}
     for path in MIGRATIONS:
         text = path.read_text()
-        for match in re.finditer(
-            r"CREATE (?:OR REPLACE )?FUNCTION\s+public\.(\w+)\s*\(", text
-        ):
+        for match in re.finditer(r"CREATE (?:OR REPLACE )?FUNCTION\s+public\.(\w+)\s*\(", text):
             start = match.end()
-            end = text.find("\n$$;", start)
-            bodies[match.group(1)] = text[start : end if end != -1 else len(text)]
+            delimiter = re.search(r"\bAS\s+(\$[A-Za-z_0-9]*\$)", text[start:], re.IGNORECASE)
+            assert delimiter is not None, f"Missing function body: {path}:{match.group(1)}"
+            body_start = start + delimiter.end()
+            body_end = text.find(delimiter.group(1), body_start)
+            assert body_end != -1, f"Unterminated function body: {path}:{match.group(1)}"
+            bodies[match.group(1)] = text[body_start:body_end]
     return bodies
 
 
 # A row lock is taken by `... FROM|JOIN public.X ... FOR UPDATE`, and also by a bare
 # `UPDATE public.X`, which locks every row it matches.
 _LOCK_SITE = re.compile(
-    r"(?P<update>UPDATE\s+public\.(?P<updated>\w+))|(?P<for_update>FOR\s+UPDATE)",
+    r"(?P<update>UPDATE\s+public\.(?P<updated>\w+))|"
+    r"(?P<for_update>FOR\s+(?:NO\s+KEY\s+UPDATE|KEY\s+SHARE|SHARE|UPDATE))",
     re.IGNORECASE,
 )
 _SOURCE = re.compile(r"(?:FROM|JOIN)\s+public\.(\w+)", re.IGNORECASE)
 # `FOR UPDATE OF a, b` locks several relations in one statement, and the order is the plan's,
 # not the text's. Nothing in the chain uses it; the checker refuses it rather than guessing.
-_MULTI_TARGET = re.compile(r"FOR\s+UPDATE\s+OF\s+\w+\s*,", re.IGNORECASE)
+_MULTI_TARGET = re.compile(
+    r"FOR\s+(?:NO\s+KEY\s+UPDATE|KEY\s+SHARE|SHARE|UPDATE)\s+OF\s+\w+\s*,",
+    re.IGNORECASE,
+)
 
 
 def _locked_tables_in_order(body: str) -> list[str]:
@@ -121,7 +127,9 @@ def test_the_activation_functions_are_actually_covered():
             """
       SELECT profile.* INTO profile_row FROM public.user_profiles AS profile
       WHERE profile.user_id = p_user_id FOR UPDATE;
-      -- """ + ("filler comment line\n      " * 40) + """
+      -- """
+            + ("filler comment line\n      " * 40)
+            + """
       SELECT journey.* INTO journey_row FROM public.activation_journeys AS journey
       WHERE journey.auth_id = x FOR UPDATE;
             """,
@@ -228,3 +236,46 @@ def test_a_write_back_to_a_held_row_is_not_an_acquisition():
     """
 
     assert _locked_tables_in_order(body) == ["activation_journeys", "user_profiles"]
+
+
+@pytest.mark.parametrize("lock_mode", ["UPDATE", "NO KEY UPDATE", "KEY SHARE", "SHARE"])
+def test_all_row_lock_modes_are_checked(lock_mode):
+    body = f"""
+      SELECT * FROM public.user_profiles WHERE user_id = x FOR {lock_mode};
+      SELECT * FROM public.activation_journeys WHERE auth_id = x FOR UPDATE;
+    """
+    assert _locked_tables_in_order(body) == ["user_profiles", "activation_journeys"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "reserve_proactive_delivery",
+        "update_reminder_budget",
+        "set_proactive_consent",
+        "enqueue_coaching_delivery",
+        "mark_coaching_dispatch",
+    ],
+)
+def test_proactive_profile_lock_precedes_budget_advisory_lock(name):
+    body = _functions()[name]
+    # Activation validation also takes the profile lock before entering budget work.
+    profile = re.search(
+        r"(?:FROM\s+public\.user_profiles[^;]*FOR\s+KEY\s+SHARE|"
+        r"public\.get_activation_state\s*\()",
+        body,
+        re.IGNORECASE,
+    )
+    advisory = re.search(r"pg_advisory_xact_lock\s*\(", body, re.IGNORECASE)
+    assert profile is not None, f"{name}: missing profile lock before budget admission"
+    assert advisory is not None, f"{name}: budget advisory lock was not checked"
+    assert profile.start() < advisory.start(), f"{name}: profile/budget lock inversion"
+
+
+def test_function_bodies_do_not_swallow_adjacent_017_to_019_functions():
+    bodies = _functions()
+    for name in ("save_mode_conversation", "coaching_program_command", "update_reminder_budget"):
+        assert name in bodies
+        assert not re.search(r"CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION", bodies[name])
+    assert "public.proactive_reservations" in bodies["update_reminder_budget"]
+    assert "immutable_reminder_schedule" in bodies["update_reminder_budget"]

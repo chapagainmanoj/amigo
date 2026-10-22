@@ -622,3 +622,14 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Full1326passed20.31s; focused channel/operator/currency checks passed; Ruff/diff clean.
   Daily golden/schema and111 currency tests unchanged. Gate A evidence remains uncertified.
   SQL unchanged in this fix; combined full-chain verification follows SQL repair integrations.
+
+### Review fix5 — 019 profile/budget lock order
+
+- Author4f3bf65 integrated separately; files migrations/019_proactive_delivery_budget.sql
+  (protected), tests/test_migration_lock_order.py, proposals/review-fix05-lock-order-verification.md.
+- update_reminder_budget takes user_profiles FOR KEY SHARE before the advisory budget lock.
+  Inline function parser now checks all row-lock modes and017–019/five proactive entry points.
+  Budget policy unchanged in this slice; owner proactive-only decision follows separately.
+- Independent cbt_selector fresh45-file CI SQL chain PASS at019hash4638f74e…;157lock-order tests
+  passed0.27s/Ruffclean. Root full1336passed20.66s, Ruff/diff clean, currency/golden included.
+  No production schema/data/credentials changed; release Gate A certification absent.

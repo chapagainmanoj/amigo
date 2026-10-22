@@ -134,6 +134,8 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN
     OR NEW.user_id IS DISTINCT FROM OLD.user_id OR NEW.task_id IS DISTINCT FROM OLD.task_id
     OR NEW.reminder_id IS DISTINCT FROM OLD.reminder_id THEN
    RAISE EXCEPTION 'immutable_reminder_schedule'; END IF;
+ -- Match reserve/Activation admission: never wait for the profile while holding budget.
+ PERFORM 1 FROM public.user_profiles WHERE user_id=NEW.user_id FOR KEY SHARE;
  PERFORM pg_catalog.pg_advisory_xact_lock(
    pg_catalog.hashtextextended('amigo-proactive:'||NEW.user_id,0));
  IF NEW.status='sending' THEN
