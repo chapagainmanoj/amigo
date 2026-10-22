@@ -506,10 +506,14 @@ class FakeStore:
             self._coaching_state.programs,
             self._mode_state.grants.values(),
             user=user, activated=activation.get("completed") is True,
+            entries=self._coaching_state.entries,
         )
 
     async def finish_coaching_delivery(self, user_id, delivery_key, claim_token, outcome):
-        return await self._proactive_state.finish(user_id, delivery_key, claim_token, outcome)
+        return await self._proactive_state.finish(
+            user_id, delivery_key, claim_token, outcome,
+            self._coaching_state.programs, self._coaching_state.entries,
+        )
 
     async def get_coaching_delivery_history(self, user_id, program_id):
         return await self._proactive_state.history(user_id, program_id)

@@ -57,6 +57,29 @@ BEGIN
  IF token IS NULL THEN RAISE EXCEPTION 'outbox not claimed'; END IF;
  IF public.mark_coaching_dispatch(other_u,key,token) THEN RAISE EXCEPTION 'cross-owner dispatch'; END IF;
  IF public.mark_coaching_dispatch(u,key,gen_random_uuid()) THEN RAISE EXCEPTION 'unfenced dispatch'; END IF;
+ -- Explicit progress suppression applies even when the queued Program version is unchanged.
+ INSERT INTO public.coaching_entries(user_id,program_id,kind,action,participant_text)
+ VALUES(u,p,'progress','record_progress','Fictional participant progress');
+ r:=to_jsonb(public.mark_coaching_dispatch(u,key,token));
+ IF r::BOOLEAN OR NOT EXISTS(SELECT 1 FROM public.coaching_delivery_outbox
+ WHERE user_id=u AND delivery_key=key AND cancellation_reason='progress_logged_today')
+ THEN RAISE EXCEPTION 'progress today did not explicitly cancel'; END IF;
+ DELETE FROM public.coaching_entries WHERE user_id=u AND program_id=p AND kind='progress';
+ UPDATE public.coaching_delivery_outbox SET state='claimed',cancellation_reason=NULL,finished_at=NULL
+ WHERE user_id=u AND delivery_key=key;
+ UPDATE public.proactive_reservations SET state='reserved' WHERE user_id=u AND delivery_key=key;
+ UPDATE public.coaching_programs SET version=2 WHERE program_id=p;
+ r:=to_jsonb(public.mark_coaching_dispatch(u,key,token));
+ IF r::BOOLEAN OR NOT EXISTS(SELECT 1 FROM public.coaching_delivery_outbox
+ WHERE user_id=u AND delivery_key=key AND cancellation_reason='program_changed')
+ THEN RAISE EXCEPTION 'edit cancellation reason lost'; END IF;
+ UPDATE public.coaching_programs SET version=1,state='paused' WHERE program_id=p;
+ IF NOT EXISTS(SELECT 1 FROM public.coaching_delivery_outbox WHERE user_id=u AND delivery_key=key
+ AND cancellation_reason='program_changed') THEN RAISE EXCEPTION 'terminal cancellation overwritten'; END IF;
+ UPDATE public.coaching_programs SET state='active' WHERE program_id=p;
+ UPDATE public.coaching_delivery_outbox SET state='claimed',cancellation_reason=NULL,finished_at=NULL
+ WHERE user_id=u AND delivery_key=key;
+ UPDATE public.proactive_reservations SET state='reserved' WHERE user_id=u AND delivery_key=key;
  -- Cadence stays in the Program's UTC day; quiet hours follow the current profile zone.
  UPDATE public.user_profiles SET timezone='Etc/GMT+12',
  wake_time=to_char((clock_timestamp() AT TIME ZONE 'UTC')-interval '30 minutes','HH24:MI')::time,

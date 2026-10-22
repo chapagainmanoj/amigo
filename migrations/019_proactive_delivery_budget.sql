@@ -42,6 +42,9 @@ CREATE TABLE public.coaching_delivery_outbox (
    CHECK (state IN ('pending','claimed','dispatched','accepted','rejected','uncertain','cancelled')),
  claim_token UUID, claimed_at TIMESTAMPTZ, worker_id TEXT,
  dispatched_at TIMESTAMPTZ, finished_at TIMESTAMPTZ,
+ cancellation_reason TEXT CHECK(cancellation_reason IS NULL OR cancellation_reason IN
+ ('progress_logged_today','program_unavailable','program_paused','program_stopped',
+ 'program_completed','program_changed','consent_withdrawn','ineligible')),
  PRIMARY KEY(user_id,delivery_key), UNIQUE(program_id,local_day),
  FOREIGN KEY(user_id,delivery_key) REFERENCES public.proactive_reservations(user_id,delivery_key)
    ON DELETE CASCADE,
@@ -184,7 +187,8 @@ DECLARE r public.proactive_processing_consents%ROWTYPE; BEGIN
  country_code=coalesce(EXCLUDED.country_code,public.proactive_processing_consents.country_code),
  acknowledged_at=clock_timestamp(),withdrawn_at=EXCLUDED.withdrawn_at RETURNING * INTO r;
  IF p_withdraw AND p_scope='coaching-v1' THEN
-   UPDATE public.coaching_delivery_outbox SET state='cancelled',finished_at=clock_timestamp()
+   UPDATE public.coaching_delivery_outbox SET state='cancelled',finished_at=clock_timestamp(),
+    cancellation_reason='consent_withdrawn'
     WHERE user_id=p_user_id AND state IN ('pending','claimed');
    UPDATE public.proactive_reservations SET state='cancelled'
     WHERE user_id=p_user_id AND kind='coaching' AND state='reserved';
@@ -258,11 +262,27 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN
  claimed_at=clock_timestamp(),worker_id=p_worker_id FROM candidates c
  WHERE d.user_id=c.user_id AND d.delivery_key=c.delivery_key RETURNING d.*;
 END $$;
+-- Progress is an explicit selected-day suppression rule, even without a version change.
+CREATE FUNCTION public.coaching_delivery_cancellation_reason(p_user_id UUID,p_program_id UUID,p_version BIGINT)
+RETURNS TEXT LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
+ SELECT coalesce((SELECT CASE
+ WHEN p.state IN ('paused','stopped','completed') THEN 'program_'||p.state
+ WHEN EXISTS(SELECT 1 FROM public.coaching_entries e WHERE e.user_id=p_user_id
+ AND e.program_id=p.program_id AND e.kind='progress'
+ AND (e.created_at AT TIME ZONE p.timezone)::date=(clock_timestamp() AT TIME ZONE p.timezone)::date)
+ THEN 'progress_logged_today'
+ WHEN p.version<>p_version THEN 'program_changed' ELSE 'ineligible' END
+ FROM public.coaching_programs p WHERE p.user_id=p_user_id AND p.program_id=p_program_id),
+ 'program_unavailable');
+$$;
+REVOKE ALL ON FUNCTION public.coaching_delivery_cancellation_reason(UUID,UUID,BIGINT)
+ FROM PUBLIC,anon,authenticated,service_role;
+
 CREATE FUNCTION public.mark_coaching_dispatch(p_user_id UUID,p_delivery_key TEXT,p_claim_token UUID)
 RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE d public.coaching_delivery_outbox%ROWTYPE; p public.coaching_programs%ROWTYPE;
  u public.user_profiles%ROWTYPE; local_now TIMESTAMP; profile_now TIMESTAMP; wake TIME; sleep TIME; unanswered BIGINT;
- reply TIMESTAMPTZ; activation_allowed BOOLEAN:=FALSE; BEGIN
+ reply TIMESTAMPTZ; activation_allowed BOOLEAN:=FALSE; cancel_reason TEXT; BEGIN
  SELECT * INTO d FROM public.coaching_delivery_outbox WHERE user_id=p_user_id AND delivery_key=p_delivery_key;
  IF NOT FOUND THEN RETURN FALSE; END IF;
  SELECT * INTO u FROM public.user_profiles WHERE user_id=p_user_id;
@@ -284,7 +304,9 @@ DECLARE d public.coaching_delivery_outbox%ROWTYPE; p public.coaching_programs%RO
  SELECT count(*) INTO unanswered FROM public.coaching_delivery_outbox
  WHERE program_id=p.program_id AND state IN ('accepted','uncertain','dispatched')
  AND (reply IS NULL OR coalesce(dispatched_at,scheduled_at)>reply);
- IF NOT activation_allowed OR p.state<>'active' OR p.version<>d.program_version OR clock_timestamp()<p.starts_at
+ cancel_reason:=public.coaching_delivery_cancellation_reason(p_user_id,d.program_id,d.program_version);
+ IF cancel_reason='progress_logged_today'
+    OR NOT activation_allowed OR p.state<>'active' OR p.version<>d.program_version OR clock_timestamp()<p.starts_at
     OR clock_timestamp()>=p.ends_at OR NOT public.has_coaching_consent(p_user_id)
     OR NOT EXISTS(SELECT 1 FROM public.mode_grants WHERE user_id=p_user_id AND mode_id='coach'
       AND revoked_at IS NULL AND expires_at>clock_timestamp())
@@ -303,7 +325,8 @@ DECLARE d public.coaching_delivery_outbox%ROWTYPE; p public.coaching_programs%RO
       >greatest(0,coalesce(u.daily_message_budget,4))
     OR unanswered>=2 OR (unanswered=1 AND d.kind<>'follow_up')
     OR (unanswered=0 AND d.kind='follow_up') THEN
-   UPDATE public.coaching_delivery_outbox SET state='cancelled',finished_at=clock_timestamp()
+   UPDATE public.coaching_delivery_outbox SET state='cancelled',finished_at=clock_timestamp(),
+     cancellation_reason=cancel_reason
      WHERE user_id=p_user_id AND delivery_key=p_delivery_key;
    UPDATE public.proactive_reservations SET state='cancelled'
      WHERE user_id=p_user_id AND delivery_key=p_delivery_key AND state='reserved';
@@ -326,7 +349,9 @@ DECLARE d public.coaching_delivery_outbox%ROWTYPE; outcome TEXT:=p_outcome; BEGI
  IF NOT FOUND OR d.claim_token IS DISTINCT FROM p_claim_token OR d.state NOT IN ('claimed','dispatched')
  THEN RETURN FALSE; END IF;
  IF d.state='dispatched' AND outcome='cancelled' THEN outcome:='uncertain'; END IF;
- UPDATE public.coaching_delivery_outbox SET state=outcome,finished_at=clock_timestamp()
+ UPDATE public.coaching_delivery_outbox SET state=outcome,finished_at=clock_timestamp(),
+ cancellation_reason=CASE WHEN outcome='cancelled' THEN
+ public.coaching_delivery_cancellation_reason(p_user_id,d.program_id,d.program_version) END
  WHERE user_id=p_user_id AND delivery_key=p_delivery_key;
  UPDATE public.proactive_reservations SET state=outcome WHERE user_id=p_user_id AND delivery_key=p_delivery_key;
  RETURN TRUE;
@@ -338,7 +363,9 @@ DECLARE owner_id UUID; affected_program UUID; BEGIN
  affected_program:=CASE WHEN TG_OP='DELETE' THEN OLD.program_id ELSE NEW.program_id END;
  IF TG_OP='DELETE' OR NEW.state<>'active' THEN
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('amigo-proactive:'||owner_id,0));
-  UPDATE public.coaching_delivery_outbox SET state='cancelled',finished_at=clock_timestamp()
+  UPDATE public.coaching_delivery_outbox SET state='cancelled',finished_at=clock_timestamp(),
+  cancellation_reason=CASE WHEN TG_OP='DELETE' THEN 'program_unavailable'
+  WHEN NEW.state IN ('paused','stopped','completed') THEN 'program_'||NEW.state ELSE 'ineligible' END
   WHERE program_id=affected_program AND state IN ('pending','claimed');
   UPDATE public.proactive_reservations SET state='cancelled'
   WHERE program_id=affected_program AND state='reserved';
@@ -369,6 +396,7 @@ DO $$ BEGIN
  IF to_regclass('public.proactive_reservations') IS NULL
  OR to_regclass('public.coaching_delivery_outbox') IS NULL
  OR to_regprocedure('public.mark_coaching_dispatch(uuid,text,uuid)') IS NULL
+ OR to_regprocedure('public.coaching_delivery_cancellation_reason(uuid,uuid,bigint)') IS NULL
  OR to_regprocedure('public.enqueue_coaching_delivery(uuid,uuid,bigint,text,date,text,timestamptz)') IS NULL
  OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger WHERE tgname='coaching_inactive_cancels_delivery')
  OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger WHERE tgname='reminder_schedule_immutable')

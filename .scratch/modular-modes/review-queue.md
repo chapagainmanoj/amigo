@@ -799,3 +799,12 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   keeps current conversation and never calls model or exposes RPC details.
 - Root67Memory/pairing passed2.45s; Ruff/diffclean. Latestfull1401passed; currency/source
   certification remains absent. Atomic suggestion confirmation follows separately.
+
+### Owner progress decision — explicit same-day cancellation
+
+- Author096ba32; protected019/assert019, proactive.py, localStore mirrors and delivery tests.
+- Dispatch checks participant-reported progress on Program-local day before generic version
+  mismatch, records progress_logged_today. Pause, edit and consent keep distinct reasons.
+- Independent cbt_selector fresh45SQL chain + Kiritimati-midnight/yesterday/foreign-owner/program/
+  helperprivilege probes PASS019SHA5e3e6b30…; root180Coach/currency passed11.51s/Ruff/diffclean.
+  Latestfull1401passed; no model/Gate A certification. No participant-requested Reminder change.

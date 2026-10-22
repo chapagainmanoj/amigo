@@ -69,10 +69,13 @@ class DeliveryStore(FakeStore):
             self.grants,
             user=user,
             activated=activation["completed"],
+            entries=self._coaching_state.entries,
         )
 
     async def finish_coaching_delivery(self, user_id, key, token, outcome):
-        return await self.proactive.finish(user_id, key, token, outcome)
+        return await self.proactive.finish(
+            user_id, key, token, outcome, self.programs, self._coaching_state.entries
+        )
 
 
 class Clock:
@@ -567,3 +570,60 @@ async def test_dispatch_rechecks_profile_day_coach_cap_and_reduced_budget(setup,
     assert not await store.mark_coaching_dispatch(
         user["user_id"], claim["delivery_key"], claim["claim_token"]
     )
+
+
+@pytest.mark.parametrize("progress_before_queue", [True, False])
+async def test_logged_progress_today_explicitly_suppresses_check_in(setup, progress_before_queue):
+    store, channel, user, program, worker, state = setup
+    entry = dict(
+        user_id=user["user_id"],
+        program_id=program["program_id"],
+        kind="progress",
+        created_at=state["now"].isoformat(),
+    )
+    if progress_before_queue:
+        store._coaching_state.entries.append(entry)
+    await worker.reconcile()
+    if not progress_before_queue:
+        store._coaching_state.entries.append(entry)
+        program["version"] += 1
+    assert await worker.drain_once() == 0
+    assert channel.sent == []
+    delivery = next(iter(store.proactive.deliveries.values()))
+    assert delivery["state"] == "cancelled"
+    assert delivery["cancellation_reason"] == "progress_logged_today"
+
+
+@pytest.mark.parametrize(
+    "change,reason", [("paused", "program_paused"), ("edit", "program_changed")]
+)
+async def test_other_program_changes_keep_distinct_cancellation_reasons(setup, change, reason):
+    store, channel, _, program, worker, _ = setup
+    await worker.reconcile()
+    program["version"] += 1
+    if change == "paused":
+        program["state"] = "paused"
+    assert await worker.drain_once() == 0
+    assert not channel.sent
+    assert next(iter(store.proactive.deliveries.values()))["cancellation_reason"] == reason
+
+
+@pytest.mark.parametrize("source", ["yesterday", "other_owner", "other_program"])
+async def test_unrelated_progress_does_not_suppress_current_check_in(setup, source):
+    store, channel, user, program, worker, state = setup
+    entry = dict(
+        user_id=user["user_id"],
+        program_id=program["program_id"],
+        kind="progress",
+        created_at=state["now"].isoformat(),
+    )
+    if source == "yesterday":
+        entry["created_at"] = (state["now"] - timedelta(days=1)).isoformat()
+    elif source == "other_owner":
+        entry["user_id"] = "foreign"
+    else:
+        entry["program_id"] = "other"
+    store._coaching_state.entries.append(entry)
+    await worker.reconcile()
+    assert await worker.drain_once() == 1
+    assert len(channel.sent) == 1

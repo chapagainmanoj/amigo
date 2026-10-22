@@ -62,7 +62,8 @@ class LocalProactiveState:
                         "claimed",
                     }:
                         delivery.update(
-                            state="cancelled", finished_at=instant(utc_now()).isoformat()
+                            state="cancelled", finished_at=instant(utc_now()).isoformat(),
+                            cancellation_reason="consent_withdrawn",
                         )
                         self.reservations[user_id, delivery["delivery_key"]]["state"] = "cancelled"
             return copy.deepcopy(row)
@@ -259,6 +260,7 @@ class LocalProactiveState:
                 worker_id=None,
                 dispatched_at=None,
                 finished_at=None,
+                cancellation_reason=None,
             )
             self.deliveries[user["user_id"], key] = row
             return {"status": "queued", "delivery": copy.deepcopy(row)}
@@ -288,7 +290,27 @@ class LocalProactiveState:
                         break
             return selected
 
-    async def dispatch(self, user_id, key, token, programs, grants, user=None, activated=False):
+    async def _cancellation_reason(self, user_id, program, row, entries, now):
+        if not program or program["user_id"] != user_id:
+            return "program_unavailable"
+        if program["state"] in {"paused", "stopped", "completed"}:
+            return "program_" + program["state"]
+        today = local_day(now, program["timezone"])
+        if any(
+            entry["user_id"] == user_id
+            and entry["program_id"] == program["program_id"]
+            and entry["kind"] == "progress"
+            and local_day(entry["created_at"], program["timezone"]) == today
+            for entry in entries
+        ):
+            return "progress_logged_today"
+        if program["version"] != row["program_version"]:
+            return "program_changed"
+        return "ineligible"
+
+    async def dispatch(
+        self, user_id, key, token, programs, grants, user=None, activated=False, entries=()
+    ):
         async with self.lock:
             await self._discard_reminder_reservations()
             row = self.deliveries.get((user_id, key))
@@ -301,7 +323,12 @@ class LocalProactiveState:
             ):
                 return False
             program = programs.get(row["program_id"])
-            invalid = not activated or not await self._eligible(user_id, program, grants, now)
+            reason = await self._cancellation_reason(user_id, program, row, entries, now)
+            invalid = (
+                reason == "progress_logged_today"
+                or not activated
+                or not await self._eligible(user_id, program, grants, now)
+            )
             if not invalid:
                 local = now.astimezone(ZoneInfo(program["timezone"]))
                 profile = user or {}
@@ -353,14 +380,16 @@ class LocalProactiveState:
                     or (unanswered == 0 and row["kind"] == "follow_up")
                 )
             if invalid:
-                row.update(state="cancelled", finished_at=now.isoformat())
+                row.update(
+                    state="cancelled", finished_at=now.isoformat(), cancellation_reason=reason
+                )
                 self.reservations[user_id, key]["state"] = "cancelled"
                 return False
             row.update(state="dispatched", dispatched_at=now.isoformat())
             self.reservations[user_id, key]["state"] = "dispatched"
             return True
 
-    async def finish(self, user_id, key, token, outcome):
+    async def finish(self, user_id, key, token, outcome, programs=None, entries=()):
         if outcome not in {"accepted", "rejected", "uncertain", "cancelled"}:
             raise ValueError("Invalid coaching delivery outcome")
         async with self.lock:
@@ -373,7 +402,22 @@ class LocalProactiveState:
                 return False
             if row["state"] == "dispatched" and outcome == "cancelled":
                 outcome = "uncertain"
-            row.update(state=outcome, finished_at=instant(utc_now()).isoformat())
+            reason = (
+                await self._cancellation_reason(
+                    user_id,
+                    (programs or {}).get(row["program_id"]),
+                    row,
+                    entries,
+                    instant(utc_now()),
+                )
+                if outcome == "cancelled"
+                else None
+            )
+            row.update(
+                state=outcome,
+                finished_at=instant(utc_now()).isoformat(),
+                cancellation_reason=reason,
+            )
             self.reservations[user_id, key]["state"] = outcome
             return True
 
@@ -385,7 +429,16 @@ class LocalProactiveState:
                     "pending",
                     "claimed",
                 }:
-                    row.update(state="cancelled", finished_at=instant(utc_now()).isoformat())
+                    row.update(
+                        state="cancelled",
+                        finished_at=instant(utc_now()).isoformat(),
+                        cancellation_reason=(
+                            "program_unavailable" if not program else
+                            "program_" + program["state"]
+                            if program["state"] in {"paused", "stopped", "completed"}
+                            else "ineligible"
+                        ),
+                    )
                     self.reservations[row["user_id"], row["delivery_key"]]["state"] = "cancelled"
 
     async def purge_programs(self, user_id, program_ids):
