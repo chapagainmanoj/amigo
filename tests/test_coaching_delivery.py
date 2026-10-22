@@ -2,6 +2,7 @@
 
 import asyncio
 import copy
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -575,6 +576,7 @@ async def test_dispatch_rechecks_profile_day_coach_cap_and_reduced_budget(setup,
 @pytest.mark.parametrize("progress_before_queue", [True, False])
 async def test_logged_progress_today_explicitly_suppresses_check_in(setup, progress_before_queue):
     store, channel, user, program, worker, state = setup
+    channel.capabilities = replace(channel.capabilities, threads=True)
     entry = dict(
         user_id=user["user_id"],
         program_id=program["program_id"],
@@ -589,6 +591,7 @@ async def test_logged_progress_today_explicitly_suppresses_check_in(setup, progr
         program["version"] += 1
     assert await worker.drain_once() == 0
     assert channel.sent == []
+    assert channel.conversations == []
     delivery = next(iter(store.proactive.deliveries.values()))
     assert delivery["state"] == "cancelled"
     assert delivery["cancellation_reason"] == "progress_logged_today"
@@ -683,3 +686,55 @@ async def test_drain_isolates_one_claim_failure_even_when_cleanup_fails(setup, m
     assert await worker.drain_once() == 1
     assert len(channel.sent) == 1
     assert "PRIVATE_" not in caplog.text
+
+
+async def test_coach_conversation_is_not_created_before_activation_check(setup, monkeypatch):
+    from unittest.mock import AsyncMock
+    store, channel, _, _, worker, _ = setup
+    channel.capabilities = replace(channel.capabilities, threads=True)
+    await worker.reconcile()
+    monkeypatch.setattr(store, "get_activation_state", AsyncMock(return_value={"completed": False}))
+    assert await worker.drain_once() == 0
+    assert channel.conversations == []
+    assert channel.sent == []
+
+
+async def test_conversation_creation_failure_after_dispatch_is_terminal(setup, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    store, channel, _, _, worker, _ = setup
+    channel.capabilities = replace(channel.capabilities, threads=True)
+    await worker.reconcile()
+    create = AsyncMock(side_effect=RuntimeError("fictional channel failure"))
+    monkeypatch.setattr(channel, "create_conversation", create)
+    assert await worker.drain_once() == 0
+    assert next(iter(store.proactive.deliveries.values()))["state"] == "uncertain"
+    assert await worker.drain_once() == 0
+    create.assert_awaited_once()
+    assert channel.sent == []
+
+
+@pytest.mark.parametrize(
+    "wake,sleep,second,expected",
+    [
+        ("12:00:30", "23:00", 45, True),
+        ("07:30", "12:00:30", 45, False),
+        ("12:00:30", "23:00", 15, False),
+        ("07:30", "12:00:30", 15, True),
+    ],
+)
+async def test_dispatch_compares_parsed_quiet_times_including_seconds(
+    setup, wake, sleep, second, expected
+):
+    store, _, user, program, _, state = setup
+    user.update(wake_time=wake, sleep_time=sleep)
+    state["now"] = state["now"].replace(second=second)
+    key = "coach:seconds"
+    queued = await store.enqueue_coaching_delivery(
+        user["user_id"], program["program_id"], 1, key, "2026-10-22", "check_in", state["now"]
+    )
+    assert queued["status"] == "queued"
+    claim = (await store.claim_coaching_deliveries("seconds"))[0]
+    assert (
+        await store.mark_coaching_dispatch(user["user_id"], key, claim["claim_token"]) is expected
+    )

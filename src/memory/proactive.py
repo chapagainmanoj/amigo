@@ -4,7 +4,7 @@ import asyncio
 import copy
 import re
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from functools import wraps
 from zoneinfo import ZoneInfo
 
@@ -332,10 +332,10 @@ class LocalProactiveState:
             if not invalid:
                 local = now.astimezone(ZoneInfo(program["timezone"]))
                 profile = user or {}
-                wake = profile.get("wake_time") or "07:30"
-                sleep = profile.get("sleep_time") or "23:00"
+                wake = time.fromisoformat(profile.get("wake_time") or "07:30")
+                sleep = time.fromisoformat(profile.get("sleep_time") or "23:00")
                 profile_local = now.astimezone(ZoneInfo(profile.get("timezone") or "UTC"))
-                wall = profile_local.strftime("%H:%M")
+                wall = profile_local.time().replace(tzinfo=None)
                 awake = wake <= wall < sleep if wake < sleep else wall >= wake or wall < sleep
                 reply = self.replies.get((user_id, program["program_id"]))
                 unanswered = sum(

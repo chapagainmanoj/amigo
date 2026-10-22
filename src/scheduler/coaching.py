@@ -172,11 +172,6 @@ class CoachingDeliveryWorker:
                 if recipient is None:
                     await self.store.finish_coaching_delivery(user_id, key, token, "cancelled")
                     continue
-                from src.conversations import ModeConversationService
-
-                conversation = await ModeConversationService(self.store, self.channel).ensure(
-                    user, "coach"
-                )
                 auth_id = user.get("supabase_auth_id")
                 activation = await self.store.get_activation_state(auth_id) if auth_id else {}
                 if activation.get("completed") is not True:
@@ -191,6 +186,11 @@ class CoachingDeliveryWorker:
                 if not await self._admitted():
                     await self.store.finish_coaching_delivery(user_id, key, token, "uncertain")
                     continue
+                from src.conversations import ModeConversationService
+
+                conversation = await ModeConversationService(self.store, self.channel).ensure(
+                    user, "coach"
+                )
                 messages = {
                     "check_in": (
                         "Coach check-in: what progress would you like to report? "

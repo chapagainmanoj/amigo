@@ -841,3 +841,13 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 -103focusedPASS2.58s; fullRuff/diffclean. Cleanup fail/success, no thread echo, timezone rejection
   and UUID schema tests included. Same-process creation locks retained. Latestfull1401passed;
   final combined suite/currency follows pending019/021 and eval rubric fixes.
+
+### Review fix11 / Coach delivery boundaries
+
+- Author340984a; proactive.py, scheduler/coaching.py, delivery tests; protected/SQL:none.
+- Activation and final durable admission precede topic creation. Denied Activation/progress never
+  creates a conversation. Provider creation failure after durable dispatch mark becomes uncertain
+  and does not replay. Local quiet hours parse datetime.time including seconds, matching SQL TIME.
+- Root81Coachapp/deliveryPASS2.89s; authorisolatedfull1328PASS20.58s and scheduler smokePASS.
+  RootfullRuff/diffclean; prior independent review of application boundary3811bc8 found no blocker,
+  87focusedPASS2.91s. Latestfull1401passed; final combined suite follows candidate rubric repair.
