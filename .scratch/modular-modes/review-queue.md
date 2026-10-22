@@ -879,3 +879,19 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   option, pending owner review; owner did not independently select this implementation policy.
   Decision13 explicitly preserves superseded version history and applies7day/30day deletion windows
   afterForget. No code, notice, production data or privacy promise changed. Diffcheckclean.
+
+### Review fix19 — atomic logical Mode opening and provider retry receipt
+
+- Author9fd285c; protected021/assert021, suggestions.py/all3Stores, ModeSuggestionController,
+  suggestion tests, proposal/suggestion-opening-receipt.md.
+- Confirmation rechecks owned source/newestDailycontrol/target, opt-in, grant and pending Handoff/
+  Coach approval. Same transaction creates/reuses targetSession and selects all owned control
+  pointers. Service SELECT revoked. No carried content or model call. Provider conversation ensure
+  follows logical DB opening with5minute token-fenced claim/release/complete receipt; completed
+  buttons cannot reopen or override later manual switch/newerDailySession. Notice follows completion.
+- Referenced Session locks sorted before offer lock to avoid target/control FK cascade inversion.
+  Independent cbt_selector fresh45CI SQL chain/helper-first concurrent DELETE/singleuse/revokedgrant/
+  manualswitch PASS021SHA12d607bf…; author delete-first interleavings PASS.83focusedPASS2.29s.
+- Rootfull1512passed22.21s/Ruff/diffclean,111currency/Dailygolden included. No Gate A release
+  certification; no provider/Supabase access. Final whole-chain proof follows production recovery
+  integration checks. External endpoint creation cannot be atomic with Postgres; receipt fences retry.

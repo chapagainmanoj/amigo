@@ -1856,5 +1856,14 @@ class InMemoryStore:
     async def get_mode_suggestion(self, user_id, offer_id):
         return await (await self._suggestions()).get(user_id, offer_id)
 
+    async def claim_mode_suggestion_opening(self, user_id, offer_id):
+        return await (await self._suggestions()).claim_opening(user_id, offer_id)
+
+    async def release_mode_suggestion_opening(self, user_id, offer_id, claim_token):
+        return await (await self._suggestions()).release_opening(user_id, offer_id, claim_token)
+
+    async def complete_mode_suggestion_opening(self, user_id, offer_id, claim_token):
+        return await (await self._suggestions()).complete_opening(user_id, offer_id, claim_token)
+
     async def resolve_mode_suggestion(self, user_id, offer_id, confirm):
         return await (await self._suggestions()).resolve(user_id, offer_id, confirm)

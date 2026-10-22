@@ -190,7 +190,11 @@ async def test_older_owned_open_daily_session_remains_valid_when_another_is_open
     assert offer and offer["source_session_id"] == older
     confirmed = await s.resolve_mode_suggestion(uid, offer["offer_id"], True)
     assert confirmed and confirmed["state"] == "confirmed"
-    assert not await state.backing.get_active_session(uid, "coach")
+    target = await state.backing.get_active_session(uid, "coach")
+    assert target["session_id"] == confirmed["opened_session_id"]
+    assert await state.backing.get_session_messages(target["session_id"]) == []
+    assert confirmed["control_session_id"] == newer["session_id"]
+    assert await state.backing.get_active_mode(uid, newer["session_id"]) == "coach"
 
 
 async def test_pending_coach_approval_suppresses_offer_but_expired_approval_does_not(
@@ -272,3 +276,147 @@ async def test_participant_preference_defaults_off_and_requires_explicit_opt_in(
     )
     assert await s.set_mode_suggestion_preference(actor, False) is False
     assert await s.get_mode_suggestion_preference(actor) is False
+
+
+@pytest.mark.parametrize("pending", ["handoff", "coaching"])
+async def test_pending_confirmation_created_after_offer_blocks_atomic_opening(state, pending):
+    store, uid, sid = state.store, state.user["user_id"], state.session["session_id"]
+    offer = await store.create_mode_suggestion(uid, sid, "coach")
+    if pending == "handoff":
+        result = await state.backing.create_handoff(
+            uid, sid, "daily", "coach", "Fictional pending question", source_grant_required=False
+        )
+        assert result["status"] == "pending"
+    else:
+        result = await state.backing.draft_coaching_program(
+            uid,
+            "post-offer-draft",
+            "post-offer-draft",
+            goal="Fictional reading",
+            success_measure="Three pages",
+            check_in_days=[4],
+            check_in_time="12:00",
+            timezone="UTC",
+        )
+        await state.backing.issue_coaching_approval(uid, result["program"]["program_id"], 1)
+    assert await store.resolve_mode_suggestion(uid, offer["offer_id"], True) is None
+    assert (await store.get_mode_suggestion(uid, offer["offer_id"]))["state"] == "declined"
+    assert not await state.backing.get_active_session(uid, "coach")
+    assert (await state.backing.get_active_mode(uid, sid)) is None
+
+
+async def test_confirm_opens_owned_fixed_mode_session_without_carried_text_and_fences_retry(
+    state, monkeypatch
+):
+    store, uid, sid = state.store, state.user["user_id"], state.session["session_id"]
+    offer = await store.create_mode_suggestion(uid, sid, "coach")
+    result = await store.resolve_mode_suggestion(uid, offer["offer_id"], True)
+    target = await state.backing.get_active_session(uid, "coach")
+    assert target["session_id"] == result["opened_session_id"]
+    assert target["mode_id"] == target["active_mode_id"] == "coach"
+    assert await state.backing.get_active_mode(uid, sid) == "coach"
+    assert await state.backing.get_session_messages(target["session_id"]) == []
+    assert (await store.claim_mode_suggestion_opening(uid, offer["offer_id"])) == {"status": "busy"}
+    assert not await store.complete_mode_suggestion_opening(
+        state.other["user_id"], offer["offer_id"], result["opening_claim_token"]
+    )
+    monkeypatch.setattr(
+        "src.memory.suggestions.utc_now", lambda: datetime.now() + timedelta(minutes=6)
+    )
+    receipt = await store.claim_mode_suggestion_opening(uid, offer["offer_id"])
+    assert receipt["offer"]["opened_session_id"] == target["session_id"]
+    token = receipt["offer"]["opening_claim_token"]
+    assert token != result["opening_claim_token"]
+    assert not await store.complete_mode_suggestion_opening(
+        uid, offer["offer_id"], result["opening_claim_token"]
+    )
+    assert not await store.release_mode_suggestion_opening(
+        uid, offer["offer_id"], result["opening_claim_token"]
+    )
+    assert await store.complete_mode_suggestion_opening(uid, offer["offer_id"], token)
+    assert not await store.claim_mode_suggestion_opening(uid, offer["offer_id"])
+    assert not await store.complete_mode_suggestion_opening(uid, offer["offer_id"], token)
+
+
+async def test_confirm_failure_leaves_offer_pending_and_selector_unchanged(state, monkeypatch):
+    store, uid, sid = state.store, state.user["user_id"], state.session["session_id"]
+    offer = await store.create_mode_suggestion(uid, sid, "coach")
+    local = await state.backing._suggestions()
+    monkeypatch.setattr(
+        local, "_target_session", AsyncMock(side_effect=RuntimeError("fictional precommit failure"))
+    )
+    with pytest.raises(RuntimeError):
+        await store.resolve_mode_suggestion(uid, offer["offer_id"], True)
+    assert (await store.get_mode_suggestion(uid, offer["offer_id"]))["state"] == "pending"
+    assert await state.backing.get_active_mode(uid, sid) is None
+    assert not await state.backing.get_active_session(uid, "coach")
+
+
+@pytest.mark.parametrize("threads", [False, True])
+async def test_failed_provider_opening_retries_same_receipt_without_a_model_turn(state, threads):
+    store, user = state.backing, state.user
+    coach = replace(DAILY, id="coach", name="Coach", entitlement="grant", context=())
+    runtime = ModeRuntime(ModeRegistry((DAILY, coach)))
+    runtime.execution_model_for = AsyncMock(side_effect=AssertionError("no model on opening"))
+    channel = FakeChannel(threads=threads)
+    modes = ModeController(store, channel, FakeScheduler(), SessionManager(store), runtime)
+    controller = ModeSuggestionController(
+        modes,
+        readiness=SuggestionReadiness(True, True, True, True),
+        turn_clearance=AsyncMock(return_value=True),
+    )
+    offer = await store.create_mode_suggestion(
+        user["user_id"], state.session["session_id"], "coach"
+    )
+    original = modes.conversations.ensure
+    calls = {"count": 0}
+
+    async def ensure(*args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("PRIVATE_PROVIDER_ERROR")
+        return await original(*args, **kwargs)
+
+    modes.conversations.ensure = ensure
+    await controller.handle_callback(user, 82001, f"suggest:yes:{offer['offer_id']}")
+    pending = await store.get_mode_suggestion(user["user_id"], offer["offer_id"])
+    assert pending["state"] == "confirmed" and pending["opening_claim_token"] is None
+    assert pending["opening_completed_at"] is None
+    assert "retry" in channel.sent[-1]["text"].lower() and "PRIVATE" not in channel.sent[-1]["text"]
+    await controller.handle_callback(user, 82001, f"suggest:yes:{offer['offer_id']}")
+    complete = await store.get_mode_suggestion(user["user_id"], offer["offer_id"])
+    assert complete["opening_completed_at"] is not None
+    assert complete["opened_session_id"] == pending["opened_session_id"]
+    target = await store.get_active_session(user["user_id"], "coach")
+    assert await store.get_session_messages(target["session_id"]) == []
+    sent = len(channel.sent)
+    await controller.handle_callback(user, 82001, f"suggest:yes:{offer['offer_id']}")
+    assert len(channel.sent) == sent
+    runtime.execution_model_for.assert_not_awaited()
+
+
+async def test_retry_cannot_override_a_later_manual_mode_choice_or_revoked_grant(state):
+    store, uid, sid = state.store, state.user["user_id"], state.session["session_id"]
+    offer = await store.create_mode_suggestion(uid, sid, "coach")
+    row = await store.resolve_mode_suggestion(uid, offer["offer_id"], True)
+    assert await store.release_mode_suggestion_opening(
+        uid, offer["offer_id"], row["opening_claim_token"]
+    )
+    await state.backing.set_active_mode(uid, sid, "daily")
+    assert await store.claim_mode_suggestion_opening(uid, offer["offer_id"]) is None
+    await state.backing.set_active_mode(uid, sid, "coach")
+    await state.backing.revoke_mode_grant(uid, "coach", "owner", "fictional revoke")
+    assert await store.claim_mode_suggestion_opening(uid, offer["offer_id"]) is None
+
+
+async def test_retry_is_rejected_after_a_newer_daily_control_session_is_created(state):
+    store, uid, sid = state.store, state.user["user_id"], state.session["session_id"]
+    offer = await store.create_mode_suggestion(uid, sid, "coach")
+    row = await store.resolve_mode_suggestion(uid, offer["offer_id"], True)
+    assert await store.release_mode_suggestion_opening(
+        uid, offer["offer_id"], row["opening_claim_token"]
+    )
+    newer = await state.backing.create_session(uid)
+    assert newer["session_id"] != row["control_session_id"]
+    assert await store.claim_mode_suggestion_opening(uid, offer["offer_id"]) is None
+    assert await state.backing.get_active_mode(uid, newer["session_id"]) is None

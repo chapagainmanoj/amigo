@@ -1846,6 +1846,21 @@ class MemoryStore:
             "p_user_id": user_id, "p_offer_id": offer_id,
         })
 
+    async def claim_mode_suggestion_opening(self, user_id, offer_id):
+        return await self._coaching_rpc("claim_mode_suggestion_opening", {
+            "p_user_id": user_id, "p_offer_id": offer_id,
+        })
+
+    async def release_mode_suggestion_opening(self, user_id, offer_id, claim_token):
+        return await self._coaching_rpc("release_mode_suggestion_opening", {
+            "p_user_id": user_id, "p_offer_id": offer_id, "p_claim_token": claim_token,
+        })
+
+    async def complete_mode_suggestion_opening(self, user_id, offer_id, claim_token):
+        return await self._coaching_rpc("complete_mode_suggestion_opening", {
+            "p_user_id": user_id, "p_offer_id": offer_id, "p_claim_token": claim_token,
+        })
+
     async def resolve_mode_suggestion(self, user_id, offer_id, confirm):
         if not isinstance(confirm, bool):
             return None

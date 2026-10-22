@@ -148,15 +148,47 @@ class ModeSuggestionController:
                     chat_id, "That Mode is no longer available.", conversation=conversation
                 )
                 return
-        resolved = await self.store.resolve_mode_suggestion(user["user_id"], parts[2], confirm)
+        if confirm and offer["state"] == "confirmed":
+            receipt = await self.store.claim_mode_suggestion_opening(user["user_id"], parts[2])
+            if receipt and receipt.get("status") == "busy":
+                await self.channel.send_message(
+                    chat_id,
+                    "Please wait a few minutes before trying this opening again.",
+                    conversation=conversation,
+                )
+                return
+            if not receipt or receipt.get("status") != "claimed":
+                return
+            resolved = receipt["offer"]
+        else:
+            resolved = await self.store.resolve_mode_suggestion(user["user_id"], parts[2], confirm)
         if not resolved or not confirm:
             return
-        # Opens via the same resolver as an explicit command. No target model call or carried text.
-        prepared = await self.modes.prepare(
-            chat_id, user, f"/mode {offer['target_mode_id']}", parts[2], conversation
-        )
-        await self.channel.send_message(
-            chat_id,
-            prepared.response or "Mode opened.",
-            conversation=prepared.context.conversation,
-        )
+        token = resolved["opening_claim_token"]
+        try:
+            # The Store has already committed the owned canonical Session and logical selector.
+            # Provider endpoint provisioning can fail independently; its lease remains retryable.
+            context.session_id = resolved["opened_session_id"]
+            mode = await self.runtime.resolve(context, resolved["target_mode_id"])
+            ref = await self.modes.conversations.ensure(
+                user, resolved["target_mode_id"], chat_id=chat_id
+            )
+            mode = await self.runtime.resolve(context, resolved["target_mode_id"])
+            if not await self.readiness.complete():
+                await self.store.release_mode_suggestion_opening(user["user_id"], parts[2], token)
+                return
+            # Fence publication after endpoint creation; an uncertain notice never resends itself.
+            if await self.store.complete_mode_suggestion_opening(user["user_id"], parts[2], token):
+                await self.channel.send_message(
+                    chat_id, f"{mode.name}: {mode.purpose}\n{mode.limits}", conversation=ref
+                )
+        except Exception:
+            released = await self.store.release_mode_suggestion_opening(
+                user["user_id"], parts[2], token
+            )
+            if released:
+                await self.channel.send_message(
+                    chat_id,
+                    "That Mode could not be opened. Tap its Open button again to retry.",
+                    conversation=conversation,
+                )
