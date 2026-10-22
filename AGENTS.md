@@ -47,7 +47,6 @@ python scripts/smoke_check.py --scheduler
 ### Authorized build scope (22 October 2026)
 
 - Follow the Amigo Modes build plan, phases 0, 1, 1b, 2, 3, 4, 5, 6, on `develop`.
-- One commit per slice, ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - Migrations 017+, schema bumps, and setting evaluated Modes live are authorized.
 - Protected files are editable: `src/config.py`, `migrations/*.sql`, `src/db/supabase.py`,
   `scripts/smoke_check.py`. List each edit in the phase review queue.

@@ -1,5 +1,5 @@
 {
-  "cluster": "/private/tmp/amigo-review-final-ednz234t",
+  "cluster": "/private/tmp/amigo-review-final-9ldw3uid",
   "network": "unix-socket-only",
   "files": [
     {
@@ -239,7 +239,7 @@
     }
   },
   "schema_version": 21,
-  "revision": "82527387d61e989ddfcbb73fd7bc5c77734ca034",
+  "revision": "06ed83bcd1ffaca40acf3d76a663029bd961ac0c",
   "result": "PASS",
   "cluster_stopped": true
 }
