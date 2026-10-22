@@ -742,3 +742,14 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Pairing/channel/currency163passed10.74s; routing/channel/pairing102passed4.14s; Ruff/diffclean.
   Added successful adoption/no-topic and denied-chat regressions. No provider/network calls.
   Latestfull1352passed; current source invalidates prior Gate A release evidence.
+
+### Review fix18 — Memory lock graph and private validation
+
+- Author001dcab; protected020/assert020, durable.py, MemoryStore and Store/lock-order tests.
+- Profile FOR KEY SHARE precedes owned advisory lock; global admission lock only for new opt-in.
+  Scope order uses C collation; malformed input and unexpected RPC errors return clean errors.
+- Independent dev_runtime fresh45-file SQL PASS at020SHAe5e6a395…; six concurrent optins→5admitted,
+  1cap; enabled save0.024s while admission lock held; profile-delete interleave acquired no owned
+  advisory while waiting. Unicode scope digest parity and private error probes PASS; cluster stopped.
+- Root221Memory/lock/currency tests passed12.18s; fullRuff/diffclean. Latestfull1352passed;
+  no actual model/Gate A certification or live admission. Final SQL chain follows021 repairs.

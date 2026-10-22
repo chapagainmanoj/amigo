@@ -149,4 +149,32 @@ DO $$ DECLARE u UUID; foreign_id UUID; p JSONB; token TEXT; r JSONB; m UUID; n I
  OR has_function_privilege('authenticated','public.purge_memory_claims()','EXECUTE')
  OR NOT has_function_privilege('service_role','public.purge_memory_claims()','EXECUTE') THEN RAISE EXCEPTION 'claim purge permissions'; END IF;
 END $$;
+DO $$ DECLARE u UUID; p JSONB; value JSONB; msg TEXT; BEGIN
+ INSERT INTO public.user_profiles(telegram_chat_id) VALUES(91020301) RETURNING user_id INTO u;
+ p:=jsonb_build_object('category','preference','text','Fictional private input probe',
+ 'source_mode_id','daily','source_channel','dashboard','source_message_id',NULL,
+ 'source_date',to_char(current_date,'YYYY-MM-DD'),'creation_path','dashboard_explicit',
+ 'scopes',jsonb_build_array('daily','coach_z','coach_0'),'valid_until',NULL);
+ IF public.memory_normalize_payload(p)->'scopes'<>'["coach_0","coach_z","daily"]'::JSONB THEN RAISE EXCEPTION 'C scope ordering'; END IF;
+ FOREACH value IN ARRAY ARRAY[
+   p||'{"source_date":"PRIVATE_BAD_DATE"}'::JSONB,
+   p||'{"source_message_id":"PRIVATE_BAD_UUID"}'::JSONB,
+   p||'{"scopes":{"PRIVATE_SCOPES":"value"}}'::JSONB
+ ] LOOP
+ BEGIN
+ PERFORM public.memory_payload_digest(value);
+ RAISE EXCEPTION 'bad payload accepted'; EXCEPTION WHEN raise_exception THEN
+ GET STACKED DIAGNOSTICS msg=MESSAGE_TEXT;
+ IF msg NOT LIKE 'Invalid Memory %' OR msg LIKE '%PRIVATE%' THEN RAISE; END IF; END;
+ END LOOP;
+ FOREACH value IN ARRAY ARRAY['[]'::JSONB,'{"learning":"PRIVATE_BOOL","expected_version":0}'::JSONB,
+ '{"expected_version":"PRIVATE_VERSION","learning":true}'::JSONB] LOOP
+ BEGIN
+ PERFORM public.memory_command(u,'set_memory_pauses',value||'{"idempotency_key":"invalid","payload_hash":"invalid"}'::JSONB);
+ RAISE EXCEPTION 'bad command accepted'; EXCEPTION WHEN raise_exception THEN
+ GET STACKED DIAGNOSTICS msg=MESSAGE_TEXT;
+ IF msg NOT LIKE 'Invalid Memory %' OR msg LIKE '%PRIVATE%' THEN RAISE; END IF; END;
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM public.memory_settings WHERE user_id=u) THEN RAISE EXCEPTION 'bad command partially mutated'; END IF;
+END $$;
 ROLLBACK;

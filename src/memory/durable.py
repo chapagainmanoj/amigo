@@ -12,7 +12,7 @@ import re
 import secrets
 import uuid
 from datetime import UTC, date, datetime, timedelta
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from src.commands.base import IdempotencyConflictError, InvalidTransitionError, StaleVersionError
 from src.utils import utc_now
@@ -44,7 +44,7 @@ def _now(value=None):
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
-def normalize_memory_payload(payload):
+def _normalize_memory_payload(payload):
     if not isinstance(payload, dict) or set(payload) - set(PAYLOAD_FIELDS):
         raise ValueError("Invalid Memory payload")
     value = {field: copy.deepcopy(payload.get(field)) for field in PAYLOAD_FIELDS}
@@ -80,6 +80,21 @@ def normalize_memory_payload(payload):
     if value["source_message_id"] is not None:
         value["source_message_id"] = str(uuid.UUID(value["source_message_id"]))
     return value
+
+
+def normalize_memory_payload(payload):
+    """Do not echo invalid dates, identifiers or arbitrary objects in validation errors."""
+    try:
+        return _normalize_memory_payload(payload)
+    except (ValueError, TypeError, AttributeError, OverflowError):
+        raise ValueError("Invalid Memory payload") from None
+
+
+def _local_day(user):
+    try:
+        return _now().astimezone(ZoneInfo(user.get("timezone") or "UTC")).date()
+    except (ValueError, TypeError, ZoneInfoNotFoundError):
+        raise ValueError("Invalid Memory timezone") from None
 
 
 def memory_payload_digest(payload):
@@ -135,12 +150,12 @@ class LocalMemoryState:
         if not rows:
             raise ValueError("Memory unavailable")
         row = max(rows, key=lambda item: item["version"])
-        if version is not None and row["version"] != version:
+        if type(version) is not int or row["version"] != version:
             raise StaleVersionError("Memory version changed")
         return row
 
     async def _replay(self, user_id, key, digest, operation, memory_id=None):
-        if not key or not digest:
+        if any(not isinstance(value, str) or not 1 <= len(value) <= 200 for value in (key, digest)):
             raise ValueError("Memory replay metadata required")
         old = self.receipts.get((user_id, key))
         if old:
@@ -190,12 +205,17 @@ class LocalMemoryState:
     ):
         async with self.lock:
             if (
-                operation not in {"save", "correct", "reconfirm", "share", "forget_all"}
+                not isinstance(operation, str)
+                or operation not in {"save", "correct", "reconfirm", "share", "forget_all"}
+                or not isinstance(preview_digest, str)
                 or re.fullmatch(r"[0-9a-f]{64}", preview_digest or "") is None
             ):
                 raise ValueError("Invalid Memory confirmation")
             settings = await self._settings(user_id)
-            if settings["version"] != expected_settings_version:
+            if (
+                type(expected_settings_version) is not int
+                or settings["version"] != expected_settings_version
+            ):
                 raise StaleVersionError("Memory settings changed")
             if operation != "forget_all" and (
                 not self.admission_enabled or settings["learning_paused"]
@@ -219,6 +239,8 @@ class LocalMemoryState:
             return dict(token=token, expires_at=(_now() + timedelta(minutes=10)).isoformat())
 
     async def _claim(self, user_id, token):
+        if not isinstance(token, str) or not 1 <= len(token) <= 256:
+            raise InvalidTransitionError("Memory confirmation unavailable")
         claim = self.claims.get(hashlib.sha256(token.encode()).hexdigest())
         if (
             not claim
@@ -258,6 +280,8 @@ class LocalMemoryState:
                 raise InvalidTransitionError(
                     "Memory admission is unavailable or learning is paused"
                 )
+            if type(enable_memory) is not bool:
+                raise ValueError("Invalid Memory opt-in")
             value = normalize_memory_payload(payload)
             if memory_payload_digest(value) != claim["preview_digest"]:
                 raise InvalidTransitionError("Memory preview changed")
@@ -278,7 +302,7 @@ class LocalMemoryState:
                     or session.get("mode_id", "daily") != value["source_mode_id"]
                 ):
                     raise ValueError("Memory source unavailable")
-            day = _now().astimezone(ZoneInfo(user.get("timezone") or "UTC")).date()
+            day = _local_day(user)
             if value["valid_until"] and date.fromisoformat(value["valid_until"]) < day:
                 raise InvalidTransitionError("Memory validity date has passed")
             if not settings["enabled"]:
@@ -341,7 +365,7 @@ class LocalMemoryState:
     async def _effective(self, row, user):
         if row["state"] != "active":
             return row["state"]
-        day = _now().astimezone(ZoneInfo(user.get("timezone") or "UTC")).date()
+        day = _local_day(user)
         if row["valid_until"] and date.fromisoformat(row["valid_until"]) < day:
             return "expired"
         if row["reconfirm_at"] and _now(row["reconfirm_at"]) <= _now():
@@ -359,6 +383,8 @@ class LocalMemoryState:
                 raise InvalidTransitionError("Memory version is unavailable")
             old = row
             row = copy.deepcopy(old)
+            if not isinstance(action, str):
+                raise ValueError("Invalid Memory action")
             if action == "inactive":
                 row["state"] = "inactive"
             elif action == "use_again":
@@ -397,7 +423,7 @@ class LocalMemoryState:
             if replay is not None:
                 return replay
             settings = copy.deepcopy(await self._settings(user_id))
-            if settings["version"] != version:
+            if type(version) is not int or settings["version"] != version:
                 raise StaleVersionError("Memory settings changed")
             if (learning is None and use is None) or any(
                 type(value) is not bool for value in (learning, use) if value is not None
@@ -419,8 +445,12 @@ class LocalMemoryState:
 
     async def read(self, user, mode_id, turn_id, purpose, query):
         if (
-            purpose not in PURPOSES
-            or not turn_id
+            not isinstance(purpose, str)
+            or purpose not in PURPOSES
+            or not isinstance(turn_id, str)
+            or not 1 <= len(turn_id) <= 200
+            or not isinstance(mode_id, str)
+            or re.fullmatch(r"[a-z][a-z0-9_]{0,31}", mode_id) is None
             or not isinstance(query, str)
             or len(query) > 1000
         ):
@@ -473,6 +503,18 @@ class LocalMemoryState:
             ]
 
     async def inspect(self, user, states=None, limit=100, offset=0):
+        if (
+            type(limit) is not int
+            or type(offset) is not int
+            or (
+                states is not None
+                and (
+                    not isinstance(states, list)
+                    or any(not isinstance(state, str) or state not in STATES for state in states)
+                )
+            )
+        ):
+            raise ValueError("Invalid Memory inspection")
         async with self.lock:
             rows = []
             for row in self.memories.values():
@@ -577,7 +619,7 @@ class LocalMemoryState:
             if replay is not None:
                 return replay
             settings = copy.deepcopy(await self._settings(user_id))
-            if settings["version"] != version:
+            if type(version) is not int or settings["version"] != version:
                 raise StaleVersionError("Memory settings changed")
             self.memories = {
                 identity: row

@@ -76,7 +76,7 @@ $$;
 CREATE FUNCTION public.memory_normalize_payload(p JSONB) RETURNS JSONB
 LANGUAGE plpgsql IMMUTABLE SET search_path='' AS $$
 DECLARE s TEXT[]; f TEXT; BEGIN
- IF jsonb_typeof(p)<>'object' OR EXISTS(SELECT 1 FROM jsonb_object_keys(p) k WHERE k NOT IN
+ IF jsonb_typeof(p) IS DISTINCT FROM 'object' OR EXISTS(SELECT 1 FROM jsonb_object_keys(p) k WHERE k NOT IN
  ('category','text','source_mode_id','source_channel','source_message_id','source_date','creation_path','scopes','valid_until'))
  OR p->>'category' IS NULL OR p->>'category' NOT IN ('preference','routine','constraint','goal','project','context')
  OR jsonb_typeof(p->'text') IS DISTINCT FROM 'string' OR char_length(btrim(p->>'text')) NOT BETWEEN 1 AND 2000
@@ -89,7 +89,7 @@ DECLARE s TEXT[]; f TEXT; BEGIN
  IF jsonb_array_length(p->'scopes') NOT BETWEEN 1 AND 4 OR EXISTS
  (SELECT 1 FROM jsonb_array_elements(p->'scopes') x WHERE jsonb_typeof(x)<>'string'
  OR (x#>>'{}') !~ '^[a-z][a-z0-9_]{0,31}$') THEN RAISE EXCEPTION 'Invalid Memory scope'; END IF;
- SELECT array_agg(DISTINCT value ORDER BY value) INTO s FROM jsonb_array_elements_text(p->'scopes');
+ SELECT array_agg(DISTINCT value COLLATE "C" ORDER BY value COLLATE "C") INTO s FROM jsonb_array_elements_text(p->'scopes');
  IF p->>'source_date' IS NULL OR to_char((p->>'source_date')::DATE,'YYYY-MM-DD')<>p->>'source_date'
  OR (p->>'valid_until' IS NOT NULL AND to_char((p->>'valid_until')::DATE,'YYYY-MM-DD')<>p->>'valid_until')
  THEN RAISE EXCEPTION 'Invalid Memory date'; END IF;
@@ -97,6 +97,8 @@ DECLARE s TEXT[]; f TEXT; BEGIN
  'source_mode_id',p->>'source_mode_id','source_channel',p->>'source_channel',
  'source_message_id',(p->>'source_message_id')::UUID,'source_date',p->>'source_date',
  'creation_path',p->>'creation_path','scopes',to_jsonb(s),'valid_until',p->>'valid_until');
+EXCEPTION WHEN data_exception OR integrity_constraint_violation THEN
+ RAISE EXCEPTION 'Invalid Memory input';
 END $$;
 CREATE FUNCTION public.memory_payload_digest(p JSONB) RETURNS TEXT
 LANGUAGE SQL IMMUTABLE SET search_path='' AS $$
@@ -117,14 +119,26 @@ DECLARE s public.memory_settings; m public.memory_versions; old public.memory_ve
  token TEXT; key TEXT:=p_args->>'idempotency_key'; digest TEXT:=p_args->>'payload_hash';
  tz TEXT; ids UUID[]; n INT; action TEXT; rows JSONB; usage JSONB; previous UUID[];
 BEGIN
- -- Global before participant lock: first opt-ins across distinct users cannot race the cap.
- IF p_operation='confirm_memory_save' THEN PERFORM pg_advisory_xact_lock(hashtextextended('amigo-memory-admission',0)); END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended('amigo-memory:'||p_user_id::TEXT,0));
- SELECT coalesce(timezone,'UTC') INTO tz FROM public.user_profiles WHERE user_id=p_user_id;
+ IF jsonb_typeof(p_args) IS DISTINCT FROM 'object' OR p_operation IS NULL OR p_operation NOT IN
+ ('get_memory_settings','inspect_memories','export_memory_data','prepare_memory_confirmation',
+ 'read_memory_context','confirm_memory_save','set_memory_pauses','transition_memory',
+ 'forget_memory','confirm_forget_all_memory','disable_memory') THEN RAISE EXCEPTION 'Invalid Memory input'; END IF;
+ IF EXISTS(SELECT 1 FROM jsonb_each(p_args) e WHERE e.key IN
+ ('idempotency_key','payload_hash','token') AND e.value<>'null'::JSONB AND jsonb_typeof(e.value)<>'string')
+ OR EXISTS(SELECT 1 FROM jsonb_each(p_args) e WHERE e.key IN
+ ('learning','use','enable_memory') AND e.value<>'null'::JSONB AND jsonb_typeof(e.value)<>'boolean')
+ THEN RAISE EXCEPTION 'Invalid Memory input'; END IF;
+ -- Parent row before child/advisory locks prevents deletion/FK lock inversion.
+ SELECT coalesce(timezone,'UTC') INTO tz FROM public.user_profiles WHERE user_id=p_user_id FOR KEY SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Memory owner unavailable'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended('amigo-memory:'||p_user_id::TEXT,0));
  SELECT * INTO s FROM public.memory_settings WHERE user_id=p_user_id;
  IF NOT FOUND THEN s.user_id:=p_user_id; s.enabled:=FALSE; s.learning_paused:=FALSE;
  s.use_paused:=FALSE; s.version:=0; END IF;
+ -- Every caller follows profile -> participant -> optional admission. Read enabled only
+ -- under the participant lock, so a concurrent withdrawal cannot bypass the five-owner cap.
+ IF p_operation='confirm_memory_save' AND NOT s.enabled THEN
+   PERFORM pg_advisory_xact_lock(hashtextextended('amigo-memory-admission',0)); END IF;
  IF p_operation='get_memory_settings' THEN RETURN to_jsonb(s); END IF;
  IF p_operation IN ('confirm_memory_save','transition_memory','set_memory_pauses','forget_memory','confirm_forget_all_memory','disable_memory') THEN
  IF key IS NULL OR char_length(key) NOT BETWEEN 1 AND 200 OR digest IS NULL OR char_length(digest) NOT BETWEEN 1 AND 200
@@ -171,7 +185,11 @@ BEGIN
  RETURN jsonb_build_object('token',token,'expires_at',clock_timestamp()+INTERVAL '10 minutes');
  ELSIF p_operation='read_memory_context' THEN
  IF p_args->>'purpose' IS NULL OR p_args->>'purpose' NOT IN ('personalize','suggestion','preference')
- OR coalesce(p_args->>'turn_id','')='' OR jsonb_typeof(p_args->'query') IS DISTINCT FROM 'string'
+ OR jsonb_typeof(p_args->'turn_id') IS DISTINCT FROM 'string'
+ OR char_length(p_args->>'turn_id') NOT BETWEEN 1 AND 200
+ OR jsonb_typeof(p_args->'mode_id') IS DISTINCT FROM 'string'
+ OR (p_args->>'mode_id') !~ '^[a-z][a-z0-9_]{0,31}$'
+ OR jsonb_typeof(p_args->'query') IS DISTINCT FROM 'string'
  OR char_length(p_args->>'query')>1000 THEN RAISE EXCEPTION 'Invalid Memory use'; END IF;
  IF NOT s.enabled OR s.use_paused OR p_args->>'mode_id'='reflect'
  OR NOT(SELECT ready FROM public.memory_admission_controls) THEN RETURN '[]'; END IF;
@@ -228,7 +246,7 @@ BEGIN
  m.user_id:=p_user_id; m.category:=v->>'category'; m.text:=v->>'text';
  m.source_mode_id:=v->>'source_mode_id'; m.source_channel:=v->>'source_channel';
  m.source_message_id:=(v->>'source_message_id')::UUID; m.source_date:=(v->>'source_date')::DATE;
- m.creation_path:=v->>'creation_path'; SELECT array_agg(value ORDER BY value) INTO m.scopes FROM jsonb_array_elements_text(v->'scopes');
+ m.creation_path:=v->>'creation_path'; SELECT array_agg(value COLLATE "C" ORDER BY value COLLATE "C") INTO m.scopes FROM jsonb_array_elements_text(v->'scopes');
  m.valid_until:=(v->>'valid_until')::DATE; m.goal_state:=coalesce(old.goal_state,'ongoing');
  m.state:=CASE WHEN m.goal_state='ongoing' THEN 'active' ELSE 'inactive' END;
  m.created_at:=clock_timestamp(); m.confirmed_at:=clock_timestamp(); m.supersedes_version:=old.version;
@@ -296,6 +314,8 @@ BEGIN
  p_operation,CASE WHEN result ? 'memory' THEN m.memory_id END,
  CASE WHEN result ? 'memory' THEN m.version END,CASE WHEN NOT(result ? 'memory') THEN result END);
  RETURN result;
+EXCEPTION WHEN data_exception OR integrity_constraint_violation THEN
+ RAISE EXCEPTION 'Invalid Memory input';
 END $$;
 -- Deliberately preserves superseded/expired history until participant Forget or withdrawal.
 -- Only expired or consumed confirmation digests are removed by periodic maintenance.

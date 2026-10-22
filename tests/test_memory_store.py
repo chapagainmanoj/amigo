@@ -9,6 +9,7 @@ import copy
 import hashlib
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -418,3 +419,64 @@ async def test_claim_maintenance_purges_consumed_and_expired_but_keeps_live_and_
     assert len(history) == 2 and all(item["text"] for item in history)
     assert {item["state"] for item in history} == {"superseded", "expired"}
     assert await api.purge_memory_claims() == {"claims": 0}
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"source_date": "PRIVATE_BAD_DATE"},
+        {"source_message_id": "PRIVATE_BAD_UUID"},
+        {"category": ["PRIVATE_CATEGORY"]},
+        {"valid_until": {"PRIVATE_DATE": "value"}},
+    ],
+)
+async def test_bad_memory_payload_errors_are_clean_and_atomic(store, changed):
+    api, backing, user, _, _ = store
+    backing._memory_state.admission_enabled = True
+    claim = await api.prepare_memory_confirmation(user, "save", memory_payload_digest(payload()), 0)
+    with pytest.raises(ValueError) as caught:
+        await api.confirm_memory_save(
+            user,
+            claim["token"],
+            payload(**changed),
+            "invalid",
+            "invalid",
+            True,
+            MEMORY_POLICY_VERSION,
+        )
+    assert "PRIVATE" not in str(caught.value)
+    assert (await api.get_memory_settings(user))["enabled"] is False
+    assert (await api.export_memory_data(user))["memories"] == []
+
+
+@pytest.mark.parametrize("operation", ["bad_token", "bad_key", "bad_pause", "bad_query"])
+async def test_bad_command_types_fail_cleanly_without_exposing_values(store, operation):
+    api, backing, user, _, _ = store
+    backing._memory_state.admission_enabled = True
+    claim = await api.prepare_memory_confirmation(user, "save", memory_payload_digest(payload()), 0)
+    with pytest.raises(ValueError) as caught:
+        if operation == "bad_token":
+            await api.confirm_memory_save(
+                user, {"PRIVATE_TOKEN": "value"}, payload(), "key", "hash"
+            )
+        elif operation == "bad_key":
+            await api.confirm_memory_save(user, claim["token"], payload(), ["PRIVATE_KEY"], "hash")
+        elif operation == "bad_pause":
+            await api.set_memory_pauses(
+                user, 0, learning="PRIVATE_BOOLEAN", idempotency_key="pause", payload_hash="pause"
+            )
+        else:
+            await api.read_memory_context(
+                user, "daily", "t", {"PRIVATE_PURPOSE": "value"}, "coffee"
+            )
+    assert "PRIVATE" not in str(caught.value)
+    assert (await api.export_memory_data(user))["memories"] == []
+
+
+async def test_unexpected_database_errors_are_sanitized_at_memory_adapter_boundary():
+    api = MemoryStore()
+    api._coaching_rpc = AsyncMock(side_effect=RuntimeError("PRIVATE_DATABASE_PARAMETER"))
+    with pytest.raises(ValueError) as caught:
+        await api.get_memory_settings("owner")
+    assert str(caught.value) == "Memory input or owner unavailable"
+    assert caught.value.__suppress_context__ is True

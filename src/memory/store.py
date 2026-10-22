@@ -368,9 +368,7 @@ class MemoryStore:
                 raise InvalidTransitionError("Memory confirmation or action unavailable") from None
             if "idempotency key reused" in message:
                 raise IdempotencyConflictError("Memory command key was reused") from None
-            if "Memory" in message or "memory" in message:
-                raise ValueError("Memory input or owner unavailable") from None
-            raise
+            raise ValueError("Memory input or owner unavailable") from None
 
     async def get_memory_settings(self, user_id):
         return await self._memory_rpc(
