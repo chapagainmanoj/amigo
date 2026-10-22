@@ -895,3 +895,15 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Rootfull1512passed22.21s/Ruff/diffclean,111currency/Dailygolden included. No Gate A release
   certification; no provider/Supabase access. Final whole-chain proof follows production recovery
   integration checks. External endpoint creation cannot be atomic with Postgres; receipt fences retry.
+
+### Review fixes2–4 / production recovery integration
+
+- Files src/main.py, src/handoffs.py, tests/test_handoff_production_recovery.py; protected/SQL:none.
+- Production maintenance previously used its own execution scan and omitted durable failed-notice
+  scan. Now execution/notice scans and individual rows isolate errors. Notice delivery rechecks
+  current owner, recipient and Activation under shared Turn lock. Known inactive/missing endpoint
+  requests retire through existing claim/fail fences without targetSession/model; nondelivery
+  outcome consumes notice. Live worker lease cannot be stolen.25inactive rows no longer hide26th.
+- Independent cbt_selector29handoffPASS2.88s +5maintenancePASS2.47s; no scoped blocker.
+  Rootfull1522passed22.55s; Ruff/diffclean,111currency/Dailygolden included. No new SQL, models,
+  production data, endpoint or privacy authorization. Gate A release certification remains absent.

@@ -73,7 +73,7 @@ class HandoffController:
         )
         if claimed["status"] != "claimed":
             if claimed.get("terminal"):
-                await self._failure_notice(user, handoff["handoff_id"])
+                await self.failure_notice(user, handoff["handoff_id"])
             return
         handoff = claimed["handoff"]
         user = dict(user)
@@ -128,7 +128,7 @@ class HandoffController:
                 handoff["execution_claim_token"],
                 "target_unavailable",
             )
-            await self._failure_notice(user, handoff["handoff_id"])
+            await self.failure_notice(user, handoff["handoff_id"])
             return
         except Exception as error:
             logger.warning("Handoff execution failed: %s", type(error).__name__)
@@ -139,14 +139,31 @@ class HandoffController:
                     handoff["execution_claim_token"],
                     "attempts_exhausted",
                 )
-                await self._failure_notice(user, handoff["handoff_id"])
+                await self.failure_notice(user, handoff["handoff_id"])
             return
         if await self.store.complete_handoff_execution(
             user["user_id"], handoff["handoff_id"], handoff["execution_claim_token"]
         ):
             await self.channel.send_message(recipient, result.output, conversation=ref)
 
-    async def _failure_notice(self, user, handoff_id):
+    async def retire_unavailable(self, pending, outcome):
+        """Terminalize a confirmed request whose owner/endpoint is no longer available.
+
+        Do not create a target Session or run a model. The existing claim/lease fencing prevents
+        cancellation of an active worker; absent target Session is already a terminal SQL outcome.
+        """
+        user_id, handoff_id = pending["user_id"], pending["handoff_id"]
+        claimed = await self.store.claim_handoff_execution(
+            user_id, handoff_id, self.worker_id,
+            execution_session_id=pending.get("execution_session_id"),
+        )
+        if claimed["status"] == "claimed" and not await self.store.fail_handoff_execution(
+            user_id, handoff_id, claimed["handoff"]["execution_claim_token"], "execution_failed",
+        ):
+            return
+        await self.store.claim_handoff_failure_notice(user_id, handoff_id, outcome)
+
+    async def failure_notice(self, user, handoff_id):
         user_id = user["user_id"]
         try:
             recipient = await self.channel.recipient_for(user)
@@ -189,7 +206,7 @@ class HandoffController:
             try:
                 user = await self.store.get_user_by_id(row["user_id"])
                 if user:
-                    await self._failure_notice(user, row["handoff_id"])
+                    await self.failure_notice(user, row["handoff_id"])
                 else:
                     await self.store.claim_handoff_failure_notice(
                         row["user_id"], row["handoff_id"], "owner_unavailable"
