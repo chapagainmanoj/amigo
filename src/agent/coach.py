@@ -18,7 +18,7 @@ current draft again without a model call. Emotional
 conversation, silence, or agreement to talk is not Program approval or permission to change it.
 Changes require clear participant intent and the current owned Program version. Pause and Stop
 work immediately. Weekly review offers Continue, Adjust, Pause, Stop. Continue does not extend;
-explicit extension adds only the chosen 1–14 days. A finished Program never resumes automatically.
+explicit extension adds only the chosen 1-14 days. A finished Program never resumes automatically.
 Check-ins use chosen weekdays/time, quiet hours and a shared daily message budget; at most one
 coaching message/day and one gentle missed follow-up, then silence until the participant returns.
 Never promise a check-in outside those controls. Report progress only as participant-reported.
