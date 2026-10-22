@@ -944,3 +944,25 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   failure notices offer at-most-one attempt, so crash/uncertain provider acceptance may lose notice.
   No claim of exactly-once provider delivery or comprehensive crisis-language detection.
 - STOP here for owner review. No new Phase6/Issue09 work.
+
+## Takeover (reviewer as builder) — candidate evals, Issue 09 draft, Gemini blocker — 23 Oct 2026
+
+- Commits: c5d918b Issue 09 threat model draft (docs/security/mcp-a2a-threat-model.md, no code);
+  f9c45f4 Coach meaning rubric (improvement_claimed, human_support polarity, contraction expansion);
+  4ad0ac9 Recommender/Reflect meaning rubric (no_live_weather, task_limit, stop_acknowledged);
+  0371b65 owner Coach hyphen edit. Protected/SQL: none. Daily instructions/Tool schema/60 cases unchanged.
+- Rubric changes fix only false negatives on correct Claude replies. Five independent review rounds;
+  every adversarial string is a test. Stored replies rescored HEAD vs new: 0 pass->fail.
+- Claude CLI (sonnet) runs: v2 invalid (subscription limit, ClaudeCLIError); v3 at faf40be source:
+  Coach 45/48, Recommender 41/48, Reflect 56/60 — all failures rubric false negatives.
+  v4 at 4ad0ac9: Coach 48/48 PASS, Recommender 48/48 PASS (`*-claude-v4-full.json`).
+  Reflect v4 57/60: three rubric false negatives on correct replies (human_support misses
+  "connections/relationships with people matter"; reflect-hard-08 phrase ban "you have" hits
+  "If you have a concern"). Not fixed: Reflect stays Planned; owner stop.
+- Gemini final runs aborted: free tier 20 requests/day (429 RESOURCE_EXHAUSTED) on first case;
+  artifacts `*-gemini-v2-final.json` status aborted_provider_incident. Usage file totals now
+  22 requests / 17 ok / 30,914 input / 6,053 output tokens. Owner chose to stop: no billing.
+  One full suite needs ≥48 requests, so free tier cannot complete any declared run.
+- Coach/Recommender remain Planned (no Gemini evidence). Reflect remains Planned regardless.
+- Full suite 1649 passed; Ruff clean. STOP: Issue 09 threat model awaits owner + independent
+  security review; Gemini evidence needs paid quota.

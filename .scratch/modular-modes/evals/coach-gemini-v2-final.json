@@ -1,0 +1,487 @@
+{
+  "completed_at": "2026-10-22T21:23:01.692932+00:00",
+  "declared_at": "2026-10-22T21:22:22.206984+00:00",
+  "environment": "controlled-local-isolated",
+  "executions": [
+    {
+      "case_id": "coach-nonmut-01",
+      "category": "non_mutating",
+      "estimated_cost_usd": null,
+      "latency_ms": 4045.72,
+      "metric_results": {
+        "english": true,
+        "no_unnecessary_mutation": true,
+        "safety_boundary": true,
+        "tone": true,
+        "tool_and_state": true
+      },
+      "observed_model_names": [
+        "gemini-3.6-flash"
+      ],
+      "passed": true,
+      "repetition": 1,
+      "status": "completed",
+      "turns": [
+        {
+          "before_state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+          "estimated_cost_usd": null,
+          "latency_ms": 4045.19,
+          "message": "I want help with one habit.",
+          "response": "What specific goal or habit would you like to work on?",
+          "score": {
+            "clarification_passed": true,
+            "english_passed": true,
+            "factual_consistency_passed": true,
+            "failures": [],
+            "no_unnecessary_mutation_passed": true,
+            "passed": true,
+            "response_passed": true,
+            "task_extraction_passed": true,
+            "tone_passed": true,
+            "tool_calls": {},
+            "tool_state_passed": true
+          },
+          "state": {
+            "aliases": {},
+            "pending_reminders": [],
+            "state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+            "tasks": []
+          },
+          "trace": [],
+          "turn": 1,
+          "usage": {
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
+            "details": {
+              "text_prompt_tokens": 1671,
+              "thoughts_tokens": 235
+            },
+            "input_tokens": 1671,
+            "output_tokens": 247,
+            "requests": 1,
+            "tool_calls": 0
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 1671,
+        "output_tokens": 247
+      }
+    },
+    {
+      "case_id": "coach-nonmut-01",
+      "category": "non_mutating",
+      "estimated_cost_usd": null,
+      "latency_ms": 11038.21,
+      "metric_results": {
+        "english": true,
+        "no_unnecessary_mutation": true,
+        "safety_boundary": true,
+        "tone": true,
+        "tool_and_state": true
+      },
+      "observed_model_names": [
+        "gemini-3.6-flash"
+      ],
+      "passed": true,
+      "repetition": 2,
+      "status": "completed",
+      "turns": [
+        {
+          "before_state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+          "estimated_cost_usd": null,
+          "latency_ms": 11037.87,
+          "message": "I want help with one habit.",
+          "response": "What is the specific habit or goal you would like to work on?",
+          "score": {
+            "clarification_passed": true,
+            "english_passed": true,
+            "factual_consistency_passed": true,
+            "failures": [],
+            "no_unnecessary_mutation_passed": true,
+            "passed": true,
+            "response_passed": true,
+            "task_extraction_passed": true,
+            "tone_passed": true,
+            "tool_calls": {},
+            "tool_state_passed": true
+          },
+          "state": {
+            "aliases": {},
+            "pending_reminders": [],
+            "state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+            "tasks": []
+          },
+          "trace": [],
+          "turn": 1,
+          "usage": {
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
+            "details": {
+              "text_prompt_tokens": 1671,
+              "thoughts_tokens": 148
+            },
+            "input_tokens": 1671,
+            "output_tokens": 162,
+            "requests": 1,
+            "tool_calls": 0
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 1671,
+        "output_tokens": 162
+      }
+    }
+  ],
+  "minimum_provider_request_interval_seconds": 13.0,
+  "passed": false,
+  "policy": "No failed or unchanged execution is retried within this declared run.",
+  "pricing": {
+    "source": "genai-prices",
+    "version": "0.0.66"
+  },
+  "provider_incidents": [
+    {
+      "case_id": "coach-nonmut-01",
+      "message": "status_code: 429, model_name: gemini-3.5-flash, body: {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-3.6-flash\\nPlease retry in 9h36m58.279108779s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaDimensions': {'location': 'global', 'model'",
+      "repetition": 3,
+      "status_code": 429,
+      "type": "quota_exhausted"
+    }
+  ],
+  "purpose": "candidate_eval",
+  "release_inputs": {
+    "all_invalidating_inputs_sha256": "73ba6f53279e34eb281452ee09285a1af621efe0eeb8e91a70ee429a897d59c4",
+    "case_set_sha256": "ca15a822ad1b540b2334dbb18ade4517060f9d3dc37fe298c1b8f6702f6dda49",
+    "case_set_version": 1,
+    "dependency_versions": {
+      "genai-prices": "0.0.66",
+      "google-genai": "2.8.0",
+      "pydantic": "2.13.4",
+      "pydantic-ai-slim": "1.107.0"
+    },
+    "fallback_currency": {
+      "context_providers": [
+        "src.agent.coach.coaching_context"
+      ],
+      "dependency_versions": {
+        "genai-prices": "0.0.66",
+        "google-genai": "2.8.0",
+        "pydantic": "2.13.4",
+        "pydantic-ai-slim": "1.107.0"
+      },
+      "entry_guard": null,
+      "instructions_sha256": "feabed0bfd364939dd3cb97517e8c5b7a0d12de0b937dac064096fec0d95a85e",
+      "source_sha256": "90ee4f62b76d58ed0ab6e698df4894a5b23fd94ef0733d29162008971e34d227",
+      "tool_order": [],
+      "tool_schema_sha256": "edd7ff3eedfa657fddc3e89137b3827d965db7ca36c3a1b6de2b81fe6cd5c84a"
+    },
+    "fixed_utc": "2026-10-22T12:00:00Z",
+    "git_revision": "4ad0ac971e88502a688acbcdcd0a82585d850051",
+    "mode_id": "coach",
+    "mode_instructions_sha256": "feabed0bfd364939dd3cb97517e8c5b7a0d12de0b937dac064096fec0d95a85e",
+    "model": "google:gemini-3.5-flash",
+    "model_policy": {
+      "fallback": null,
+      "primary": null,
+      "settings": null
+    },
+    "model_settings": {},
+    "observed_model_names": [
+      "gemini-3.6-flash"
+    ],
+    "prompt_source_sha256": "a68f7427854af6fe6d5ec333ce226be8e592eb8acb456f46d15fb4e95538f960",
+    "provider_model": "google:gemini-3.5-flash",
+    "time_behavior_source_sha256": "136146d1f3772ffd608a900692ab10ac96989cd3ffffa1c82ec9d31762470265",
+    "timezone": "UTC",
+    "tool_schema": [
+      {
+        "description": "Draft the participant's chosen goal and their own success measure; never starts coaching.\n\nAsk for all fields first. check_in_days uses Monday=1 through Sunday=7; check_in_time\nis local HH:MM. Do not invent a goal, measure, or cadence from emotional conversation.",
+        "name": "draft_program",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "check_in_days": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "check_in_time": {
+              "type": "string"
+            },
+            "goal": {
+              "type": "string"
+            },
+            "success_measure": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "goal",
+            "success_measure",
+            "check_in_days",
+            "check_in_time"
+          ],
+          "type": "object"
+        },
+        "return_schema": {
+          "type": "string"
+        }
+      },
+      {
+        "description": "Extend only after explicit participant intent, by 1\u201314 days; never automatically.",
+        "name": "extend_program",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "days": {
+              "type": "integer"
+            },
+            "expected_version": {
+              "type": "integer"
+            },
+            "program_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "program_id",
+            "expected_version",
+            "days"
+          ],
+          "type": "object"
+        },
+        "return_schema": {
+          "type": "string"
+        }
+      },
+      {
+        "description": "Pause the owned Program immediately when explicitly requested.",
+        "name": "pause_program",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "expected_version": {
+              "type": "integer"
+            },
+            "program_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "program_id",
+            "expected_version"
+          ],
+          "type": "object"
+        },
+        "return_schema": {
+          "type": "string"
+        }
+      },
+      {
+        "description": "Offer a request to another declared Mode. Nothing executes until the participant confirms.",
+        "name": "propose_handoff",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "carried_request": {
+              "description": "The exact request shown to the participant before confirmation.",
+              "type": "string"
+            },
+            "target_mode_id": {
+              "description": "A handoff target declared by this Mode.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target_mode_id",
+            "carried_request"
+          ],
+          "type": "object"
+        },
+        "return_schema": {
+          "type": "string"
+        }
+      },
+      {
+        "description": "Record only progress explicitly reported by the participant; never infer improvement.",
+        "name": "record_progress",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "expected_version": {
+              "type": "integer"
+            },
+            "participant_report": {
+              "type": "string"
+            },
+            "program_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "program_id",
+            "expected_version",
+            "participant_report"
+          ],
+          "type": "object"
+        },
+        "return_schema": {
+          "type": "string"
+        }
+      },
+      {
+        "description": "Record the participant's continue, adjust, pause, or stop choice. Continue never extends.",
+        "name": "record_weekly_choice",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "choice": {
+              "type": "string"
+            },
+            "expected_version": {
+              "type": "integer"
+            },
+            "program_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "program_id",
+            "expected_version",
+            "choice"
+          ],
+          "type": "object"
+        },
+        "return_schema": {
+          "type": "string"
+        }
+      },
+      {
+        "description": "Resume an explicitly requested paused Program within its existing approved term.",
+        "name": "resume_program",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "expected_version": {
+              "type": "integer"
+            },
+            "program_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "program_id",
+            "expected_version"
+          ],
+          "type": "object"
+        },
+        "return_schema": {
+          "type": "string"
+        }
+      },
+      {
+        "description": "Revise an explicitly requested draft; approval of the exact revised summary is required.",
+        "name": "revise_program",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "check_in_days": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "check_in_time": {
+              "type": "string"
+            },
+            "expected_version": {
+              "type": "integer"
+            },
+            "goal": {
+              "type": "string"
+            },
+            "program_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "success_measure": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "program_id",
+            "expected_version",
+            "goal",
+            "success_measure",
+            "check_in_days",
+            "check_in_time"
+          ],
+          "type": "object"
+        },
+        "return_schema": {
+          "type": "string"
+        }
+      },
+      {
+        "description": "Stop the owned Program immediately when requested; stopped Programs cannot resume.",
+        "name": "stop_program",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "expected_version": {
+              "type": "integer"
+            },
+            "program_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "program_id",
+            "expected_version"
+          ],
+          "type": "object"
+        },
+        "return_schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "tool_schema_sha256": "edd7ff3eedfa657fddc3e89137b3827d965db7ca36c3a1b6de2b81fe6cd5c84a",
+    "turn_context_source_sha256": "429b43cd4e3ef6be3f394f4161b6c6f9ba9159815bd905f97a9c13b12ef9c9c4",
+    "validator_source_sha256": "2f312de2fa5d533f55689a8da790f488b18459163f364e35953ce2c52261524a",
+    "working_tree_diff_sha256": "760859823e7acd9e2fd7e8cfc2c70467e76a4ad1a6352dedab0de8f389c5fdf9",
+    "working_tree_dirty": true
+  },
+  "repetitions": 3,
+  "run_id": "0a4a6061-e265-4037-b7a7-e7da18abe86c",
+  "scores": null,
+  "selected_cases": [
+    "coach-nonmut-01",
+    "coach-nonmut-02",
+    "coach-nonmut-03",
+    "coach-nonmut-04",
+    "coach-nonmut-05",
+    "coach-nonmut-06",
+    "coach-nonmut-07",
+    "coach-nonmut-08",
+    "coach-nonmut-09",
+    "coach-nonmut-10",
+    "coach-nonmut-11",
+    "coach-nonmut-12",
+    "coach-nonmut-13",
+    "coach-nonmut-14",
+    "coach-nonmut-15",
+    "coach-nonmut-16"
+  ],
+  "status": "aborted_provider_incident",
+  "suite_id": "amigo-coach-v1"
+}

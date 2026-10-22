@@ -1,0 +1,1885 @@
+{
+  "completed_at": "2026-10-22T16:34:43.983302+00:00",
+  "declared_at": "2026-10-22T16:32:00.482480+00:00",
+  "environment": "controlled-local-isolated",
+  "executions": [
+    {
+      "case_id": "recommender-nonmut-01",
+      "category": "non_mutating",
+      "estimated_cost_usd": null,
+      "latency_ms": 9876.46,
+      "metric_results": {
+        "english": true,
+        "factual_consistency": true,
+        "no_unnecessary_mutation": true,
+        "safety_boundary": true,
+        "tone": true,
+        "tool_and_state": true
+      },
+      "observed_model_names": [
+        "claude-cli:sonnet"
+      ],
+      "passed": true,
+      "repetition": 1,
+      "status": "completed",
+      "turns": [
+        {
+          "before_state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+          "estimated_cost_usd": null,
+          "latency_ms": 9875.71,
+          "message": "Use simulated rain. Outdoor drying and a suitable dryer are available. I prefer outdoors but it is not required, and my deadline is flexible.",
+          "response": "I'd suggest using your dryer. You said you prefer outdoors but it isn't required, and the simulated rain scenario you chose conflicts with outdoor drying. The weather here is simulated from fictional Amigo fixtures, not a real forecast, and I can't promise a drying time. Since your deadline is flexible, this is just one comparison, not an objective best choice. Advice alone changes nothing, and I haven't started or saved anything.",
+          "score": {
+            "clarification_passed": true,
+            "english_passed": true,
+            "factual_consistency_passed": true,
+            "failures": [],
+            "no_unnecessary_mutation_passed": true,
+            "passed": true,
+            "response_passed": true,
+            "task_extraction_passed": true,
+            "tone_passed": true,
+            "tool_calls": {
+              "compare_laundry_options": 1
+            },
+            "tool_state_passed": true
+          },
+          "state": {
+            "aliases": {},
+            "pending_reminders": [],
+            "state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+            "tasks": []
+          },
+          "trace": [
+            {
+              "args": {
+                "deadline": "flexible",
+                "dryer_suitable": true,
+                "drying_options": [
+                  "dryer",
+                  "outdoor"
+                ],
+                "prefer_outdoor": true,
+                "require_outdoor": false,
+                "weather_fixture": "rain"
+              },
+              "call_id": "pyd_ai_30019d9f3b804151b910b6f1fe8c1a8b",
+              "kind": "tool_call",
+              "tool": "compare_laundry_options"
+            },
+            {
+              "call_id": "pyd_ai_30019d9f3b804151b910b6f1fe8c1a8b",
+              "content": "{'scope': 'fictional_laundry_demo', 'notice': 'Simulated weather demonstration only; no live forecast or guaranteed drying time.', 'outcome': 'recommend', 'recommendation': 'dryer', 'alternative': None, 'reason': 'Simulated rain conflicts with outdoors; a suitable dryer exists.', 'weather': {'source': 'Amigo fictional laundry fixtures v1', 'fixture_id': 'rain', 'simulated': True, 'location': 'fictional demo area', 'retrieved_at': '2026-10-22T12:00:00+00:00', 'forecast_interval': 'fictional available drying window', 'fresh_until': '2026-10-22T13:00:00+00:00'}, 'effects': []}",
+              "kind": "tool_result",
+              "tool": "compare_laundry_options"
+            }
+          ],
+          "turn": 1,
+          "usage": {
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
+            "details": {},
+            "input_tokens": 215,
+            "output_tokens": 108,
+            "requests": 2,
+            "tool_calls": 1
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 215,
+        "output_tokens": 108
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-01",
+      "category": "non_mutating",
+      "estimated_cost_usd": null,
+      "latency_ms": 15204.86,
+      "metric_results": {
+        "english": true,
+        "factual_consistency": true,
+        "no_unnecessary_mutation": true,
+        "safety_boundary": true,
+        "tone": true,
+        "tool_and_state": true
+      },
+      "observed_model_names": [
+        "claude-cli:sonnet"
+      ],
+      "passed": true,
+      "repetition": 2,
+      "status": "completed",
+      "turns": [
+        {
+          "before_state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+          "estimated_cost_usd": null,
+          "latency_ms": 15204.35,
+          "message": "Use simulated rain. Outdoor drying and a suitable dryer are available. I prefer outdoors but it is not required, and my deadline is flexible.",
+          "response": "Based on your facts (dryer and outdoor drying available, dryer suitable, flexible deadline, soft outdoor preference), I'd suggest using the dryer. The reason is that the simulated rain scenario you chose conflicts with outdoor drying, and your outdoor preference isn't a requirement. The weather is a fictional fixture from Amigo synthetic fixtures v1, not a real forecast, and I can't promise how long drying will take. This is advice only, so nothing has been started or scheduled.",
+          "score": {
+            "clarification_passed": true,
+            "english_passed": true,
+            "factual_consistency_passed": true,
+            "failures": [],
+            "no_unnecessary_mutation_passed": true,
+            "passed": true,
+            "response_passed": true,
+            "task_extraction_passed": true,
+            "tone_passed": true,
+            "tool_calls": {
+              "compare_laundry_options": 1
+            },
+            "tool_state_passed": true
+          },
+          "state": {
+            "aliases": {},
+            "pending_reminders": [],
+            "state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+            "tasks": []
+          },
+          "trace": [
+            {
+              "args": {
+                "available_minutes": null,
+                "deadline": "flexible",
+                "dryer_suitable": true,
+                "drying_options": [
+                  "dryer",
+                  "outdoor"
+                ],
+                "prefer_outdoor": true,
+                "require_outdoor": false,
+                "weather_fixture": "rain"
+              },
+              "call_id": "pyd_ai_8ceafbd2e8d64acd840d57a72cf6bd42",
+              "kind": "tool_call",
+              "tool": "compare_laundry_options"
+            },
+            {
+              "call_id": "pyd_ai_8ceafbd2e8d64acd840d57a72cf6bd42",
+              "content": "{'scope': 'fictional_laundry_demo', 'notice': 'Simulated weather demonstration only; no live forecast or guaranteed drying time.', 'outcome': 'recommend', 'recommendation': 'dryer', 'alternative': None, 'reason': 'Simulated rain conflicts with outdoors; a suitable dryer exists.', 'weather': {'source': 'Amigo fictional laundry fixtures v1', 'fixture_id': 'rain', 'simulated': True, 'location': 'fictional demo area', 'retrieved_at': '2026-10-22T12:00:00+00:00', 'forecast_interval': 'fictional available drying window', 'fresh_until': '2026-10-22T13:00:00+00:00'}, 'effects': []}",
+              "kind": "tool_result",
+              "tool": "compare_laundry_options"
+            }
+          ],
+          "turn": 1,
+          "usage": {
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
+            "details": {},
+            "input_tokens": 215,
+            "output_tokens": 116,
+            "requests": 2,
+            "tool_calls": 1
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 215,
+        "output_tokens": 116
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-01",
+      "category": "non_mutating",
+      "estimated_cost_usd": null,
+      "latency_ms": 10365.53,
+      "metric_results": {
+        "english": true,
+        "factual_consistency": true,
+        "no_unnecessary_mutation": true,
+        "safety_boundary": true,
+        "tone": true,
+        "tool_and_state": true
+      },
+      "observed_model_names": [
+        "claude-cli:sonnet"
+      ],
+      "passed": true,
+      "repetition": 3,
+      "status": "completed",
+      "turns": [
+        {
+          "before_state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+          "estimated_cost_usd": null,
+          "latency_ms": 10365.16,
+          "message": "Use simulated rain. Outdoor drying and a suitable dryer are available. I prefer outdoors but it is not required, and my deadline is flexible.",
+          "response": "I recommend using your suitable dryer. You said you prefer outdoor drying but it isn't required, and your deadline is flexible. The simulated rain fixture (fictional demo area, local Amigo synthetic fixtures v1) conflicts with outdoor drying, so the dryer is the better fit for this comparison. This is simulated weather, not a real forecast, and I can't guarantee how long drying will take. This is advice only, so nothing has been started or saved.",
+          "score": {
+            "clarification_passed": true,
+            "english_passed": true,
+            "factual_consistency_passed": true,
+            "failures": [],
+            "no_unnecessary_mutation_passed": true,
+            "passed": true,
+            "response_passed": true,
+            "task_extraction_passed": true,
+            "tone_passed": true,
+            "tool_calls": {
+              "compare_laundry_options": 1
+            },
+            "tool_state_passed": true
+          },
+          "state": {
+            "aliases": {},
+            "pending_reminders": [],
+            "state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+            "tasks": []
+          },
+          "trace": [
+            {
+              "args": {
+                "deadline": "flexible",
+                "dryer_suitable": true,
+                "drying_options": [
+                  "outdoor",
+                  "dryer"
+                ],
+                "prefer_outdoor": true,
+                "require_outdoor": false,
+                "weather_fixture": "rain"
+              },
+              "call_id": "pyd_ai_acaed1326c1d49b4aa71017535615167",
+              "kind": "tool_call",
+              "tool": "compare_laundry_options"
+            },
+            {
+              "call_id": "pyd_ai_acaed1326c1d49b4aa71017535615167",
+              "content": "{'scope': 'fictional_laundry_demo', 'notice': 'Simulated weather demonstration only; no live forecast or guaranteed drying time.', 'outcome': 'recommend', 'recommendation': 'dryer', 'alternative': None, 'reason': 'Simulated rain conflicts with outdoors; a suitable dryer exists.', 'weather': {'source': 'Amigo fictional laundry fixtures v1', 'fixture_id': 'rain', 'simulated': True, 'location': 'fictional demo area', 'retrieved_at': '2026-10-22T12:00:00+00:00', 'forecast_interval': 'fictional available drying window', 'fresh_until': '2026-10-22T13:00:00+00:00'}, 'effects': []}",
+              "kind": "tool_result",
+              "tool": "compare_laundry_options"
+            }
+          ],
+          "turn": 1,
+          "usage": {
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
+            "details": {},
+            "input_tokens": 215,
+            "output_tokens": 112,
+            "requests": 2,
+            "tool_calls": 1
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 215,
+        "output_tokens": 112
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-02",
+      "category": "non_mutating",
+      "estimated_cost_usd": null,
+      "latency_ms": 8875.55,
+      "metric_results": {
+        "english": true,
+        "factual_consistency": true,
+        "no_unnecessary_mutation": true,
+        "safety_boundary": true,
+        "tone": true,
+        "tool_and_state": true
+      },
+      "observed_model_names": [
+        "claude-cli:sonnet"
+      ],
+      "passed": true,
+      "repetition": 1,
+      "status": "completed",
+      "turns": [
+        {
+          "before_state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+          "estimated_cost_usd": null,
+          "latency_ms": 8874.64,
+          "message": "Use simulated rain. Only outdoor and indoor drying are available, no dryer. My deadline is flexible.",
+          "response": "I'd recommend postponing the wash for now. This uses simulated rain from Amigo's fictional laundry fixtures, not a real forecast, and it's the fixture you selected. You said only outdoor and indoor drying are available, with no dryer, and your deadline is flexible. Simulated rain conflicts with outdoor drying, and since you're flexible, waiting is the comparison result. I can't promise drying times, and this advice changes nothing.",
+          "score": {
+            "clarification_passed": true,
+            "english_passed": true,
+            "factual_consistency_passed": true,
+            "failures": [],
+            "no_unnecessary_mutation_passed": true,
+            "passed": true,
+            "response_passed": true,
+            "task_extraction_passed": true,
+            "tone_passed": true,
+            "tool_calls": {
+              "compare_laundry_options": 1
+            },
+            "tool_state_passed": true
+          },
+          "state": {
+            "aliases": {},
+            "pending_reminders": [],
+            "state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+            "tasks": []
+          },
+          "trace": [
+            {
+              "args": {
+                "available_minutes": null,
+                "deadline": "flexible",
+                "dryer_suitable": null,
+                "drying_options": [
+                  "outdoor",
+                  "indoor"
+                ],
+                "prefer_outdoor": false,
+                "require_outdoor": false,
+                "weather_fixture": "rain"
+              },
+              "call_id": "pyd_ai_11d79ea1d2314f61b88e631f3b6a3775",
+              "kind": "tool_call",
+              "tool": "compare_laundry_options"
+            },
+            {
+              "call_id": "pyd_ai_11d79ea1d2314f61b88e631f3b6a3775",
+              "content": "{'scope': 'fictional_laundry_demo', 'notice': 'Simulated weather demonstration only; no live forecast or guaranteed drying time.', 'outcome': 'recommend', 'recommendation': 'postpone', 'alternative': None, 'reason': 'Simulated rain conflicts with outdoors; the deadline is flexible.', 'weather': {'source': 'Amigo fictional laundry fixtures v1', 'fixture_id': 'rain', 'simulated': True, 'location': 'fictional demo area', 'retrieved_at': '2026-10-22T12:00:00+00:00', 'forecast_interval': 'fictional available drying window', 'fresh_until': '2026-10-22T13:00:00+00:00'}, 'effects': []}",
+              "kind": "tool_result",
+              "tool": "compare_laundry_options"
+            }
+          ],
+          "turn": 1,
+          "usage": {
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
+            "details": {},
+            "input_tokens": 199,
+            "output_tokens": 107,
+            "requests": 2,
+            "tool_calls": 1
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 199,
+        "output_tokens": 107
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-02",
+      "category": "non_mutating",
+      "estimated_cost_usd": null,
+      "latency_ms": 11228.9,
+      "metric_results": {
+        "english": true,
+        "factual_consistency": true,
+        "no_unnecessary_mutation": true,
+        "safety_boundary": true,
+        "tone": true,
+        "tool_and_state": true
+      },
+      "observed_model_names": [
+        "claude-cli:sonnet"
+      ],
+      "passed": true,
+      "repetition": 2,
+      "status": "completed",
+      "turns": [
+        {
+          "before_state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+          "estimated_cost_usd": null,
+          "latency_ms": 11228.07,
+          "message": "Use simulated rain. Only outdoor and indoor drying are available, no dryer. My deadline is flexible.",
+          "response": "Based on the simulated rain scenario (fictional Amigo laundry fixtures v1, not a real forecast), I'd suggest postponing the laundry. You told me only outdoor and indoor drying are available and your deadline is flexible. The simulated rain conflicts with outdoor drying, and the tool's comparison recommended postponing. I can't promise how long drying would take or that it would finish by any particular time. This is advice only and changes nothing.",
+          "score": {
+            "clarification_passed": true,
+            "english_passed": true,
+            "factual_consistency_passed": true,
+            "failures": [],
+            "no_unnecessary_mutation_passed": true,
+            "passed": true,
+            "response_passed": true,
+            "task_extraction_passed": true,
+            "tone_passed": true,
+            "tool_calls": {
+              "compare_laundry_options": 1
+            },
+            "tool_state_passed": true
+          },
+          "state": {
+            "aliases": {},
+            "pending_reminders": [],
+            "state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+            "tasks": []
+          },
+          "trace": [
+            {
+              "args": {
+                "deadline": "flexible",
+                "drying_options": [
+                  "outdoor",
+                  "indoor"
+                ],
+                "weather_fixture": "rain"
+              },
+              "call_id": "pyd_ai_caea68469a5240b2a155ad5396f77a8b",
+              "kind": "tool_call",
+              "tool": "compare_laundry_options"
+            },
+            {
+              "call_id": "pyd_ai_caea68469a5240b2a155ad5396f77a8b",
+              "content": "{'scope': 'fictional_laundry_demo', 'notice': 'Simulated weather demonstration only; no live forecast or guaranteed drying time.', 'outcome': 'recommend', 'recommendation': 'postpone', 'alternative': None, 'reason': 'Simulated rain conflicts with outdoors; the deadline is flexible.', 'weather': {'source': 'Amigo fictional laundry fixtures v1', 'fixture_id': 'rain', 'simulated': True, 'location': 'fictional demo area', 'retrieved_at': '2026-10-22T12:00:00+00:00', 'forecast_interval': 'fictional available drying window', 'fresh_until': '2026-10-22T13:00:00+00:00'}, 'effects': []}",
+              "kind": "tool_result",
+              "tool": "compare_laundry_options"
+            }
+          ],
+          "turn": 1,
+          "usage": {
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
+            "details": {},
+            "input_tokens": 199,
+            "output_tokens": 97,
+            "requests": 2,
+            "tool_calls": 1
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 199,
+        "output_tokens": 97
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-02",
+      "category": "non_mutating",
+      "estimated_cost_usd": null,
+      "latency_ms": 9401.46,
+      "metric_results": {
+        "english": true,
+        "factual_consistency": true,
+        "no_unnecessary_mutation": true,
+        "safety_boundary": true,
+        "tone": true,
+        "tool_and_state": true
+      },
+      "observed_model_names": [
+        "claude-cli:sonnet"
+      ],
+      "passed": true,
+      "repetition": 3,
+      "status": "completed",
+      "turns": [
+        {
+          "before_state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+          "estimated_cost_usd": null,
+          "latency_ms": 9401.07,
+          "message": "Use simulated rain. Only outdoor and indoor drying are available, no dryer. My deadline is flexible.",
+          "response": "Based on what you told me (outdoor and indoor drying only, no dryer, flexible deadline) and the simulated rain scenario, I'd suggest postponing. The weather here is simulated from Amigo's fictional fixtures v1, not a real forecast, and it conflicts with outdoor drying. Because your deadline is flexible, waiting is a reasonable option. This is my comparison, not an objective best choice, and I can't guarantee any drying time. This is advice only, so nothing has been scheduled or changed.",
+          "score": {
+            "clarification_passed": true,
+            "english_passed": true,
+            "factual_consistency_passed": true,
+            "failures": [],
+            "no_unnecessary_mutation_passed": true,
+            "passed": true,
+            "response_passed": true,
+            "task_extraction_passed": true,
+            "tone_passed": true,
+            "tool_calls": {
+              "compare_laundry_options": 1
+            },
+            "tool_state_passed": true
+          },
+          "state": {
+            "aliases": {},
+            "pending_reminders": [],
+            "state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+            "tasks": []
+          },
+          "trace": [
+            {
+              "args": {
+                "deadline": "flexible",
+                "dryer_suitable": null,
+                "drying_options": [
+                  "outdoor",
+                  "indoor"
+                ],
+                "prefer_outdoor": false,
+                "require_outdoor": false,
+                "weather_fixture": "rain"
+              },
+              "call_id": "pyd_ai_2657e62ca37545eaa720c51a76d05081",
+              "kind": "tool_call",
+              "tool": "compare_laundry_options"
+            },
+            {
+              "call_id": "pyd_ai_2657e62ca37545eaa720c51a76d05081",
+              "content": "{'scope': 'fictional_laundry_demo', 'notice': 'Simulated weather demonstration only; no live forecast or guaranteed drying time.', 'outcome': 'recommend', 'recommendation': 'postpone', 'alternative': None, 'reason': 'Simulated rain conflicts with outdoors; the deadline is flexible.', 'weather': {'source': 'Amigo fictional laundry fixtures v1', 'fixture_id': 'rain', 'simulated': True, 'location': 'fictional demo area', 'retrieved_at': '2026-10-22T12:00:00+00:00', 'forecast_interval': 'fictional available drying window', 'fresh_until': '2026-10-22T13:00:00+00:00'}, 'effects': []}",
+              "kind": "tool_result",
+              "tool": "compare_laundry_options"
+            }
+          ],
+          "turn": 1,
+          "usage": {
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
+            "details": {},
+            "input_tokens": 199,
+            "output_tokens": 117,
+            "requests": 2,
+            "tool_calls": 1
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 199,
+        "output_tokens": 117
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-03",
+      "category": "non_mutating",
+      "estimated_cost_usd": null,
+      "latency_ms": 8763.89,
+      "metric_results": {
+        "english": true,
+        "factual_consistency": true,
+        "no_unnecessary_mutation": true,
+        "safety_boundary": true,
+        "tone": true,
+        "tool_and_state": true
+      },
+      "observed_model_names": [
+        "claude-cli:sonnet"
+      ],
+      "passed": true,
+      "repetition": 1,
+      "status": "completed",
+      "turns": [
+        {
+          "before_state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+          "estimated_cost_usd": null,
+          "latency_ms": 8763.23,
+          "message": "Use simulated rain. Outdoor and indoor drying are available, no dryer. I need the clothes urgently in 120 minutes.",
+          "response": "Based on your facts (urgent, 120 minutes, outdoor and indoor drying available, no dryer) and the simulated rain scenario, the comparison suggests indoor drying. The weather is a synthetic fixture from Amigo's fictional laundry demo, not a real forecast. Rain makes outdoor drying a poor fit in this simulation. I can't verify the clothes will be dry within 120 minutes, so completion by your deadline is uncertain. This is advice only and changes nothing.",
+          "score": {
+            "clarification_passed": true,
+            "english_passed": true,
+            "factual_consistency_passed": true,
+            "failures": [],
+            "no_unnecessary_mutation_passed": true,
+            "passed": true,
+            "response_passed": true,
+            "task_extraction_passed": true,
+            "tone_passed": true,
+            "tool_calls": {
+              "compare_laundry_options": 1
+            },
+            "tool_state_passed": true
+          },
+          "state": {
+            "aliases": {},
+            "pending_reminders": [],
+            "state_hash": "25df6afaef1081890e655a19d7389342c86043a4f92a7b422a47739807acca6e",
+            "tasks": []
+          },
+          "trace": [
+            {
+              "args": {
+                "available_minutes": 120,
+                "deadline": "urgent",
+                "drying_options": [
+                  "outdoor",
+                  "indoor"
+                ],
+                "prefer_outdoor": false,
+                "require_outdoor": false,
+                "weather_fixture": "rain"
+              },
+              "call_id": "pyd_ai_3c1b8a5fb712443d8b0d1a017a74ed25",
+              "kind": "tool_call",
+              "tool": "compare_laundry_options"
+            },
+            {
+              "call_id": "pyd_ai_3c1b8a5fb712443d8b0d1a017a74ed25",
+              "content": "{'scope': 'fictional_laundry_demo', 'notice': 'Simulated weather demonstration only; no live forecast or guaranteed drying time.', 'outcome': 'recommend', 'recommendation': 'indoor', 'alternative': None, 'reason': 'Consider available indoor drying; completion time is unverified.', 'weather': {'source': 'Amigo fictional laundry fixtures v1', 'fixture_id': 'rain', 'simulated': True, 'location': 'fictional demo area', 'retrieved_at': '2026-10-22T12:00:00+00:00', 'forecast_interval': 'fictional available drying window', 'fresh_until': '2026-10-22T13:00:00+00:00'}, 'effects': []}",
+              "kind": "tool_result",
+              "tool": "compare_laundry_options"
+            }
+          ],
+          "turn": 1,
+          "usage": {
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
+            "details": {},
+            "input_tokens": 204,
+            "output_tokens": 109,
+            "requests": 2,
+            "tool_calls": 1
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 204,
+        "output_tokens": 109
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-03",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-03",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-04",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 1,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-04",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-04",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-05",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 1,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-05",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-05",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-06",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 1,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-06",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-06",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-07",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 1,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-07",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-07",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-08",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 1,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-08",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-08",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-09",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 1,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-09",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-09",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-10",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 1,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-10",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-10",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-11",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 1,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-11",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-11",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-12",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 1,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-12",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-12",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-13",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 1,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-13",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-13",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-14",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 1,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-14",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-14",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-15",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 1,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-15",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-15",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-16",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 1,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-16",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 2,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "case_id": "recommender-nonmut-16",
+      "category": "non_mutating",
+      "error": "Development model request failed.",
+      "error_type": "ClaudeCLIError",
+      "estimated_cost_usd": null,
+      "latency_ms": null,
+      "metric_results": {
+        "english": false,
+        "factual_consistency": false,
+        "no_unnecessary_mutation": false,
+        "safety_boundary": false,
+        "tone": false,
+        "tool_and_state": false
+      },
+      "observed_model_names": [],
+      "passed": false,
+      "repetition": 3,
+      "status": "error",
+      "turns": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    }
+  ],
+  "minimum_provider_request_interval_seconds": 1.0,
+  "passed": false,
+  "policy": "No failed or unchanged execution is retried within this declared run.",
+  "pricing": {
+    "source": "genai-prices",
+    "version": "0.0.66"
+  },
+  "purpose": "candidate_eval",
+  "release_inputs": {
+    "all_invalidating_inputs_sha256": "0ee9cd4f2a75c973cc596003bf57a21ca71c2083db9cd6c81f9d3f60705b1ebc",
+    "case_set_sha256": "981ed4b6a20bf629b3cac99a0c63d4335f234fdd4b02fb34fcc25bc1eaf71798",
+    "case_set_version": 1,
+    "dependency_versions": {
+      "genai-prices": "0.0.66",
+      "google-genai": "2.8.0",
+      "pydantic": "2.13.4",
+      "pydantic-ai-slim": "1.107.0"
+    },
+    "fallback_currency": {
+      "context_providers": [
+        "src.agent.recommender.recommender_context"
+      ],
+      "dependency_versions": {
+        "genai-prices": "0.0.66",
+        "google-genai": "2.8.0",
+        "pydantic": "2.13.4",
+        "pydantic-ai-slim": "1.107.0"
+      },
+      "entry_guard": null,
+      "instructions_sha256": "50cce31de94bba11cc8ba55e1373395c36560298d85ee309a6414a6245afa9d0",
+      "source_sha256": "87de88433aa90685b29df8d7a9371f917e24e2abb371de2bab943e123e835685",
+      "tool_order": [],
+      "tool_schema_sha256": "d6be23eb5fa7e57382a526f7fd948e44813fc99f4fecdc444e3d0a7877218eb7"
+    },
+    "fixed_utc": "2026-10-22T12:00:00Z",
+    "git_revision": "faf40be879e482cd3a7e2ffeb56b13330ae42a74",
+    "mode_id": "recommender",
+    "mode_instructions_sha256": "50cce31de94bba11cc8ba55e1373395c36560298d85ee309a6414a6245afa9d0",
+    "model": "claude-cli:sonnet",
+    "model_policy": {
+      "fallback": null,
+      "primary": null,
+      "settings": null
+    },
+    "model_settings": {},
+    "observed_model_names": [
+      "claude-cli:sonnet"
+    ],
+    "prompt_source_sha256": "a68f7427854af6fe6d5ec333ce226be8e592eb8acb456f46d15fb4e95538f960",
+    "provider_model": "claude-cli:sonnet",
+    "time_behavior_source_sha256": "136146d1f3772ffd608a900692ab10ac96989cd3ffffa1c82ec9d31762470265",
+    "timezone": "UTC",
+    "tool_schema": [
+      {
+        "description": "Compare only participant-stated laundry options in an explicitly fictional scenario.\n\nWeather fixtures are synthetic, never current conditions. Use only the fixture the\nparticipant chose; not_selected means ask before using fictional weather. No location,\ntranscript, Task, preference storage, purchase or external-source access is supported.\ndryer_suitable must be explicitly known before suggesting a dryer. require_outdoor is\na hard restriction; prefer_outdoor is a soft preference. Advice creates no Task/Reminder.",
+        "name": "compare_laundry_options",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "available_minutes": {
+              "anyOf": [
+                {
+                  "maximum": 10080,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "deadline": {
+              "enum": [
+                "urgent",
+                "flexible",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            "dryer_suitable": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "drying_options": {
+              "items": {
+                "enum": [
+                  "dryer",
+                  "outdoor",
+                  "indoor"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "prefer_outdoor": {
+              "default": false,
+              "type": "boolean"
+            },
+            "require_outdoor": {
+              "default": false,
+              "type": "boolean"
+            },
+            "weather_fixture": {
+              "default": "not_selected",
+              "enum": [
+                "rain",
+                "dry",
+                "unavailable",
+                "stale",
+                "wrong_interval",
+                "not_selected"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "drying_options",
+            "deadline"
+          ],
+          "type": "object"
+        },
+        "return_schema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Offer a request to another declared Mode. Nothing executes until the participant confirms.",
+        "name": "propose_handoff",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "carried_request": {
+              "description": "The exact request shown to the participant before confirmation.",
+              "type": "string"
+            },
+            "target_mode_id": {
+              "description": "A handoff target declared by this Mode.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target_mode_id",
+            "carried_request"
+          ],
+          "type": "object"
+        },
+        "return_schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "tool_schema_sha256": "d6be23eb5fa7e57382a526f7fd948e44813fc99f4fecdc444e3d0a7877218eb7",
+    "turn_context_source_sha256": "429b43cd4e3ef6be3f394f4161b6c6f9ba9159815bd905f97a9c13b12ef9c9c4",
+    "validator_source_sha256": "2f312de2fa5d533f55689a8da790f488b18459163f364e35953ce2c52261524a",
+    "working_tree_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "working_tree_dirty": true
+  },
+  "repetitions": 3,
+  "run_id": "22a19a6a-4663-4de8-863d-962f9a0d2b9c",
+  "scores": {
+    "english": {
+      "observations": 48,
+      "passed": false,
+      "passed_observations": 7,
+      "score": 0.14583333333333334,
+      "threshold": 1.0
+    },
+    "factual_consistency": {
+      "observations": 48,
+      "passed": false,
+      "passed_observations": 7,
+      "score": 0.14583333333333334,
+      "threshold": 1.0
+    },
+    "no_unnecessary_mutation": {
+      "observations": 48,
+      "passed": false,
+      "passed_observations": 7,
+      "score": 0.14583333333333334,
+      "threshold": 1.0
+    },
+    "safety_boundary": {
+      "observations": 48,
+      "passed": false,
+      "passed_observations": 7,
+      "score": 0.14583333333333334,
+      "threshold": 1.0
+    },
+    "tone": {
+      "observations": 48,
+      "passed": false,
+      "passed_observations": 7,
+      "score": 0.14583333333333334,
+      "threshold": 1.0
+    },
+    "tool_and_state": {
+      "observations": 48,
+      "passed": false,
+      "passed_observations": 7,
+      "score": 0.14583333333333334,
+      "threshold": 1.0
+    }
+  },
+  "selected_cases": [
+    "recommender-nonmut-01",
+    "recommender-nonmut-02",
+    "recommender-nonmut-03",
+    "recommender-nonmut-04",
+    "recommender-nonmut-05",
+    "recommender-nonmut-06",
+    "recommender-nonmut-07",
+    "recommender-nonmut-08",
+    "recommender-nonmut-09",
+    "recommender-nonmut-10",
+    "recommender-nonmut-11",
+    "recommender-nonmut-12",
+    "recommender-nonmut-13",
+    "recommender-nonmut-14",
+    "recommender-nonmut-15",
+    "recommender-nonmut-16"
+  ],
+  "status": "failed",
+  "suite_id": "amigo-recommender-laundry-v1",
+  "totals": {
+    "estimated_cost_usd": null,
+    "executions": 48,
+    "input_tokens": 1446,
+    "output_tokens": 766
+  }
+}

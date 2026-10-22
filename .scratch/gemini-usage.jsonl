@@ -14,3 +14,9 @@
 {"at":"2026-10-22T14:41:49.148749","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1650,"output_tokens":663,"outcome":"ok"}
 {"at":"2026-10-22T14:42:03.916788","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1650,"output_tokens":699,"outcome":"ok"}
 {"at":"2026-10-22T14:42:14.180971","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1650,"output_tokens":612,"outcome":"ok"}
+{"at":"2026-10-22T21:22:26.310040","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1671,"output_tokens":247,"outcome":"ok"}
+{"at":"2026-10-22T21:22:37.346974","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1671,"output_tokens":162,"outcome":"ok"}
+{"at":"2026-10-22T21:22:48.985635","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":null,"output_tokens":null,"outcome":"error"}
+{"at":"2026-10-22T21:23:01.690021","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":null,"output_tokens":null,"outcome":"error"}
+{"at":"2026-10-22T21:23:04.546966","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":null,"output_tokens":null,"outcome":"error"}
+{"at":"2026-10-22T21:23:17.620246","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":null,"output_tokens":null,"outcome":"error"}

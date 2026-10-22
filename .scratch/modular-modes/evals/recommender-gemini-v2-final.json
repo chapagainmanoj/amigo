@@ -1,0 +1,202 @@
+{
+  "completed_at": "2026-10-22T21:23:17.624816+00:00",
+  "declared_at": "2026-10-22T21:23:04.148016+00:00",
+  "environment": "controlled-local-isolated",
+  "executions": [],
+  "minimum_provider_request_interval_seconds": 13.0,
+  "passed": false,
+  "policy": "No failed or unchanged execution is retried within this declared run.",
+  "pricing": {
+    "source": "genai-prices",
+    "version": "0.0.66"
+  },
+  "provider_incidents": [
+    {
+      "case_id": "recommender-nonmut-01",
+      "message": "status_code: 429, model_name: gemini-3.5-flash, body: {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-3.6-flash\\nPlease retry in 9h36m42.344747706s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaDimensions': {'location': 'global', 'model'",
+      "repetition": 1,
+      "status_code": 429,
+      "type": "quota_exhausted"
+    }
+  ],
+  "purpose": "candidate_eval",
+  "release_inputs": {
+    "all_invalidating_inputs_sha256": "1bf9a558253faa90d4347524182f8050e2ea812a91c93a29ec264f5fe60867d5",
+    "case_set_sha256": "981ed4b6a20bf629b3cac99a0c63d4335f234fdd4b02fb34fcc25bc1eaf71798",
+    "case_set_version": 1,
+    "dependency_versions": {
+      "genai-prices": "0.0.66",
+      "google-genai": "2.8.0",
+      "pydantic": "2.13.4",
+      "pydantic-ai-slim": "1.107.0"
+    },
+    "fallback_currency": {
+      "context_providers": [
+        "src.agent.recommender.recommender_context"
+      ],
+      "dependency_versions": {
+        "genai-prices": "0.0.66",
+        "google-genai": "2.8.0",
+        "pydantic": "2.13.4",
+        "pydantic-ai-slim": "1.107.0"
+      },
+      "entry_guard": null,
+      "instructions_sha256": "50cce31de94bba11cc8ba55e1373395c36560298d85ee309a6414a6245afa9d0",
+      "source_sha256": "2efcd78e86fd8f85ac43d3cdcc366e781b93bd990706e800d8b62eb46c82dc64",
+      "tool_order": [],
+      "tool_schema_sha256": "d6be23eb5fa7e57382a526f7fd948e44813fc99f4fecdc444e3d0a7877218eb7"
+    },
+    "fixed_utc": "2026-10-22T12:00:00Z",
+    "git_revision": "4ad0ac971e88502a688acbcdcd0a82585d850051",
+    "mode_id": "recommender",
+    "mode_instructions_sha256": "50cce31de94bba11cc8ba55e1373395c36560298d85ee309a6414a6245afa9d0",
+    "model": "google:gemini-3.5-flash",
+    "model_policy": {
+      "fallback": null,
+      "primary": null,
+      "settings": null
+    },
+    "model_settings": {},
+    "observed_model_names": [],
+    "prompt_source_sha256": "a68f7427854af6fe6d5ec333ce226be8e592eb8acb456f46d15fb4e95538f960",
+    "provider_model": "google:gemini-3.5-flash",
+    "time_behavior_source_sha256": "136146d1f3772ffd608a900692ab10ac96989cd3ffffa1c82ec9d31762470265",
+    "timezone": "UTC",
+    "tool_schema": [
+      {
+        "description": "Compare only participant-stated laundry options in an explicitly fictional scenario.\n\nWeather fixtures are synthetic, never current conditions. Use only the fixture the\nparticipant chose; not_selected means ask before using fictional weather. No location,\ntranscript, Task, preference storage, purchase or external-source access is supported.\ndryer_suitable must be explicitly known before suggesting a dryer. require_outdoor is\na hard restriction; prefer_outdoor is a soft preference. Advice creates no Task/Reminder.",
+        "name": "compare_laundry_options",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "available_minutes": {
+              "anyOf": [
+                {
+                  "maximum": 10080,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "deadline": {
+              "enum": [
+                "urgent",
+                "flexible",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            "dryer_suitable": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "drying_options": {
+              "items": {
+                "enum": [
+                  "dryer",
+                  "outdoor",
+                  "indoor"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "prefer_outdoor": {
+              "default": false,
+              "type": "boolean"
+            },
+            "require_outdoor": {
+              "default": false,
+              "type": "boolean"
+            },
+            "weather_fixture": {
+              "default": "not_selected",
+              "enum": [
+                "rain",
+                "dry",
+                "unavailable",
+                "stale",
+                "wrong_interval",
+                "not_selected"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "drying_options",
+            "deadline"
+          ],
+          "type": "object"
+        },
+        "return_schema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Offer a request to another declared Mode. Nothing executes until the participant confirms.",
+        "name": "propose_handoff",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "carried_request": {
+              "description": "The exact request shown to the participant before confirmation.",
+              "type": "string"
+            },
+            "target_mode_id": {
+              "description": "A handoff target declared by this Mode.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target_mode_id",
+            "carried_request"
+          ],
+          "type": "object"
+        },
+        "return_schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "tool_schema_sha256": "d6be23eb5fa7e57382a526f7fd948e44813fc99f4fecdc444e3d0a7877218eb7",
+    "turn_context_source_sha256": "429b43cd4e3ef6be3f394f4161b6c6f9ba9159815bd905f97a9c13b12ef9c9c4",
+    "validator_source_sha256": "2f312de2fa5d533f55689a8da790f488b18459163f364e35953ce2c52261524a",
+    "working_tree_diff_sha256": "81c069a2c036f1061a611d2cdd4af71d4148348d47a7ab6462a2a0c32aa89e2a",
+    "working_tree_dirty": true
+  },
+  "repetitions": 3,
+  "run_id": "c2852e8f-f648-4121-a4c4-224771bec34b",
+  "scores": null,
+  "selected_cases": [
+    "recommender-nonmut-01",
+    "recommender-nonmut-02",
+    "recommender-nonmut-03",
+    "recommender-nonmut-04",
+    "recommender-nonmut-05",
+    "recommender-nonmut-06",
+    "recommender-nonmut-07",
+    "recommender-nonmut-08",
+    "recommender-nonmut-09",
+    "recommender-nonmut-10",
+    "recommender-nonmut-11",
+    "recommender-nonmut-12",
+    "recommender-nonmut-13",
+    "recommender-nonmut-14",
+    "recommender-nonmut-15",
+    "recommender-nonmut-16"
+  ],
+  "status": "aborted_provider_incident",
+  "suite_id": "amigo-recommender-laundry-v1"
+}
