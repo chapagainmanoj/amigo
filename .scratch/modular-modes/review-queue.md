@@ -540,3 +540,23 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   or arbitrary Tool workflow guarantee invented.
 - Sole final Gemini batches remain deferred until execution sources freeze; full Claude/Ollama
   development suites retain failures. New Modes remain Planned until required provider evidence.
+
+## Phase 6 — Memory Inspector dashboard
+
+- Backend0be20bb; files web/src/components/MemoryInspector.jsx, MemoryInspector.css, AppShell.jsx;
+  proposals/memory-inspector-independent-verification.md + retained fictional browser probes;
+  .impeccable/review/memory-inspector/ desktop/mobile/first-opt-in captures, exports and results.
+- Complete versions/states/provenance/use history; explicit exact previews + first-item opt-in,
+  corrections/reconfirmation/Mode sharing, independent/master pauses, lifecycle controls,
+  complete JSON/CSV with formula escaping, scoped Forget/ForgetAll. Hash links open canonical
+  Inspector. Saving remains OFF; inspection/rights controls available. Stale/uncertain mutation
+  locks changes/export until refresh. No provider/backup/whole-account erasure claim.
+- ESLint zero warnings; Vite8.3.5 build passed1990modules (existing >500kB chunk warning retained).
+  Single detector pass changed3targets returned[]. Desktop1440/mobile390 fictional stub behavior
+  passed: consent/version/history/filter/export/pause/forget/stale recovery; no overflow/pageerrors.
+- Fresh independent finish review found focus-discovery bug; fixed Edit/Forget heading focus without
+  stealing text-input focus. Targeted corrective checks passed both viewports; final reviewerSHIP.
+  No additional detector or open-ended UI review loop. Incumbent oat/sand, Fraunces/Inter preserved.
+- Protected files:none; no Turn source changes in this UI slice. Latest full backend1313passed,
+  Ruff/smoke passed; Gate A currency inputs unchanged by these UI files, release certification absent.
+- Open: actual eligibility/privacy/retention/demand/usability/trial evidence, as backend record.

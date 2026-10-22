@@ -1,0 +1,14 @@
+[
+  {
+    "viewport": "desktop",
+    "editHeadingFocus": true,
+    "typingKeepsFocus": true,
+    "forgetHeadingFocus": true
+  },
+  {
+    "viewport": "mobile",
+    "editHeadingFocus": true,
+    "typingKeepsFocus": true,
+    "forgetHeadingFocus": true
+  }
+]

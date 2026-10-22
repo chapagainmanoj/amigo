@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { LayoutDashboard, Link2, LogOut, Menu, NotebookText, X } from 'lucide-react'
+import { LayoutDashboard, Link2, LogOut, Menu, NotebookText, BookOpen, X } from 'lucide-react'
 import { supabase, apiRequest } from '../supabase'
 import DashboardView from './DashboardView'
 import ConnectView from './ConnectView'
 import ActivationJourney from './ActivationJourney'
 import CoachingRecords from './CoachingRecords'
+import MemoryInspector from './MemoryInspector'
 
 export default function AppShell({ session }) {
-  const [activeView, setActiveView] = useState('dashboard')
+  const [activeView, setActiveView] = useState(() => ['memory', 'coaching', 'connect'].includes(window.location.hash.slice(1)) ? window.location.hash.slice(1) : 'dashboard')
   const [pairedUser, setPairedUser] = useState(null)
   const [checkingPairing, setCheckingPairing] = useState(true)
   const [activation, setActivation] = useState(null)
@@ -33,6 +34,16 @@ export default function AppShell({ session }) {
   useEffect(() => {
     checkPairing()
   }, [checkPairing])
+
+  useEffect(() => {
+    const followHash = () => {
+      const view = window.location.hash.slice(1)
+      setActiveView(['memory', 'coaching', 'connect'].includes(view) ? view : 'dashboard')
+      setMobileMenuOpen(false)
+    }
+    window.addEventListener('hashchange', followHash)
+    return () => window.removeEventListener('hashchange', followHash)
+  }, [])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -64,6 +75,7 @@ export default function AppShell({ session }) {
 
   const navigateTo = (view) => {
     setActiveView(view)
+    window.location.hash = view
     setMobileMenuOpen(false)
   }
 
@@ -100,6 +112,13 @@ export default function AppShell({ session }) {
             <span style={{ fontWeight: 500 }}>Dashboard</span>
           </button>
           
+          <button type="button" onClick={() => navigateTo('memory')}
+            className={`nav-item ${effectiveView === 'memory' ? 'nav-item--active' : ''}`}
+            aria-current={effectiveView === 'memory' ? 'page' : undefined}>
+            <BookOpen size={20} aria-hidden="true" />
+            <span style={{ fontWeight: 500 }}>Memory Inspector</span>
+          </button>
+
           <button
             type="button"
             onClick={() => navigateTo('coaching')}
@@ -141,7 +160,9 @@ export default function AppShell({ session }) {
               <strong>Connect Telegram to continue.</strong> Pair your account to chat with Amigo, schedule reminders, and view your dashboard.
             </div>
           )}
-          {effectiveView === 'coaching' ? (
+          {effectiveView === 'memory' ? (
+            <MemoryInspector />
+          ) : effectiveView === 'coaching' ? (
             <CoachingRecords />
           ) : effectiveView === 'dashboard' ? (
             <DashboardView pairedUser={pairedUser} />

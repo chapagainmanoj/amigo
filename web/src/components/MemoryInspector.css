@@ -1,0 +1,45 @@
+.memory-inspector { overflow-wrap: anywhere; }
+.memory-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.memory-controls { border-top: 1px solid var(--rule); padding: 28px 0 32px; }
+.memory-inspector h2 { font-size: 1.5rem; line-height: 1.3; margin-bottom: 12px; }
+.memory-inspector h3 { font-size: 1.35rem; line-height: 1.3; }
+.memory-controls > p, .memory-editor > p, .memory-preview > p { margin-bottom: 18px; max-width: 70ch; }
+.memory-controls .memory-actions + p { margin-top: 14px; }
+.memory-availability { color: var(--ink-2); }
+.memory-inspector label { font-size: .9rem; }
+.memory-inspector select, .memory-inspector textarea, .memory-inspector input[type="date"] { display: block; width: 100%; max-width: 100%; min-height: 44px; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--ink-2); border-radius: 6px; color: var(--ink); background: var(--oat); font: inherit; }
+.memory-inspector textarea { resize: vertical; caret-color: var(--ink); }
+.memory-inspector select:focus-visible, .memory-inspector textarea:focus-visible, .memory-inspector input:focus-visible, .memory-inspector summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.memory-inspector textarea[readonly] { background: var(--sand); }
+.memory-inspector select:disabled, .memory-inspector input:disabled { opacity: .65; }
+.memory-editor, .memory-preview { padding: 26px; margin-bottom: 32px; background: var(--sand); border-radius: 12px; }
+.memory-editor fieldset { border: 0; min-width: 0; }
+.memory-editor fieldset > label { display: block; margin-bottom: 20px; }
+.memory-editor .memory-scope { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-bottom: 10px; }
+.memory-scope legend { font-size: .9rem; margin-bottom: 8px; }
+.memory-scope label, .memory-check { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; }
+.memory-inspector input[type="checkbox"] { accent-color: var(--ink); flex-shrink: 0; width: 20px; height: 20px; margin-top: 1px; }
+.memory-check { margin: 16px 0; max-width: 70ch; }
+.memory-editor .coaching-muted { font-size: .9rem; max-width: 68ch; margin-bottom: 20px; }
+.memory-exact { white-space: pre-wrap; max-width: 70ch; margin-bottom: 24px; font-size: 1.05rem; line-height: 1.65; }
+.memory-preview .coaching-details { margin-bottom: 20px; }
+.memory-inventory { margin-top: 10px; }
+.memory-inventory-header { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 16px; }
+.memory-inventory-header h2 { margin: 0; }
+.memory-inventory-header label { min-width: 210px; }
+.memory-inspector .coaching-program-heading { margin-bottom: 18px; }
+.memory-inspector .coaching-program-heading h3 { margin: 0; }
+.memory-state-reason { color: var(--ink-2); max-width: 70ch; margin-top: 16px; }
+.memory-use-history { margin-top: 24px; }
+.memory-use-history summary { cursor: pointer; min-height: 44px; padding: 10px 0; }
+.memory-use-history p { font-size: .9rem; }
+.memory-empty { padding: 28px 0 36px; color: var(--ink-2); }
+.memory-inspector .coaching-data-controls { margin-top: 12px; }
+@media (max-width: 640px) {
+  .memory-inventory-header { align-items: stretch; flex-direction: column; gap: 16px; }
+  .memory-inventory-header label { min-width: 0; }
+  .memory-editor, .memory-preview { padding: 20px 16px; }
+  .memory-actions { align-items: stretch; }
+  .memory-actions .coaching-button { flex-grow: 1; }
+  .memory-inspector .coaching-details { gap: 18px; }
+}
