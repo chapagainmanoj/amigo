@@ -668,3 +668,13 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Evidence correction for fix13: independent73pytest count used default import mode and may have
   resolved main checkout; exclude that count from isolated review evidence. Independent frozen
   45-file SQL chain, source/API/UI review, author90focused and root1346full remain valid.
+
+### Review fix12 — schema21 cutover runbook
+
+- Files docs/runbooks/mode-schema-21-cutover.md, README.md,
+  proposals/topic-spike-runbook.md. Protected/SQL:none.
+- Owner-run only: zero confirmed handoffs and valid timezone preflights; maintenance window;
+  017→021 in one psql session with version checks; immediate matching deploy. Topics may remain
+  off; if enabled user-created threads must be off. Android remains untested. No execution here.
+- Documentation checked against schema21/CI migration order. Latest full1353passed20.53s,
+  Ruff/diff clean; currency unchanged. Final combined SQL chain follows remaining SQL fixes.

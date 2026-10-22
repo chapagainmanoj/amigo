@@ -24,6 +24,9 @@ Amigo is in invitation-only beta development. See the
 Amigo does not currently offer autonomous morning/evening check-ins or participant-enabled Memory,
 adaptive coaching Modes, wellbeing treatment, WhatsApp, voice, or native mobile apps.
 
+Operator deployment review: [schema16→21 cutover runbook](docs/runbooks/mode-schema-21-cutover.md).
+All five migrations017–021 run in one maintenance session before the matching application.
+
 ## For Users
 
 ### Talking to Amigo

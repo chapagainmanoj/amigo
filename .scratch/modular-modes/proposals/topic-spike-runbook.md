@@ -59,7 +59,9 @@ Return the console result plus these owner observations:
 - Unverified: Android; where unthreaded sends land after user-created threads are disabled.
 
 ADR 0003 **Accepted**. Phase 4 uses channel-neutral ConversationRef/capabilities and Mode state;
-unknown conversations become additional Daily endpoints. Production requires topic mode enabled,
-user-created threads disabled, and every send explicitly addressed. Do not enable the production
+unknown conversations become additional Daily endpoints. Production may keep topic mode off and
+use in-chat commands. If enabled, user-created threads must be off and every send explicitly addressed. Do not enable the production
 bot's topic mode before reviewed Phase 4 deployment. Owner observations above are the evidence;
 no tokens, private chat content or provider error bodies are retained here.
+
+Deployment review now uses the full017–021 [schema21 cutover runbook](../../../docs/runbooks/mode-schema-21-cutover.md); no SQL has been applied by the builder.
