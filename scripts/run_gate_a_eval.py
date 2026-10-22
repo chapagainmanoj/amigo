@@ -205,6 +205,7 @@ async def _setup_case(case, suite: GateASuite, repetition: int, mode_id="daily")
         user["user_id"],
         {
             "name": "Eval User",
+            "daily_message_budget": case.setup.daily_message_budget,
             "timezone": suite.timezone,
             "wake_time": "07:30",
             "sleep_time": "23:00",

@@ -1,6 +1,7 @@
 """APScheduler reminder management — in-memory for Phase 1a."""
 
 import contextlib
+import hashlib
 import logging
 import uuid
 from datetime import datetime, timedelta
@@ -10,6 +11,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from src.bot.keyboards import reminder_keyboard
 from src.channels.base import MessageChannel
+from src.memory.proactive import instant
 from src.memory.store import MemoryStore
 from src.utils import Clock, default_clock
 
@@ -236,44 +238,68 @@ class ReminderScheduler:
     async def _send_recovery_summary(
         self, user_id: str, chat_id: int, reminders: list[dict]
     ) -> None:
-        claimed: list[tuple[dict, str]] = []
-        for reminder in reminders:
-            row = await self.store.claim_reminder_for_send(
-                reminder["reminder_id"],
-                user_id,
-                f"recovery:{reminder['reminder_id']}:{uuid.uuid4()}",
-            )
-            if row:
-                claimed.append((reminder, row["attempt"]["attempt_id"]))
-        if not claimed:
+        user = await self.store.get_user_by_id(user_id)
+        if not user:
             return
-        titles = [item.get("tasks", {}).get("title", "your task") for item, _ in claimed]
-        text = "A few reminders were delayed while Amigo restarted:\n" + "\n".join(
-            f"• {title}" for title in titles
+        local = instant(self.clock.utc_now()).astimezone(ZoneInfo(user.get("timezone") or "UTC"))
+        scheduled_at = local.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        identities = ",".join(sorted(row["reminder_id"] for row in reminders))
+        identity_hash = hashlib.sha256(identities.encode()).hexdigest()[:32]
+        delivery_key = f"recovery:{local.date().isoformat()}:{identity_hash}"
+        reserved = await self.store.reserve_proactive_delivery(
+            user_id, delivery_key, "recovery", scheduled_at
         )
+        if (
+            reserved["status"] == "budget_exhausted"
+            or reserved["reservation"]["state"] != "reserved"
+        ):
+            return
+        claimed: list[tuple[dict, str]] = []
+        dispatched = False
         try:
             chat_id, conversation = await self._daily_delivery(user_id)
+            # Atomic transition fences concurrent recovery workers and crash replay.
+            if not await self.store.mark_proactive_dispatch(user_id, delivery_key):
+                return
+            dispatched = True
+            for reminder in reminders:
+                row = await self.store.claim_reminder_for_send(
+                    reminder["reminder_id"], user_id,
+                    f"recovery:{reminder['reminder_id']}:{uuid.uuid4()}",
+                )
+                if row:
+                    claimed.append((reminder, row["attempt"]["attempt_id"]))
+            if not claimed:
+                await self.store.finish_proactive_delivery(user_id, delivery_key, "rejected")
+                return
+            titles = [item.get("tasks", {}).get("title", "your task") for item, _ in claimed]
+            text = "A few reminders were delayed while Amigo restarted:\n" + "\n".join(
+                f"• {title}" for title in titles
+            )
             message_id = await self.channel.send_message(
                 chat_id, text, conversation=conversation,
             )
+            await self.store.finish_proactive_delivery(
+                user_id, delivery_key, "accepted" if message_id is not None else "rejected"
+            )
         except Exception as error:
+            if dispatched:
+                await self.store.finish_proactive_delivery(user_id, delivery_key, "uncertain")
+            else:
+                await self.store.release_proactive_delivery(user_id, delivery_key)
             for reminder, attempt_id in claimed:
                 await self.store.finish_reminder_delivery(
                     attempt_id=attempt_id,
-                    reminder_id=reminder["reminder_id"],
-                    user_id=user_id,
+                    reminder_id=reminder["reminder_id"], user_id=user_id,
                     result="timeout" if isinstance(error, TimeoutError) else "error",
-                    normalized_cause=type(error).__name__,
-                    retry_decision="do_not_retry",
+                    normalized_cause=type(error).__name__, retry_decision="do_not_retry",
                     telegram_message_id=None,
                 )
             raise
         for reminder, attempt_id in claimed:
             await self._finish_provider_result(
-                attempt_id=attempt_id,
-                reminder_id=reminder["reminder_id"],
-                user_id=user_id,
-                message_id=message_id,
+                attempt_id=attempt_id, reminder_id=reminder["reminder_id"],
+                user_id=user_id, message_id=message_id,
             )
 
     def schedule_reminder(

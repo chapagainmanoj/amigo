@@ -1,0 +1,168 @@
+{
+  "cases": [
+    {
+      "id": "ga-task-21",
+      "category": "task_creation",
+      "title": "Participant Reminder survives zero proactive budget",
+      "tags": [
+        "single",
+        "relative_time",
+        "proactive_budget_zero"
+      ],
+      "setup": {
+        "tasks": [],
+        "history": [],
+        "daily_message_budget": 0
+      },
+      "turns": [
+        {
+          "message": "Remind me in 30 minutes to stretch.",
+          "expected_tools": {
+            "create_task": 1
+          },
+          "prohibited_tools": [
+            "update_task_status",
+            "schedule_reminder",
+            "cancel_reminders"
+          ],
+          "clarification": "not_required",
+          "response": {
+            "english": true,
+            "question_required": false,
+            "must_include_any": [
+              "stretch",
+              "reminder",
+              "created"
+            ],
+            "must_include_all": [],
+            "must_not_include": [
+              "what time",
+              "you failed"
+            ],
+            "max_sentences": 4
+          },
+          "expected_state": {
+            "task_count": 1,
+            "task_titles_contain": [
+              "stretch"
+            ],
+            "task_statuses": {},
+            "pending_reminder_count": 1,
+            "unchanged": false
+          }
+        }
+      ],
+      "metrics": [
+        "english",
+        "tool_and_state",
+        "task_extraction",
+        "clarification",
+        "no_unnecessary_mutation",
+        "factual_consistency",
+        "tone"
+      ]
+    },
+    {
+      "id": "ga-life-99",
+      "category": "lifecycle",
+      "title": "Participant reschedule ignores zero proactive budget",
+      "tags": [
+        "reschedule",
+        "relative_time",
+        "proactive_budget_zero"
+      ],
+      "setup": {
+        "tasks": [
+          {
+            "alias": "deploy",
+            "title": "Check deploy",
+            "status": "pending",
+            "reminder_at": "2026-09-01T05:00:00+00:00"
+          }
+        ],
+        "history": [],
+        "daily_message_budget": 0
+      },
+      "turns": [
+        {
+          "message": "Move the check deploy reminder to in 90 minutes.",
+          "expected_tools": {
+            "schedule_reminder": 1
+          },
+          "prohibited_tools": [
+            "create_task",
+            "update_task_status",
+            "cancel_reminders"
+          ],
+          "clarification": "not_required",
+          "response": {
+            "english": true,
+            "question_required": false,
+            "must_include_any": [
+              "reminder",
+              "check deploy",
+              "scheduled"
+            ],
+            "must_include_all": [],
+            "must_not_include": [
+              "confirm",
+              "failed"
+            ],
+            "max_sentences": 4
+          },
+          "expected_state": {
+            "task_count": 1,
+            "task_titles_contain": [
+              "check deploy"
+            ],
+            "task_statuses": {
+              "deploy": "pending"
+            },
+            "pending_reminder_count": 1,
+            "unchanged": false
+          }
+        }
+      ],
+      "metrics": [
+        "english",
+        "tool_and_state",
+        "clarification",
+        "no_unnecessary_mutation",
+        "factual_consistency",
+        "tone"
+      ]
+    }
+  ],
+  "deterministic": [
+    {
+      "case_id": "ga-task-21",
+      "responses": [
+        {
+          "tool": "create_task",
+          "args": {
+            "title": "Stretch",
+            "reminder_time": "in 30 minutes"
+          }
+        },
+        {
+          "text": "Created stretch with a reminder in 30 minutes."
+        }
+      ]
+    },
+    {
+      "case_id": "ga-life-99",
+      "responses": [
+        {
+          "tool": "schedule_reminder",
+          "args": {
+            "task_id": "$task:deploy",
+            "time_expression": "in 90 minutes"
+          }
+        },
+        {
+          "text": "Reminder moved for check deploy to in 90 minutes."
+        }
+      ]
+    }
+  ]
+}

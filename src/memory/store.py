@@ -593,6 +593,17 @@ class MemoryStore:
             ),
         )
 
+    async def mark_proactive_dispatch(self, user_id, delivery_key):
+        return await self._coaching_rpc(
+            "mark_proactive_dispatch", dict(p_user_id=user_id, p_delivery_key=delivery_key)
+        )
+
+    async def finish_proactive_delivery(self, user_id, delivery_key, outcome):
+        return await self._coaching_rpc(
+            "finish_proactive_delivery",
+            dict(p_user_id=user_id, p_delivery_key=delivery_key, p_outcome=outcome),
+        )
+
     async def release_proactive_delivery(self, user_id, delivery_key):
         return await self._coaching_rpc(
             "release_proactive_delivery", dict(p_user_id=user_id, p_delivery_key=delivery_key)

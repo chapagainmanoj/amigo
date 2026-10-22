@@ -69,7 +69,7 @@ CREATE FUNCTION public.reserve_proactive_delivery(
 DECLARE u public.user_profiles%ROWTYPE; r public.proactive_reservations%ROWTYPE;
  zone TEXT; day DATE; used BIGINT; BEGIN
  IF p_delivery_key IS NULL OR length(p_delivery_key) NOT BETWEEN 1 AND 250
-    OR p_kind IS NULL OR p_kind NOT IN ('reminder','recovery','coaching') OR p_scheduled_at IS NULL
+    OR p_kind IS NULL OR p_kind NOT IN ('recovery','coaching') OR p_scheduled_at IS NULL
  THEN RAISE EXCEPTION 'invalid_proactive_reservation'; END IF;
  SELECT * INTO u FROM public.user_profiles WHERE user_id=p_user_id FOR KEY SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'proactive_owner_unavailable'; END IF;
@@ -89,7 +89,7 @@ DECLARE u public.user_profiles%ROWTYPE; r public.proactive_reservations%ROWTYPE;
    RETURN jsonb_build_object('status','already_reserved','reservation',to_jsonb(r));
  END IF;
  SELECT count(*) INTO used FROM public.proactive_reservations
- WHERE user_id=p_user_id AND state<>'cancelled' AND
+ WHERE user_id=p_user_id AND kind IN ('recovery','coaching') AND state<>'cancelled' AND
    (local_day=day OR (scheduled_at AT TIME ZONE zone)::date=day);
  IF used >= greatest(0,coalesce(u.daily_message_budget,4))
     OR (p_kind='coaching' AND EXISTS(SELECT 1 FROM public.proactive_reservations
@@ -115,70 +115,51 @@ RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN
  RETURN FOUND;
 END $$;
 
--- Reminder inserts share the same atomic admission ledger, including Later and dashboard writes.
--- A refusal rolls back the complete calling command (prior cancellation, outbox and receipt).
-CREATE FUNCTION public.reserve_reminder_budget() RETURNS TRIGGER
-LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE result JSONB; BEGIN
- result:=public.reserve_proactive_delivery(NEW.user_id,'reminder:'||NEW.reminder_id,
-   'reminder',NEW.scheduled_time,NULL);
- IF result->>'status'='budget_exhausted' THEN
-   RAISE EXCEPTION 'proactive_budget_exhausted'; END IF;
- RETURN NEW;
-END $$;
-CREATE TRIGGER reminder_budget_admission BEFORE INSERT ON public.reminders
- FOR EACH ROW EXECUTE FUNCTION public.reserve_reminder_budget();
-CREATE FUNCTION public.update_reminder_budget() RETURNS TRIGGER
+-- Participant-requested Reminders, Later and Activation never consume proactive capacity.
+-- Only schedule identity remains immutable; replacements use the existing command APIs.
+CREATE FUNCTION public.validate_reminder_schedule() RETURNS TRIGGER
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN
  IF NEW.scheduled_time IS DISTINCT FROM OLD.scheduled_time
     OR NEW.user_id IS DISTINCT FROM OLD.user_id OR NEW.task_id IS DISTINCT FROM OLD.task_id
     OR NEW.reminder_id IS DISTINCT FROM OLD.reminder_id THEN
    RAISE EXCEPTION 'immutable_reminder_schedule'; END IF;
- -- Match reserve/Activation admission: never wait for the profile while holding budget.
- PERFORM 1 FROM public.user_profiles WHERE user_id=NEW.user_id FOR KEY SHARE;
- PERFORM pg_catalog.pg_advisory_xact_lock(
-   pg_catalog.hashtextextended('amigo-proactive:'||NEW.user_id,0));
- IF NEW.status='sending' THEN
-   UPDATE public.proactive_reservations SET state='dispatched'
-    WHERE user_id=NEW.user_id AND delivery_key='reminder:'||NEW.reminder_id
-      AND state='reserved';
- ELSIF NEW.status='sent' THEN
-   UPDATE public.proactive_reservations SET state='accepted'
-    WHERE user_id=NEW.user_id AND delivery_key='reminder:'||NEW.reminder_id;
- ELSIF NEW.status IN ('cancelled','acknowledged','missed','failed') THEN
-   -- Unsent cancellations free a slot. Attempted delivery remains counted conservatively.
-   UPDATE public.proactive_reservations SET state='cancelled'
-    WHERE user_id=NEW.user_id AND delivery_key='reminder:'||NEW.reminder_id
-      AND state='reserved';
- END IF;
  RETURN NEW;
 END $$;
-CREATE TRIGGER reminder_budget_status BEFORE UPDATE OF status,scheduled_time,user_id,task_id,reminder_id
- ON public.reminders FOR EACH ROW
- EXECUTE FUNCTION public.update_reminder_budget();
-REVOKE ALL ON FUNCTION public.reserve_reminder_budget(),public.update_reminder_budget()
- FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER reminder_schedule_immutable BEFORE UPDATE OF scheduled_time,user_id,task_id,reminder_id
+ ON public.reminders FOR EACH ROW EXECUTE FUNCTION public.validate_reminder_schedule();
+REVOKE ALL ON FUNCTION public.validate_reminder_schedule() FROM PUBLIC,anon,authenticated,service_role;
 
--- Existing commitments consume capacity first. Overflow remains visible as legacy debt;
--- no existing Reminder is dropped or declared compliant with the new cap retroactively.
-WITH commitments AS (
- SELECT r.user_id,'reminder:'||r.reminder_id delivery_key,r.scheduled_time scheduled_at,
-   coalesce(u.timezone,'UTC') zone,greatest(0,coalesce(u.daily_message_budget,4)) budget,
-   CASE WHEN r.status='sent' OR r.telegram_message_id IS NOT NULL THEN 'accepted'
-     WHEN r.status='sending' OR EXISTS(SELECT 1 FROM public.reminder_occurrences o
-       WHERE o.reminder_id=r.reminder_id AND o.first_claimed_at IS NOT NULL) THEN 'uncertain'
-     ELSE 'reserved' END reservation_state,
-   row_number() OVER(PARTITION BY r.user_id,
-     (r.scheduled_time AT TIME ZONE coalesce(u.timezone,'UTC'))::date
-     ORDER BY r.scheduled_time,r.reminder_id) ordinal
- FROM public.reminders r JOIN public.user_profiles u ON u.user_id=r.user_id
- WHERE r.status IN ('pending','sending','sent') OR r.telegram_message_id IS NOT NULL
-   OR EXISTS(SELECT 1 FROM public.reminder_occurrences o WHERE o.reminder_id=r.reminder_id
-     AND o.first_claimed_at IS NOT NULL)
-) INSERT INTO public.proactive_reservations(user_id,delivery_key,kind,scheduled_at,
- timezone,local_day,legacy_debt,state)
- SELECT user_id,delivery_key,'reminder',scheduled_at,zone,
-   (scheduled_at AT TIME ZONE zone)::date,ordinal>budget,reservation_state FROM commitments;
+CREATE FUNCTION public.mark_proactive_dispatch(p_user_id UUID,p_delivery_key TEXT)
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE u public.user_profiles; r public.proactive_reservations; n BIGINT; BEGIN
+ SELECT * INTO u FROM public.user_profiles WHERE user_id=p_user_id FOR KEY SHARE;
+ IF NOT FOUND THEN RETURN FALSE; END IF;
+ PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('amigo-proactive:'||p_user_id,0));
+ SELECT * INTO r FROM public.proactive_reservations WHERE user_id=p_user_id
+ AND delivery_key=p_delivery_key AND kind='recovery' AND state='reserved' FOR UPDATE;
+ IF NOT FOUND THEN RETURN FALSE; END IF;
+ SELECT count(*) INTO n FROM public.proactive_reservations WHERE user_id=p_user_id
+ AND kind IN ('recovery','coaching') AND state<>'cancelled' AND
+ (local_day=(clock_timestamp() AT TIME ZONE coalesce(u.timezone,'UTC'))::date OR
+ (scheduled_at AT TIME ZONE coalesce(u.timezone,'UTC'))::date=
+ (clock_timestamp() AT TIME ZONE coalesce(u.timezone,'UTC'))::date);
+ IF n>greatest(0,coalesce(u.daily_message_budget,4)) OR
+ (r.scheduled_at AT TIME ZONE coalesce(u.timezone,'UTC'))::date<>
+ (clock_timestamp() AT TIME ZONE coalesce(u.timezone,'UTC'))::date THEN
+ UPDATE public.proactive_reservations SET state='cancelled' WHERE user_id=p_user_id AND delivery_key=p_delivery_key;
+ RETURN FALSE; END IF;
+ UPDATE public.proactive_reservations SET state='dispatched' WHERE user_id=p_user_id AND delivery_key=p_delivery_key;
+ RETURN TRUE;
+END $$;
+CREATE FUNCTION public.finish_proactive_delivery(p_user_id UUID,p_delivery_key TEXT,p_outcome TEXT)
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN
+ IF p_outcome IS NULL OR p_outcome NOT IN ('accepted','rejected','uncertain') THEN
+ RAISE EXCEPTION 'invalid_proactive_outcome'; END IF;
+ PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('amigo-proactive:'||p_user_id,0));
+ UPDATE public.proactive_reservations SET state=p_outcome WHERE user_id=p_user_id
+ AND delivery_key=p_delivery_key AND kind='recovery' AND state='dispatched';
+ RETURN FOUND;
+END $$;
 
 CREATE FUNCTION public.get_proactive_consent(p_user_id UUID,p_scope TEXT)
 RETURNS JSONB LANGUAGE sql SECURITY DEFINER SET search_path='' AS $$
@@ -317,7 +298,7 @@ DECLARE d public.coaching_delivery_outbox%ROWTYPE; p public.coaching_programs%RO
       AND state<>'cancelled' AND (local_day=profile_now::date
         OR (scheduled_at AT TIME ZONE coalesce(u.timezone,'UTC'))::date=profile_now::date))
     OR (SELECT count(*) FROM public.proactive_reservations WHERE user_id=p_user_id
-      AND state<>'cancelled' AND (local_day=profile_now::date
+      AND kind IN ('recovery','coaching') AND state<>'cancelled' AND (local_day=profile_now::date
         OR (scheduled_at AT TIME ZONE coalesce(u.timezone,'UTC'))::date=profile_now::date))
       >greatest(0,coalesce(u.daily_message_budget,4))
     OR unanswered>=2 OR (unanswered=1 AND d.kind<>'follow_up')
@@ -373,7 +354,7 @@ CREATE TRIGGER coaching_deleted_cancels_delivery BEFORE DELETE ON public.coachin
 DO $$ DECLARE fn RECORD; BEGIN
  FOR fn IN SELECT p.oid::regprocedure signature FROM pg_catalog.pg_proc p
  JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN (
- 'reserve_proactive_delivery','release_proactive_delivery','set_proactive_consent','get_proactive_consent',
+ 'reserve_proactive_delivery','release_proactive_delivery','mark_proactive_dispatch','finish_proactive_delivery','set_proactive_consent','get_proactive_consent',
  'set_coaching_consent','has_coaching_consent',
  'note_coaching_reply','get_coaching_delivery_history','enqueue_coaching_delivery',
  'claim_coaching_deliveries','mark_coaching_dispatch','finish_coaching_delivery',
@@ -390,8 +371,9 @@ DO $$ BEGIN
  OR to_regprocedure('public.mark_coaching_dispatch(uuid,text,uuid)') IS NULL
  OR to_regprocedure('public.enqueue_coaching_delivery(uuid,uuid,bigint,text,date,text,timestamptz)') IS NULL
  OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger WHERE tgname='coaching_inactive_cancels_delivery')
- OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger WHERE tgname='reminder_budget_admission')
- OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger WHERE tgname='reminder_budget_status')
+ OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger WHERE tgname='reminder_schedule_immutable')
+ OR to_regprocedure('public.mark_proactive_dispatch(uuid,text)') IS NULL
+ OR to_regprocedure('public.finish_proactive_delivery(uuid,text,text)') IS NULL
  THEN RAISE EXCEPTION '019 objects were not created'; END IF;
  INSERT INTO public.schema_migrations(version) VALUES(19);
 END $$;

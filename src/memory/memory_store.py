@@ -419,6 +419,13 @@ class InMemoryStore:
             user, delivery_key, kind, scheduled_at, program_id
         )
 
+    async def mark_proactive_dispatch(self, user_id, delivery_key):
+        user = await self.get_user_by_id(user_id)
+        return await self._proactive_state.mark_dispatch(user, delivery_key)
+
+    async def finish_proactive_delivery(self, user_id, delivery_key, outcome):
+        return await self._proactive_state.finish_delivery(user_id, delivery_key, outcome)
+
     async def release_proactive_delivery(self, user_id, delivery_key):
         return await self._proactive_state.release(user_id, delivery_key)
 

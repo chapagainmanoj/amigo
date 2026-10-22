@@ -708,3 +708,17 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   cannot terminate its enclosing prompt block; ids, provenance and lifecycle fields omitted.
 - Root172service/retrieval/currency passed11.97s; Ruff/diff clean. Latest full1372passed;
   Daily golden/schema unchanged. Gate A source fingerprint changed; no release certification.
+
+### Owner budget decision — proactive messages only
+
+- Authorba832ce; protected019/assert019, proactive/all3Stores, Reminder scheduler/Tools,
+  auxiliary evals/gate_a/v1/budget-regressions.json, test_budget_gate_a and related tests/docs.
+- Requested Reminders, Later and Activation tests neither reserve nor refuse proactive capacity.
+  Coach plus recovery summaries reserve capacity; recovery dispatch/accept/uncertain fenced and
+  cannot replay. Uncertain delivery retains capacity. Legacy Reminder reservations excluded.
+- Independent cbt_selector fresh45-file CI SQL chain/source/3Store parity PASS at019SHA9377ef24…;
+  zero-budget requested paths/recovery fence/uncertain-capacity checks PASS; cluster stopped.
+- Root full1352passed21.48s/Ruff/diffclean. Removed obsolete budget-refusal tests replaced with
+  requested-reminder/recovery invariants. Two auxiliary scripted Daily Gate A scorer cases pass;
+  original60case suite, Daily instructions/Tool schema/goldens and111currency unchanged.
+  No real model calls or Gate A release certification.

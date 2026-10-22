@@ -1,6 +1,9 @@
 """ReminderScheduler job management and delivery tests."""
 
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock
+
+import pytest
 
 from src.scheduler.reminders import ReminderScheduler
 from tests.fakes import FakeChannel, FakeStore
@@ -211,8 +214,9 @@ async def test_reconciliation_repairs_time_and_removes_inverse_drift():
     assert scheduler.scheduler.get_job(f"{user['user_id']}:{reminder['reminder_id']}") is None
 
 
-async def test_interrupted_send_recovers_and_delayed_reminders_emit_one_summary():
+async def test_interrupted_send_recovers_and_delayed_reminders_emit_one_summary(monkeypatch):
     now = datetime(2026, 6, 14, 10, 0)
+    monkeypatch.setattr("src.memory.proactive.utc_now", lambda: now)
     store = FakeStore()
     channel = FakeChannel()
     user, task, first = await _create_user_task_reminder(
@@ -258,3 +262,42 @@ async def test_reconciliation_does_not_retry_an_unfinished_delivery_attempt():
     assert attempt["normalized_cause"] == "interrupted_delivery_unknown"
     assert attempt["retry_decision"] == "do_not_retry"
     assert scheduler.scheduler.get_job(f"recovery:{user['user_id']}") is None
+
+
+async def test_recovery_summary_is_proactive_but_regular_reminder_ignores_zero_budget(monkeypatch):
+    now = datetime(2026, 6, 14, 10, 0)
+    monkeypatch.setattr("src.memory.proactive.utc_now", lambda: now)
+    store, channel = FakeStore(), FakeChannel()
+    user, _, reminder = await _create_user_task_reminder(
+        store, scheduled_time=now - timedelta(minutes=2)
+    )
+    await store.update_user(user["user_id"], {"daily_message_budget": 0})
+    scheduler = ReminderScheduler(channel, store, FixedClock(now))
+    await scheduler._send_recovery_summary(user["user_id"], user["telegram_chat_id"], [reminder])
+    assert channel.sent == []
+    assert reminder["status"] == "pending"
+    assert store._proactive_state.reservations == {}
+    await scheduler._send_reminder(
+        user["user_id"], user["telegram_chat_id"], reminder["reminder_id"], "Task"
+    )
+    assert len(channel.sent) == 1
+    assert store._proactive_state.reservations == {}
+
+
+async def test_uncertain_recovery_summary_is_counted_and_not_replayed(monkeypatch):
+    now = datetime(2026, 6, 14, 10, 0)
+    monkeypatch.setattr("src.memory.proactive.utc_now", lambda: now)
+    store, channel = FakeStore(), FakeChannel()
+    user, _, reminder = await _create_user_task_reminder(
+        store, scheduled_time=now - timedelta(minutes=2)
+    )
+    channel.send_message = AsyncMock(side_effect=TimeoutError)
+    scheduler = ReminderScheduler(channel, store, FixedClock(now))
+    with pytest.raises(TimeoutError):
+        await scheduler._send_recovery_summary(
+            user["user_id"], user["telegram_chat_id"], [reminder]
+        )
+    reservation = next(iter(store._proactive_state.reservations.values()))
+    assert reservation["kind"] == "recovery" and reservation["state"] == "uncertain"
+    await scheduler._send_recovery_summary(user["user_id"], user["telegram_chat_id"], [reminder])
+    assert channel.send_message.await_count == 1

@@ -8,7 +8,6 @@ from datetime import UTC, datetime, timedelta
 from functools import wraps
 from zoneinfo import ZoneInfo
 
-from src.commands.base import ProactiveBudgetExceeded
 from src.utils import utc_now
 
 
@@ -88,9 +87,10 @@ class LocalProactiveState:
         )
 
     async def _reserve(self, user, key, kind, scheduled_at, program_id=None, *, legacy=False):
-        if not user or not key or kind not in {"reminder", "recovery", "coaching"}:
+        if not user or not key or kind not in {"recovery", "coaching"}:
             raise ValueError("Invalid proactive reservation")
         user_id = user["user_id"]
+        await self._discard_reminder_reservations()
         at = instant(scheduled_at)
         timezone = user.get("timezone") or "UTC"
         day = local_day(at, timezone)
@@ -138,24 +138,49 @@ class LocalProactiveState:
         async with self.lock:
             return await self._reserve(user, key, kind, scheduled_at, program_id)
 
+    async def _discard_reminder_reservations(self):
+        for key, row in list(self.reservations.items()):
+            if row["kind"] == "reminder":
+                del self.reservations[key]
+
     async def backfill_reminders(self, users, reminders, occurrences=None, attempts=None):
-        """Trusted cutover preserves both promised and already attempted daily commitments."""
+        """Old Reminder reservations are no longer proactive capacity; commitments stay intact."""
         async with self.lock:
-            for reminder in reminders:
-                observed = _delivery_state(reminder, occurrences or {}, attempts or {})
-                if reminder["status"] not in {"pending", "sending"} and not observed:
-                    continue
-                user = next((row for row in users if row["user_id"] == reminder["user_id"]), None)
-                if user:
-                    key = (reminder["user_id"], f"reminder:{reminder['reminder_id']}")
-                    await self._reserve(
-                        user, key[1], "reminder", reminder["scheduled_time"], legacy=True
-                    )
-                    reservation = self.reservations[key]
-                    if observed == "accepted":
-                        reservation["state"] = "accepted"
-                    elif observed and reservation["state"] == "reserved":
-                        reservation["state"] = "uncertain"
+            await self._discard_reminder_reservations()
+
+    async def mark_dispatch(self, user, key):
+        if not user:
+            return False
+        async with self.lock:
+            await self._discard_reminder_reservations()
+            user_id = user["user_id"]
+            row = self.reservations.get((user_id, key))
+            if not row or row["kind"] != "recovery" or row["state"] != "reserved":
+                return False
+            zone = user.get("timezone") or "UTC"
+            day = local_day(utc_now(), zone)
+            occupied = sum(
+                item["user_id"] == user_id and item["state"] != "cancelled"
+                and (item["local_day"] == day or local_day(item["scheduled_at"], zone) == day)
+                for item in self.reservations.values()
+            )
+            limit = user.get("daily_message_budget")
+            limit = 4 if limit is None else max(0, int(limit))
+            if occupied > limit or local_day(row["scheduled_at"], zone) != day:
+                row["state"] = "cancelled"
+                return False
+            row["state"] = "dispatched"
+            return True
+
+    async def finish_delivery(self, user_id, key, outcome):
+        if outcome not in {"accepted", "rejected", "uncertain"}:
+            raise ValueError("Invalid proactive outcome")
+        async with self.lock:
+            row = self.reservations.get((user_id, key))
+            if not row or row["kind"] != "recovery" or row["state"] != "dispatched":
+                return False
+            row["state"] = outcome
+            return True
 
     async def release(self, user_id, key):
         async with self.lock:
@@ -265,6 +290,7 @@ class LocalProactiveState:
 
     async def dispatch(self, user_id, key, token, programs, grants, user=None, activated=False):
         async with self.lock:
+            await self._discard_reminder_reservations()
             row = self.deliveries.get((user_id, key))
             now = instant(utc_now())
             if (
@@ -465,56 +491,16 @@ def _delivery_state(reminder, occurrences, attempts):
 
 
 async def _sync_reminder_budget(store, containers, *, legacy):
-    state = store._proactive_state
-    prefix = "_" if hasattr(store, "_reminders") else ""
-    users = {row["user_id"]: row for row in _rows(getattr(store, prefix + "users"))}
-    reminders = list(_rows(containers[prefix + "reminders"]))
-    occurrences = containers[prefix + "reminder_occurrences"]
-    attempts = containers[prefix + "reminder_delivery_attempts"]
-    # Release unsent cancelled/acknowledged slots BEFORE reserving a replacement.
-    for reminder in reminders:
-        key = (reminder["user_id"], f"reminder:{reminder['reminder_id']}")
-        reservation = state.reservations.get(key)
-        observed = _delivery_state(reminder, occurrences, attempts)
-        if reservation:
-            if observed == "accepted":
-                reservation["state"] = "accepted"
-            elif observed and reservation["state"] == "reserved":
-                reservation["state"] = "uncertain" if legacy else "dispatched"
-            elif (
-                reminder["status"] in {"cancelled", "acknowledged"}
-                and reservation["state"] == "reserved"
-            ):
-                reservation["state"] = "cancelled"
-    for reminder in reminders:
-        key = (reminder["user_id"], f"reminder:{reminder['reminder_id']}")
-        observed = _delivery_state(reminder, occurrences, attempts)
-        reservation = state.reservations.get(key)
-        if not observed and reminder["status"] not in {"pending", "sending"}:
-            continue
-        if reservation and reservation["state"] != "cancelled":
-            continue
-        result = await state._reserve(
-            users.get(reminder["user_id"]),
-            key[1],
-            "reminder",
-            reminder["scheduled_time"],
-            legacy=legacy,
-        )
-        if result["status"] == "budget_exhausted":
-            raise ProactiveBudgetExceeded("The shared daily message budget is full")
-        if observed:
-            state.reservations[key]["state"] = (
-                "uncertain" if legacy and observed == "dispatched" else observed
-            )
+    # Compatibility with existing local atomic command wrappers: never reserve or refuse
+    # participant requests, and discard obsolete ledger rows without touching Reminders.
+    await store._proactive_state._discard_reminder_reservations()
 
 
 def reminder_budget_transaction(method):
-    """Serialize local Reminder mutations with Coach reservations and roll back a refused command.
+    """Preserve local command atomicity without admitting participant requests to a budget.
 
-    The lock is task-reentrant for nested local Store helpers. Only trusted preexisting local
-    rows are grandfathered at entry (the SQL migration's cutover); new rows never receive that
-    exemption. Mutations run entirely on local containers, with no provider or network calls.
+    The lock is task-reentrant for nested local Store helpers. Obsolete Reminder reservations
+    are discarded without changing commitments. No provider or network calls run under it.
     """
 
     @wraps(method)

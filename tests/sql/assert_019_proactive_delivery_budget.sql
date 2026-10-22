@@ -9,16 +9,16 @@ BEGIN
  VALUES(91019001,'UTC',2,'00:00','00:00') RETURNING user_id INTO u;
  INSERT INTO public.user_profiles(telegram_chat_id,timezone)
  VALUES(91019002,'UTC') RETURNING user_id INTO other_u;
- r:=public.reserve_proactive_delivery(u,'reminder:first','reminder',date_trunc('minute',clock_timestamp()));
+ r:=public.reserve_proactive_delivery(u,'recovery:first','recovery',date_trunc('minute',clock_timestamp()));
  IF r->>'status'<>'reserved' THEN RAISE EXCEPTION 'first reservation failed'; END IF;
- IF public.reserve_proactive_delivery(u,'reminder:first','reminder',
+ IF public.reserve_proactive_delivery(u,'recovery:first','recovery',
    (r->'reservation'->>'scheduled_at')::timestamptz)<>jsonb_set(r,'{status}','"already_reserved"')
  THEN RAISE EXCEPTION 'reservation replay changed'; END IF;
- PERFORM public.reserve_proactive_delivery(u,'reminder:second','reminder',clock_timestamp());
- IF public.reserve_proactive_delivery(u,'reminder:third','reminder',clock_timestamp())->>'status'<>'budget_exhausted'
+ PERFORM public.reserve_proactive_delivery(u,'recovery:second','recovery',clock_timestamp());
+ IF public.reserve_proactive_delivery(u,'recovery:third','recovery',clock_timestamp())->>'status'<>'budget_exhausted'
  THEN RAISE EXCEPTION 'shared cap bypassed'; END IF;
- IF NOT public.release_proactive_delivery(u,'reminder:second') THEN RAISE EXCEPTION 'release failed'; END IF;
- IF public.release_proactive_delivery(other_u,'reminder:first') THEN RAISE EXCEPTION 'cross-owner release'; END IF;
+ IF NOT public.release_proactive_delivery(u,'recovery:second') THEN RAISE EXCEPTION 'release failed'; END IF;
+ IF public.release_proactive_delivery(other_u,'recovery:first') THEN RAISE EXCEPTION 'cross-owner release'; END IF;
  UPDATE public.user_profiles SET supabase_auth_id=auth WHERE user_id=u;
  INSERT INTO public.tasks(user_id,title,status) VALUES(u,'Private test','completed') RETURNING tasks.task_id INTO task_id;
  INSERT INTO public.reminders(user_id,task_id,scheduled_time,status,telegram_message_id,
@@ -143,5 +143,45 @@ DO $$ DECLARE t TEXT; fn TEXT; BEGIN
   IF NOT (SELECT prosecdef AND 'search_path=""'=ANY(proconfig) FROM pg_proc
     WHERE oid=('public.'||fn)::regprocedure) THEN RAISE EXCEPTION '019 RPC not hardened'; END IF;
  END LOOP;
+END $$;
+DO $$ DECLARE u UUID; task UUID; rid UUID; later_id UUID; v BIGINT; result JSONB;
+ auth UUID:='00000000-0000-0000-0000-000000019099'; at TIMESTAMPTZ:=clock_timestamp();
+BEGIN
+ INSERT INTO public.user_profiles(telegram_chat_id,timezone,daily_message_budget,supabase_auth_id)
+ VALUES(91019099,'UTC',0,auth) RETURNING user_id INTO u;
+ INSERT INTO public.tasks(user_id,title) VALUES(u,'Requested task') RETURNING task_id INTO task;
+ -- Direct writes, canonical scheduling, replacement and Later all ignore a zero budget.
+ INSERT INTO public.reminders(user_id,task_id,scheduled_time,intended_local_date,intended_local_time,intended_timezone)
+ VALUES(u,task,at,(at AT TIME ZONE 'UTC')::date,(at AT TIME ZONE 'UTC')::time,'UTC')
+ RETURNING reminder_id INTO rid;
+ UPDATE public.reminders SET status='sending' WHERE reminder_id=rid;
+ UPDATE public.reminders SET status='sent',telegram_message_id=99 WHERE reminder_id=rid;
+ result:=public.schedule_reminder_command(u,'requested',repeat('a',64),task,NULL,at,
+ (at AT TIME ZONE 'UTC')::date,(at AT TIME ZONE 'UTC')::time,'UTC');
+ later_id:=(result->'reminder'->>'reminder_id')::UUID;
+ result:=public.schedule_reminder_command(u,'replace',repeat('a',64),task,later_id,at+interval '1 hour',
+ (at AT TIME ZONE 'UTC')::date,((at+interval '1 hour') AT TIME ZONE 'UTC')::time,'UTC');
+ later_id:=(result->'reminder'->>'reminder_id')::UUID;
+ SELECT version INTO v FROM public.tasks WHERE task_id=task;
+ result:=public.apply_later_command(u,'later',repeat('a',64),later_id,v,1,at+interval '2 hours',
+ (at AT TIME ZONE 'UTC')::date,((at+interval '2 hours') AT TIME ZONE 'UTC')::time,'UTC',FALSE,NULL);
+ PERFORM public.acknowledge_activation_terms(auth,'fictional-policy');
+ PERFORM public.update_activation_profile(auth,'Fictional','UTC','07:00','23:00');
+ PERFORM public.create_activation_test_command(u,'activation',repeat('a',64),'Private test',FALSE,at,
+ (at AT TIME ZONE 'UTC')::date,(at AT TIME ZONE 'UTC')::time,'UTC');
+ IF EXISTS(SELECT 1 FROM public.proactive_reservations WHERE user_id=u) THEN
+ RAISE EXCEPTION 'participant request consumed proactive capacity'; END IF;
+ IF public.reserve_proactive_delivery(u,'blocked','recovery',at)->>'status'<>'budget_exhausted'
+ THEN RAISE EXCEPTION 'zero proactive budget ignored'; END IF;
+ UPDATE public.user_profiles SET daily_message_budget=1 WHERE user_id=u;
+ PERFORM public.reserve_proactive_delivery(u,'summary','recovery',at);
+ IF public.mark_proactive_dispatch(gen_random_uuid(),'summary') THEN RAISE EXCEPTION 'foreign recovery dispatch'; END IF;
+ IF NOT public.mark_proactive_dispatch(u,'summary') OR public.mark_proactive_dispatch(u,'summary')
+ THEN RAISE EXCEPTION 'recovery fence'; END IF;
+ IF public.release_proactive_delivery(u,'summary') THEN RAISE EXCEPTION 'dispatched recovery released'; END IF;
+ IF NOT public.finish_proactive_delivery(u,'summary','uncertain')
+ OR public.finish_proactive_delivery(u,'summary','accepted') THEN RAISE EXCEPTION 'recovery terminal replay'; END IF;
+ IF public.reserve_proactive_delivery(u,'next','recovery',at)->>'status'<>'budget_exhausted'
+ THEN RAISE EXCEPTION 'uncertain recovery did not count'; END IF;
 END $$;
 ROLLBACK;

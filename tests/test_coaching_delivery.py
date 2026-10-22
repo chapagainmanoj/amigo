@@ -132,7 +132,7 @@ async def test_shared_budget_is_atomic_and_cannot_be_supplied_by_caller(setup):
     store, _, user, _, _, state = setup
     results = await asyncio.gather(
         *[
-            store.proactive.reserve(user, f"reminder:{index}", "reminder", state["now"])
+            store.proactive.reserve(user, f"reminder:{index}", "recovery", state["now"])
             for index in range(8)
         ]
     )
@@ -140,31 +140,22 @@ async def test_shared_budget_is_atomic_and_cannot_be_supplied_by_caller(setup):
     assert sum(row["status"] == "budget_exhausted" for row in results) == 4
 
 
-async def test_existing_commitments_become_visible_debt_and_block_coach(setup):
+async def test_participant_reminders_do_not_create_debt_or_block_coach(setup):
     store, _, user, _, worker, state = setup
-    reminders = [
-        dict(
-            reminder_id=str(index),
-            user_id=user["user_id"],
-            status="pending",
-            scheduled_time=state["now"].isoformat(),
-        )
-        for index in range(5)
-    ]
+    reminders = [dict(reminder_id=str(index), user_id=user["user_id"], status="pending",
+                      scheduled_time=state["now"].isoformat()) for index in range(5)]
     await store.proactive.backfill_reminders([user], reminders)
-    assert len(store.proactive.reservations) == 5
-    assert sum(row["legacy_debt"] for row in store.proactive.reservations.values()) == 1
-    assert await worker.reconcile() == 0
-    assert store.proactive.deliveries == {}
+    assert store.proactive.reservations == {}
+    assert await worker.reconcile() == 1
 
 
 async def test_timezone_change_does_not_reopen_reserved_capacity(setup):
     store, _, user, _, _, state = setup
     user["daily_message_budget"] = 1
     at = state["now"].replace(hour=23)
-    await store.proactive.reserve(user, "first", "reminder", at)
+    await store.proactive.reserve(user, "first", "recovery", at)
     user["timezone"] = "Pacific/Auckland"
-    result = await store.proactive.reserve(user, "second", "reminder", at + timedelta(minutes=1))
+    result = await store.proactive.reserve(user, "second", "recovery", at + timedelta(minutes=1))
     assert result["status"] == "budget_exhausted"
 
 
@@ -377,7 +368,7 @@ async def test_consumed_budget_survives_program_content_deletion(setup):
     assert not store.proactive.deliveries
     row = next(iter(store.proactive.reservations.values()))
     assert row["program_id"] is None and row["state"] == "accepted"
-    result = await store.proactive.reserve(user, "new-reminder", "reminder", state["now"])
+    result = await store.proactive.reserve(user, "new-reminder", "recovery", state["now"])
     assert result["status"] == "budget_exhausted"
 
 
@@ -397,7 +388,7 @@ async def test_deleting_program_releases_undispatched_standalone_reservation(set
     await store.proactive.purge_programs(user["user_id"], [program["program_id"]])
     old = store.proactive.reservations[user["user_id"], "unused-coach"]
     assert old["state"] == "cancelled" and old["program_id"] is None
-    assert (await store.proactive.reserve(user, "new-reminder", "reminder", state["now"]))[
+    assert (await store.proactive.reserve(user, "new-reminder", "recovery", state["now"]))[
         "status"
     ] == "reserved"
 

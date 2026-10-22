@@ -398,9 +398,10 @@ No Supabase writes. Safe for CI/CD.
 
 Migrations 018/019 add owned versioned Coaching Programs, exact-draft approval callbacks,
 Program export/deletion, a shared proactive budget ledger and a fenced coaching outbox.
-Existing Reminder commitments consume capacity first; historical overflow is recorded as debt,
-not silently dropped. New Reminder scheduling can refuse before mutation when the shared profile
-budget is full. Coaching uses remaining capacity, selected days, quiet hours, one check-in/day,
+The profile budget covers Amigo-initiated Coach messages and recovery summaries only.
+Participant-requested Reminders, Later, and Activation test Reminders never consume or get refused
+by this budget. Existing Reminder commitments remain unchanged. Coaching uses selected days,
+quiet hours, remaining proactive capacity, one check-in/day,
 one missed follow-up then silence. Weekly review replaces a chosen check-in. Returning to Coach resumes that gate; program approval and extension remain separate choices.
 
 Coach, Reflect and fictional laundry Recommender have authored instructions, isolated Toolsets

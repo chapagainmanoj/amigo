@@ -327,6 +327,7 @@ class SetupTask(BaseModel):
 class EvalSetup(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    daily_message_budget: int | None = Field(default=None, ge=0)
     tasks: list[SetupTask] = Field(default_factory=list)
     history: list[dict[Literal["role", "content"], str]] = Field(default_factory=list)
 

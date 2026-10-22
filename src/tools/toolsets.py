@@ -13,7 +13,7 @@ from datetime import date
 
 from pydantic_ai import FunctionToolset, RunContext
 
-from src.commands.base import CommandContext, ProactiveBudgetExceeded, StaleVersionError
+from src.commands.base import CommandContext, StaleVersionError
 from src.commands.later import ApplyLaterCommand, LaterPolicy
 from src.commands.reminders import (
     CancelReminderCommand,
@@ -83,10 +83,7 @@ async def create_task(
 
     # Schedule reminder if time was provided
     if resolution:
-        try:
-            reminder_result = await _schedule_resolved_reminder(deps, task, resolution)
-        except ProactiveBudgetExceeded:
-            return f"Created task '{title}'. No Reminder scheduled: daily message budget is full."
+        reminder_result = await _schedule_resolved_reminder(deps, task, resolution)
         return f"Created task '{title}' with reminder for {reminder_result}."
 
     return f"Created task '{title}'."
@@ -156,10 +153,7 @@ async def schedule_reminder(
     blocked = _resolution_block_message(resolution, confirmed_time)
     if blocked:
         return blocked
-    try:
-        exact = await _schedule_resolved_reminder(deps, task, resolution)
-    except ProactiveBudgetExceeded:
-        return "Daily message budget is full. No Reminder was changed or scheduled."
+    exact = await _schedule_resolved_reminder(deps, task, resolution)
     return f"Reminder scheduled for '{task['title']}' on {exact}."
 
 
@@ -174,20 +168,17 @@ async def apply_later(
         reminder_id: The reminder_id from the active Reminders list in context.
     """
     deps = ctx.deps
-    try:
-        result = await ApplyLaterCommand(
-            deps.store,
-            LaterPolicy(deps.clock),
-        ).run(
-            CommandContext(
-                actor_user_id=deps.user["user_id"],
-                surface="telegram",
-                idempotency_key=f"telegram:{deps.turn_id}:later:{reminder_id}",
-            ),
-            reminder_id=reminder_id,
-        )
-    except ProactiveBudgetExceeded:
-        return "Daily message budget is full. The current Reminder was not changed."
+    result = await ApplyLaterCommand(
+        deps.store,
+        LaterPolicy(deps.clock),
+    ).run(
+        CommandContext(
+            actor_user_id=deps.user["user_id"],
+            surface="telegram",
+            idempotency_key=f"telegram:{deps.turn_id}:later:{reminder_id}",
+        ),
+        reminder_id=reminder_id,
+    )
     local_time = result["intended_local_time"][:5]
     adjustment = " after quiet hours" if result["quiet_hours_adjusted"] else ""
     return (

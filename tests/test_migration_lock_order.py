@@ -251,7 +251,7 @@ def test_all_row_lock_modes_are_checked(lock_mode):
     "name",
     [
         "reserve_proactive_delivery",
-        "update_reminder_budget",
+        "mark_proactive_dispatch",
         "set_proactive_consent",
         "enqueue_coaching_delivery",
         "mark_coaching_dispatch",
@@ -274,8 +274,11 @@ def test_proactive_profile_lock_precedes_budget_advisory_lock(name):
 
 def test_function_bodies_do_not_swallow_adjacent_017_to_019_functions():
     bodies = _functions()
-    for name in ("save_mode_conversation", "coaching_program_command", "update_reminder_budget"):
+    for name in (
+        "save_mode_conversation",
+        "coaching_program_command",
+        "validate_reminder_schedule",
+    ):
         assert name in bodies
         assert not re.search(r"CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION", bodies[name])
-    assert "public.proactive_reservations" in bodies["update_reminder_budget"]
-    assert "immutable_reminder_schedule" in bodies["update_reminder_budget"]
+    assert "immutable_reminder_schedule" in bodies["validate_reminder_schedule"]

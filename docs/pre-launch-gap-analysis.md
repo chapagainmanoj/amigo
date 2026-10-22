@@ -123,7 +123,7 @@ The same evidence exposes the following gaps that must be treated explicitly:
 | No temporal or semantic memory | Current memory is message history, tasks, and optional session summaries. There is no Graphiti, pgvector, contradiction handling, or routine learning. | **High** | Remove current claims. Later define memory provenance, confidence, expiry, correction, retrieval, and deletion before implementation. | Claim removal before launch; feature later |
 | Memory admission and rights evidence missing | Migration020 and the default-off Inspector provide owned versioned records, pauses, correction and scoped rights operations. Real eligibility, privacy/backup verification, demand and usability evidence remain missing. | **Partially resolved locally** | Keep admission off until the complete trust contract is independently verified. | Before advertising memory |
 | Adaptive coaching is only a stored default | `coaching_profile` exists but is not learned or applied dynamically; the agent uses a static persona. | **High** | Describe the current personality as fixed. Define signals, safe bounds, overrides, and evaluation before adaptation. | Before claiming adaptation |
-| Proactive admission needs deployment/trial proof | Migration019 adds a shared budget and bounded coaching outbox; legacy over-budget commitments remain explicit debt. Coach admission defaults off. | **Partially resolved locally** | Verify reviewed privacy admission, production cutover and 14-day timing evidence before enabling check-ins. | Before proactive check-ins |
+| Proactive admission needs deployment/trial proof | Migration019 budgets Coach messages and recovery summaries only; participant-requested Reminders never count or get refused. Coach admission defaults off. | **Partially resolved locally** | Verify reviewed privacy admission, production cutover and 14-day timing evidence before enabling check-ins. | Before proactive check-ins |
 | No user-facing reminder preferences | Users cannot set quiet hours, wake/sleep times, categories, cadence, or notification limits. | **High** | Add minimal Preferences UI and Telegram controls for mute, quiet hours, timezone, and reminder intensity. | Before broader beta |
 | Dashboard snooze did not reschedule the live job | Dashboard Later now routes through the authenticated backend and the same durable replacement-Reminder transition used by Telegram. | **Resolved locally** | Verify the outbox projection and replacement delivery in staging. | Staging evidence before external beta |
 | “Deferred to tomorrow” is incomplete | A deferred task is not proactively carried over or scheduled for review; it is only seen when the user initiates another turn. | **High** | Define carry-over semantics and schedule a next-day check-in or create a correctly dated task. | Before claiming automatic follow-up |
@@ -277,9 +277,10 @@ trustworthy reminders, honest positioning, fast onboarding, and privacy cannot.
 
 Migrations 018/019 add owned versioned Coaching Programs, exact-draft approval callbacks,
 Program export/deletion, a shared proactive budget ledger and a fenced coaching outbox.
-Existing Reminder commitments consume capacity first; historical overflow is recorded as debt,
-not silently dropped. New Reminder scheduling can refuse before mutation when the shared profile
-budget is full. Coaching uses remaining capacity, selected days, quiet hours, one check-in/day,
+The profile budget covers Amigo-initiated Coach messages and recovery summaries only.
+Participant-requested Reminders, Later, and Activation test Reminders never consume or get refused
+by this budget. Existing Reminder commitments remain unchanged. Coaching uses selected days,
+quiet hours, remaining proactive capacity, one check-in/day,
 one missed follow-up then silence. Weekly review replaces a chosen check-in. Returning to Coach resumes that gate; program approval and extension remain separate choices.
 
 Coach, Reflect and fictional laundry Recommender have authored instructions, isolated Toolsets
