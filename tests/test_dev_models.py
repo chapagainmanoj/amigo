@@ -241,3 +241,63 @@ def test_cli_environment_preserves_only_known_identity_and_subscription_auth():
         assert subscription_cli_environment() == allowed
     with patch.dict("os.environ", {}, clear=True):
         assert subscription_cli_environment() == {}
+
+
+async def test_offline_profile_sends_bounded_public_settings_without_thinking():
+    import httpx
+    from pydantic_ai.providers.ollama import OllamaProvider
+
+    requests = []
+
+    async def reply(request):
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "id": "fictional",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "qwen3.5:4b",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": "Ready."},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(reply))
+    provider = OllamaProvider(base_url="http://offline.invalid/v1", http_client=client)
+    config = Settings(_env_file=None, app_env="development", google_api_key="")
+    with (
+        patch("src.config.settings", config),
+        patch("src.agent.runtime._provider_for", return_value=provider),
+    ):
+        model = await ModeRuntime(build_registry()).model_for("ollama:qwen3.5:4b")
+        result = await Agent(model).run("Fictional readiness test.")
+    assert result.output == "Ready."
+    body = json.loads(requests[0].content)
+    assert body["max_completion_tokens"] == 512
+    assert body["reasoning_effort"] == "none"
+    assert requests[0].extensions["timeout"] == {
+        "connect": 60,
+        "read": 60,
+        "write": 60,
+        "pool": 60,
+    }
+    await client.aclose()
+
+
+async def test_production_ollama_factory_keeps_existing_provider_defaults():
+    sentinel = object()
+    config = Settings(_env_file=None, app_env="production")
+    with (
+        patch("src.config.settings", config),
+        patch("src.agent.runtime.infer_model", return_value=sentinel) as factory,
+    ):
+        model = await ModeRuntime(build_registry()).model_for("ollama:qwen3.5:4b")
+    assert model is sentinel
+    factory.assert_called_once()

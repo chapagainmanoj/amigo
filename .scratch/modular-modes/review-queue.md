@@ -572,3 +572,24 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   cross-owner metadata query regressions pass; Daily golden/schema and111 currency pass.
   Removed formatter-only Store churn after AST-equivalence check; only new methods remain.
 - Gate A source inputs changed; no release artifact certified. No Memory admission enablement.
+
+## Phase 5/6 model iteration follow-up — bounded offline profile and observed reply defects
+
+- Parent11e923d; files src/agent/runtime.py, src/agent/coach.py, src/agent/reflect.py,
+  tests/test_dev_models.py. Protected files:none.
+- Actual unbounded Ollama first cases took64–72s and produced excessive hidden thinking; original
+  partial runs cancelled explicitly and preserved unchanged, with separate cancellation manifest.
+  Development-only public OllamaModel defaults: max_tokens512, reasoning_effort none, timeout60.
+  Production provider defaults unchanged. Mock outgoing-body test verifies SDK mapping to
+  max_completion_tokens512/reasoning_effort none/timeout; first bounded Coach case17.7s.
+  Primary protocol reference: https://github.com/ollama/ollama/blob/main/docs/api/openai-compatibility.mdx
+- Full Claude suites: Coach40/48, Reflect37/60, Recommender28/48 case executions pass; no fallback
+  certification. Original artifacts retain failures, including wording-sensitive assertions,
+  excess sentence count and redundant draft+approval preview calls. No assertions weakened.
+- Coach prompt now avoids redundant activate_program immediately after draft_program and avoids
+  pitching a Program after a clinical refusal unless separately requested. Reflect prompt now
+  enforces existing six-sentence contract. Revised cases retained separately; no old artifact
+  rescoring. Daily instructions/Tools byte-identical.
+- Evidence: full1323passed38.28s; Ruff/diff clean;111 Gate A currency and Daily golden pass.
+  Execution source changes invalidate older evidence. Final sole Gemini batches follow this
+  source freeze; candidates remain Planned unless all required model/release evidence qualifies.

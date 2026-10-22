@@ -231,6 +231,20 @@ class ModeRuntime:
                     model_type = LoggedGoogleModel
                 provider, _, model_name = reference.partition(":")
                 model = model_type(model_name, provider=_provider_for(provider))
+            elif reference.startswith("ollama:") and not production:
+                from pydantic_ai.models.ollama import OllamaModel
+
+                # Bound the offline development profile; disable hidden thinking on
+                # boolean-thinking models so small local backups return promptly.
+                model = OllamaModel(
+                    reference.partition(":")[2],
+                    provider=_provider_for("ollama"),
+                    settings={
+                        "max_tokens": 512,
+                        "openai_reasoning_effort": "none",
+                        "timeout": 60,
+                    },
+                )
             else:
                 model = infer_model(reference, _provider_for)
             self._models[cache_key] = model
