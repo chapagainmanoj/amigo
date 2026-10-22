@@ -821,3 +821,11 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Reflect follow-up98e8d66 fixes independent disclosure-negation finding; reviewer reproduced
   correction and41testsPASS2.23s. No claim of clinical review/comprehensive detection.
   Latestfull1401passed; release Gate A evidence absent and all candidates remainPlanned.
+
+### Review fix2 / Coach rows — cleanup failures also isolated
+
+- Author330e309; scheduler/coaching.py, delivery tests; protected/SQL:none.
+- Each Program reconcile and delivery claim isolated, including malformed claims and failed error
+  cleanup. Content-free warning labels. Later eligible Program/check-in still reconciles/sends.
+- Root50deliverytestsPASS0.14s; author74focusedPASS2.64s; fullRuff/diffclean.
+  Latestfull1401passed,168currency/suggestion checks pass; no Gate A release certification.

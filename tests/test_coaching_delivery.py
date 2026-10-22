@@ -627,3 +627,59 @@ async def test_unrelated_progress_does_not_suppress_current_check_in(setup, sour
     await worker.reconcile()
     assert await worker.drain_once() == 1
     assert len(channel.sent) == 1
+
+
+async def test_reconcile_isolates_one_program_lookup_failure(setup, monkeypatch, caplog):
+    store, _, _, program, worker, _ = setup
+    import uuid
+
+    another = copy.deepcopy(program)
+    another["program_id"] = str(uuid.uuid4())
+    store.programs[another["program_id"]] = another
+    original = store.get_user_by_id
+    calls = 0
+
+    async def fail_first(user_id):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("PRIVATE_PROGRAM_ERROR")
+        return await original(user_id)
+
+    monkeypatch.setattr(store, "get_user_by_id", fail_first)
+    assert await worker.reconcile() == 1
+    delivery = next(iter(store.proactive.deliveries.values()))
+    assert delivery["program_id"] == another["program_id"]
+    assert "PRIVATE_PROGRAM_ERROR" not in caplog.text
+
+
+async def test_drain_isolates_one_claim_failure_even_when_cleanup_fails(setup, monkeypatch, caplog):
+    from unittest.mock import AsyncMock
+
+    store, channel, _, _, worker, _ = setup
+    await worker.reconcile()
+    valid = (await store.claim_coaching_deliveries(worker.worker_id))[0]
+    faulted = {**valid, "delivery_key": "faulted-occurrence"}
+    monkeypatch.setattr(
+        store, "claim_coaching_deliveries", AsyncMock(return_value=[None, faulted, valid])
+    )
+    original_get, original_finish = store.get_user_by_id, store.finish_coaching_delivery
+    first = True
+
+    async def lookup(user_id):
+        nonlocal first
+        if first:
+            first = False
+            raise RuntimeError("PRIVATE_LOOKUP_ERROR")
+        return await original_get(user_id)
+
+    async def finish(user_id, key, token, outcome):
+        if key == "faulted-occurrence":
+            raise RuntimeError("PRIVATE_CLEANUP_ERROR")
+        return await original_finish(user_id, key, token, outcome)
+
+    monkeypatch.setattr(store, "get_user_by_id", lookup)
+    monkeypatch.setattr(store, "finish_coaching_delivery", finish)
+    assert await worker.drain_once() == 1
+    assert len(channel.sent) == 1
+    assert "PRIVATE_" not in caplog.text

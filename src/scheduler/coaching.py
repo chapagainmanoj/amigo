@@ -1,11 +1,14 @@
 """Durable, bounded coaching delivery; disabled until reviewed admission is explicitly enabled."""
 
+import logging
 import uuid
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from src.memory.proactive import instant
 from src.utils import default_clock
+
+logger = logging.getLogger(__name__)
 
 LATE_WINDOW = timedelta(minutes=15)
 
@@ -113,23 +116,26 @@ class CoachingDeliveryWorker:
             return 0
         queued = 0
         for program in await self.store.list_active_coaching_programs():
-            user = await self.store.get_user_by_id(program["user_id"])
-            if not user or not await self.store.has_coaching_consent(user["user_id"]):
-                continue
-            history = await self.store.get_coaching_delivery_history(
-                user["user_id"], program["program_id"]
-            )
-            plan = plan_coaching_delivery(program, user, self.clock.utc_now(), history)
-            if plan:
-                if not await self._admitted():
-                    return queued
-                result = await self.store.enqueue_coaching_delivery(
-                    user["user_id"],
-                    program["program_id"],
-                    program["version"],
-                    **plan,
+            try:
+                user = await self.store.get_user_by_id(program["user_id"])
+                if not user or not await self.store.has_coaching_consent(user["user_id"]):
+                    continue
+                history = await self.store.get_coaching_delivery_history(
+                    user["user_id"], program["program_id"]
                 )
-                queued += result["status"] == "queued"
+                plan = plan_coaching_delivery(program, user, self.clock.utc_now(), history)
+                if plan:
+                    if not await self._admitted():
+                        return queued
+                    result = await self.store.enqueue_coaching_delivery(
+                        user["user_id"],
+                        program["program_id"],
+                        program["version"],
+                        **plan,
+                    )
+                    queued += result["status"] == "queued"
+            except Exception:
+                logger.warning("Coaching reconciliation failed for one Program")
         return queued
 
     async def drain_once(self, limit=25):
@@ -137,9 +143,9 @@ class CoachingDeliveryWorker:
             return 0
         sent = 0
         for row in await self.store.claim_coaching_deliveries(self.worker_id, limit):
-            user_id, key, token = row["user_id"], row["delivery_key"], row["claim_token"]
             dispatched = False
             try:
+                user_id, key, token = row["user_id"], row["delivery_key"], row["claim_token"]
                 user = await self.store.get_user_by_id(user_id)
                 program = await self.store.get_coaching_program(user_id, row["program_id"])
                 history = await self.store.get_coaching_delivery_history(user_id, row["program_id"])
@@ -226,10 +232,15 @@ class CoachingDeliveryWorker:
                 await self.store.finish_coaching_delivery(user_id, key, token, outcome)
                 sent += outcome == "accepted"
             except Exception:
-                await self.store.finish_coaching_delivery(
-                    user_id,
-                    key,
-                    token,
-                    "uncertain" if dispatched else "cancelled",
-                )
+                logger.warning("Coaching delivery failed for one occurrence")
+                if isinstance(row, dict) and all(
+                    name in row for name in ("user_id", "delivery_key", "claim_token")
+                ):
+                    try:
+                        await self.store.finish_coaching_delivery(
+                            row["user_id"], row["delivery_key"], row["claim_token"],
+                            "uncertain" if dispatched else "cancelled",
+                        )
+                    except Exception:
+                        logger.warning("Coaching delivery cleanup failed for one occurrence")
         return sent
