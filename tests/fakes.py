@@ -411,6 +411,9 @@ class FakeStore:
             user_id, memory_id, expected_version, idempotency_key, payload_hash
         )
 
+    async def purge_memory_claims(self):
+        return await self._memory_state.purge_claims()
+
     async def disable_memory(self, user_id, expected_version, idempotency_key, payload_hash):
         await self._memory_user(user_id)
         return await self._memory_state.disable(

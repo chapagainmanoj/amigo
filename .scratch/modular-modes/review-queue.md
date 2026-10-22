@@ -688,3 +688,15 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   stale-token/25blocked→26th queue drain checks PASS. Reviewer cluster stopped.
 - Root full1362passed20.34s; Ruff/diff clean,111currency/Daily golden included. Author scheduler
   smoke passed. Two-attempt cap/one notice follow separately in fix3. No release certification.
+
+### Review fix14 — Forget digests, stale claims and retention policy
+
+- Author3af05ab; protected020/assert020, all3Stores, MemoryService/durable and tests;
+  proposals/memory-retention-policy.md explicitly records retained version policy and unverified
+  operational7dayactive/30daybackup Forget propagation requirement. Admission remains off.
+- Forget deletes all owned confirmation claims and nulls every owned receipt payload_hash,
+  including current Forget; hash-bearing replay results scrubbed. Old write keys cannot replay;
+  safe Forget retry returns status only. Prune removes consumed/expired claims even admission-off.
+- Independent dev_runtime fresh45-file CI SQL chain and ownership/hash/replay/history probes PASS
+  at020SHA83c26e01…; reviewer cluster stopped. Rootfull1372passed21.08s/Ruff/diffclean;
+ 111currency and Daily golden included. No new privacy notice promise or release certification.

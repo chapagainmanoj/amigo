@@ -52,7 +52,7 @@ CREATE TABLE public.memory_confirmation_claims (
 );
 CREATE TABLE public.memory_command_receipts (
  user_id UUID NOT NULL REFERENCES public.user_profiles(user_id) ON DELETE CASCADE,
- idempotency_key TEXT NOT NULL, payload_hash TEXT NOT NULL, operation TEXT NOT NULL,
+ idempotency_key TEXT NOT NULL, payload_hash TEXT, operation TEXT NOT NULL,
  memory_id UUID, version INT, result_metadata JSONB,
  PRIMARY KEY(user_id,idempotency_key)
 );
@@ -131,6 +131,12 @@ BEGIN
  THEN RAISE EXCEPTION 'Memory replay metadata required'; END IF;
  SELECT * INTO r FROM public.memory_command_receipts WHERE user_id=p_user_id AND idempotency_key=key;
  IF FOUND THEN
+ IF r.payload_hash IS NULL THEN
+   IF r.operation=p_operation AND (p_operation='confirm_forget_all_memory'
+     OR (p_operation='forget_memory' AND r.result_metadata->>'memory_id'=p_args->>'memory_id'))
+   THEN RETURN r.result_metadata; END IF;
+   RAISE EXCEPTION 'idempotency key reused';
+ END IF;
  IF r.payload_hash<>digest OR r.operation<>p_operation THEN RAISE EXCEPTION 'idempotency key reused'; END IF;
  IF r.version IS NOT NULL THEN SELECT * INTO m FROM public.memory_versions WHERE user_id=p_user_id
  AND memory_id=r.memory_id AND version=r.version;
@@ -272,8 +278,9 @@ BEGIN
  UPDATE public.memory_versions SET text=NULL,source_mode_id=NULL,source_channel=NULL,source_message_id=NULL,
  source_date=NULL,creation_path=NULL,scopes='{}',valid_until=NULL,reconfirm_at=NULL,state='forgotten'
  WHERE user_id=p_user_id AND memory_id=ANY(ids);
- UPDATE public.memory_confirmation_claims SET consumed_at=clock_timestamp() WHERE user_id=p_user_id
- AND (memory_id=ANY(ids) OR operation='forget_all' OR p_operation='confirm_forget_all_memory');
+ -- Even an unrelated outstanding preview can encode the forgotten text in its digest.
+ DELETE FROM public.memory_confirmation_claims WHERE user_id=p_user_id;
+ UPDATE public.memory_command_receipts SET payload_hash=NULL WHERE user_id=p_user_id;
  result:=CASE WHEN p_operation='forget_memory' THEN jsonb_build_object('status','forgotten','memory_id',m.memory_id)
  ELSE jsonb_build_object('status','forgotten','count',coalesce(cardinality(ids),0)) END;
  END IF;
@@ -285,10 +292,23 @@ BEGIN
  ELSIF p_operation='disable_memory' THEN result:=jsonb_build_object('status','disabled','settings',to_jsonb(s));
  ELSIF result IS NULL THEN result:=jsonb_build_object('memory',to_jsonb(m),'settings',to_jsonb(s)); END IF;
  INSERT INTO public.memory_command_receipts(user_id,idempotency_key,payload_hash,operation,memory_id,version,result_metadata)
- VALUES(p_user_id,key,digest,p_operation,CASE WHEN result ? 'memory' THEN m.memory_id END,
+ VALUES(p_user_id,key,CASE WHEN p_operation IN ('forget_memory','confirm_forget_all_memory') THEN NULL ELSE digest END,
+ p_operation,CASE WHEN result ? 'memory' THEN m.memory_id END,
  CASE WHEN result ? 'memory' THEN m.version END,CASE WHEN NOT(result ? 'memory') THEN result END);
  RETURN result;
 END $$;
+-- Deliberately preserves superseded/expired history until participant Forget or withdrawal.
+-- Only expired or consumed confirmation digests are removed by periodic maintenance.
+CREATE FUNCTION public.purge_memory_claims() RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE removed INT; BEGIN
+ DELETE FROM public.memory_confirmation_claims
+ WHERE consumed_at IS NOT NULL OR expires_at<=clock_timestamp();
+ GET DIAGNOSTICS removed = ROW_COUNT;
+ RETURN jsonb_build_object('claims',removed);
+END $$;
+REVOKE ALL ON FUNCTION public.purge_memory_claims() FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.purge_memory_claims() TO service_role;
 REVOKE ALL ON FUNCTION public.memory_effective_state(public.memory_versions,TEXT),
  public.memory_normalize_payload(JSONB),public.memory_payload_digest(JSONB),
  public.memory_inventory_digest(UUID),public.memory_command(UUID,TEXT,JSONB) FROM PUBLIC,anon,authenticated,service_role;
@@ -301,6 +321,7 @@ DO $$ BEGIN
  OR to_regprocedure('public.memory_command(uuid,text,jsonb)') IS NULL
  OR to_regprocedure('public.memory_payload_digest(jsonb)') IS NULL
  OR to_regprocedure('public.memory_inventory_digest(uuid)') IS NULL
+ OR to_regprocedure('public.purge_memory_claims()') IS NULL
  OR NOT EXISTS(SELECT 1 FROM public.memory_admission_controls WHERE singleton AND NOT ready)
  THEN RAISE EXCEPTION '020 objects were not created with admission off'; END IF;
  INSERT INTO public.schema_migrations(version) VALUES(20);

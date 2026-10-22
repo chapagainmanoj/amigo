@@ -116,6 +116,7 @@ class MemoryService:
 
     async def prune(self):
         await self._prune()
+        return await self.store.purge_memory_claims()
 
     async def _prune(self):
         now = memory_now(self.clock)

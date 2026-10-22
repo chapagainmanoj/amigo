@@ -139,11 +139,20 @@ class LocalMemoryState:
             raise StaleVersionError("Memory version changed")
         return row
 
-    async def _replay(self, user_id, key, digest, operation):
+    async def _replay(self, user_id, key, digest, operation, memory_id=None):
         if not key or not digest:
             raise ValueError("Memory replay metadata required")
         old = self.receipts.get((user_id, key))
         if old:
+            if old["payload_hash"] is None:
+                if old["operation"] == operation and (
+                    operation == "confirm_forget_all_memory"
+                    or (
+                        operation == "forget_memory" and old["result"].get("memory_id") == memory_id
+                    )
+                ):
+                    return copy.deepcopy(old["result"])
+                raise IdempotencyConflictError("Memory command key was retired after forgetting")
             if old["payload_hash"] != digest or old["operation"] != operation:
                 raise IdempotencyConflictError("Memory command key was reused")
             result = copy.deepcopy(old["result"])
@@ -162,7 +171,11 @@ class LocalMemoryState:
             else copy.deepcopy(result)
         )
         self.receipts[user_id, key] = dict(
-            payload_hash=digest, result=retained, operation=operation
+            payload_hash=None
+            if operation in {"forget_memory", "confirm_forget_all_memory"}
+            else digest,
+            result=retained,
+            operation=operation,
         )
         return copy.deepcopy(result)
 
@@ -509,15 +522,15 @@ class LocalMemoryState:
             for row in self.uses
             if not (row["user_id"] == user_id and row["memory_id"] in memory_ids)
         ]
-        for claim in self.claims.values():
-            if claim["user_id"] == user_id and (
-                claim["memory_id"] in memory_ids or claim["operation"] == "forget_all"
-            ):
-                claim["consumed_at"] = _now().isoformat()
+        # A claim may contain a digest of the just-forgotten content, even for a new item.
+        self.claims = {key: row for key, row in self.claims.items() if row["user_id"] != user_id}
+        for (actor, _), receipt in self.receipts.items():
+            if actor == user_id:
+                receipt["payload_hash"] = None
 
     async def forget(self, user_id, memory_id, version, key, digest):
         async with self.lock:
-            replay = await self._replay(user_id, key, digest, "forget_memory")
+            replay = await self._replay(user_id, key, digest, "forget_memory", memory_id)
             if replay is not None:
                 return replay
             await self._owned(user_id, memory_id, version)
@@ -547,10 +560,6 @@ class LocalMemoryState:
                 raise InvalidTransitionError("Memory inventory changed")
             identities = {row["memory_id"] for row in rows if row["state"] != "forgotten"}
             await self._purge(user_id, identities)
-            # Forget All also invalidates every outstanding ephemeral candidate's metadata.
-            for item in self.claims.values():
-                if item["user_id"] == user_id:
-                    item["consumed_at"] = _now().isoformat()
             settings["version"] += 1
             self.settings[user_id] = settings
             return await self._receipt(
@@ -599,3 +608,14 @@ class LocalMemoryState:
                 dict(status="disabled", settings=settings),
                 operation="disable_memory",
             )
+
+    async def purge_claims(self):
+        """Remove expired/consumed digests; keep visible item version history until Forget/off."""
+        async with self.lock:
+            before = len(self.claims)
+            self.claims = {
+                token: row
+                for token, row in self.claims.items()
+                if row["consumed_at"] is None and _now(row["expires_at"]) > _now()
+            }
+            return {"claims": before - len(self.claims)}

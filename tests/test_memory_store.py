@@ -6,6 +6,7 @@ into the same contract suite and does not claim to simulate SQL isolation/permis
 
 import asyncio
 import copy
+import hashlib
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
@@ -37,10 +38,12 @@ def payload(**overrides):
 
 class _RPC:
     def __init__(self, backing, name, args):
-        assert name == "memory_command"
-        self.backing, self.args = backing, args
+        assert name in {"memory_command", "purge_memory_claims"}
+        self.backing, self.args, self.name = backing, args, name
 
     async def execute(self):
+        if self.name == "purge_memory_claims":
+            return SimpleNamespace(data=await self.backing.purge_memory_claims())
         args = self.args
         result = await getattr(self.backing, args["p_operation"])(
             args["p_user_id"], **args["p_args"]
@@ -178,8 +181,8 @@ async def test_correct_share_lifecycle_optimistic_and_purge_all_versions(store):
         and r["state"] == "forgotten"
         for r in data["memories"]
     )
-    replay = await api.confirm_memory_save(user, "gone", payload(), "save", "save")
-    assert replay["memory"]["text"] is None
+    with pytest.raises(IdempotencyConflictError):
+        await api.confirm_memory_save(user, "gone", payload(), "save", "save")
 
 
 async def test_temporal_reconfirmation_goal_completion_and_learning_pause(store):
@@ -347,3 +350,71 @@ async def test_disable_frees_global_trial_slot_but_pause_does_not(store):
     settings = await api.get_memory_settings(user)
     await api.disable_memory(user, settings["version"], "disable", "disable")
     assert (await save(api, waiting))["settings"]["enabled"] is True
+
+
+async def test_forget_deletes_all_owned_claims_and_hashes_with_safe_scoped_replay(store):
+    api, backing, user, other, _ = store
+    backing._memory_state.admission_enabled = True
+    row = (await save(api, user))["memory"]
+    foreign = (await save(api, other, "foreign"))["memory"]
+    settings = await api.get_memory_settings(user)
+    await api.prepare_memory_confirmation(
+        user, "save", memory_payload_digest(payload()), settings["version"]
+    )
+    foreign_settings = await api.get_memory_settings(other)
+    await api.prepare_memory_confirmation(
+        other, "save", memory_payload_digest(payload()), foreign_settings["version"]
+    )
+    result = await api.forget_memory(user, row["memory_id"], row["version"], "forget", "forget")
+    assert not any(item["user_id"] == user for item in backing._memory_state.claims.values())
+    assert all(
+        item["payload_hash"] is None
+        for (actor, _), item in backing._memory_state.receipts.items()
+        if actor == user
+    )
+    assert any(item["user_id"] == other for item in backing._memory_state.claims.values())
+    assert all(
+        item["payload_hash"] is not None
+        for (actor, _), item in backing._memory_state.receipts.items()
+        if actor == other
+    )
+    assert (
+        await api.forget_memory(user, row["memory_id"], row["version"], "forget", "forget")
+        == result
+    )
+    with pytest.raises(IdempotencyConflictError):
+        await api.forget_memory(user, foreign["memory_id"], foreign["version"], "forget", "forget")
+    with pytest.raises(IdempotencyConflictError):
+        await api.confirm_memory_save(
+            user, "deleted", payload(), "save", "save", True, MEMORY_POLICY_VERSION
+        )
+
+
+async def test_claim_maintenance_purges_consumed_and_expired_but_keeps_live_and_version_history(
+    store,
+):
+    api, backing, user, other, clock = store
+    backing._memory_state.admission_enabled = True
+    row = (await save(api, user, value=payload(valid_until="2026-10-23")))["memory"]
+    await save(
+        api,
+        user,
+        "correct",
+        payload(text="Fictional correction", valid_until="2026-10-23"),
+        "correct",
+        row,
+    )
+    settings = await api.get_memory_settings(user)
+    await api.prepare_memory_confirmation(
+        user, "save", memory_payload_digest(payload()), settings["version"]
+    )
+    clock["now"] += timedelta(days=2)
+    live = await api.prepare_memory_confirmation(other, "save", memory_payload_digest(payload()), 0)
+    result = await api.purge_memory_claims()
+    assert result == {"claims": 3}
+    assert len(backing._memory_state.claims) == 1
+    assert hashlib.sha256(live["token"].encode()).hexdigest() in backing._memory_state.claims
+    history = (await api.export_memory_data(user))["memories"]
+    assert len(history) == 2 and all(item["text"] for item in history)
+    assert {item["state"] for item in history} == {"superseded", "expired"}
+    assert await api.purge_memory_claims() == {"claims": 0}

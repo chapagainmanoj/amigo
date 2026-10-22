@@ -56,9 +56,14 @@ BEGIN
  IF EXISTS(SELECT 1 FROM public.memory_versions WHERE memory_id=m AND
  (text IS NOT NULL OR source_mode_id IS NOT NULL OR cardinality(scopes)<>0 OR state<>'forgotten'))
  OR EXISTS(SELECT 1 FROM public.memory_uses WHERE memory_id=m) THEN RAISE EXCEPTION 'purge incomplete'; END IF;
- r:=public.memory_command(u,'confirm_memory_save',jsonb_build_object('token',token,'payload',p,
+ BEGIN
+ PERFORM public.memory_command(u,'confirm_memory_save',jsonb_build_object('token',token,'payload',p,
  'idempotency_key','save','payload_hash','save','enable_memory',TRUE,'policy_version','memory-explicit-v1'));
- IF r->'memory'->>'text' IS NOT NULL THEN RAISE EXCEPTION 'idempotency resurrected plaintext'; END IF;
+ RAISE EXCEPTION 'retired save command replayed'; EXCEPTION WHEN raise_exception THEN
+ IF SQLERRM<>'idempotency key reused' THEN RAISE; END IF; END;
+ IF EXISTS(SELECT 1 FROM public.memory_confirmation_claims WHERE user_id=u)
+ OR EXISTS(SELECT 1 FROM public.memory_command_receipts WHERE user_id=u AND payload_hash IS NOT NULL)
+ THEN RAISE EXCEPTION 'forget retained claims or receipt hashes'; END IF;
  IF EXISTS(SELECT 1 FROM public.memory_command_receipts WHERE result_metadata::TEXT LIKE '%Fictional%') THEN RAISE EXCEPTION 'receipt content'; END IF;
  IF has_table_privilege('service_role','public.memory_admission_controls','UPDATE')
  OR has_table_privilege('service_role','public.memory_versions','SELECT')
@@ -126,5 +131,22 @@ BEGIN
  'idempotency_key','fresh','payload_hash','fresh'));
  RAISE EXCEPTION 'fresh consent skipped'; EXCEPTION WHEN raise_exception THEN
  IF SQLERRM NOT LIKE 'invalid transition: Memory opt-in%' THEN RAISE; END IF; END;
+END $$;
+DO $$ DECLARE u UUID; foreign_id UUID; p JSONB; token TEXT; r JSONB; m UUID; n INT; BEGIN
+ INSERT INTO public.user_profiles(telegram_chat_id) VALUES(91020201) RETURNING user_id INTO u;
+ INSERT INTO public.user_profiles(telegram_chat_id) VALUES(91020202) RETURNING user_id INTO foreign_id;
+ -- Only fictional metadata is inserted directly to check cleanup independently of admission.
+ INSERT INTO public.memory_confirmation_claims VALUES('consumed',u,'save',repeat('a',64),0,NULL,NULL,
+ clock_timestamp()+interval '5 minutes',clock_timestamp());
+ INSERT INTO public.memory_confirmation_claims VALUES('expired',u,'save',repeat('b',64),0,NULL,NULL,
+ clock_timestamp()-interval '1 second',NULL);
+ INSERT INTO public.memory_confirmation_claims VALUES('live',foreign_id,'save',repeat('c',64),0,NULL,NULL,
+ clock_timestamp()+interval '5 minutes',NULL);
+ r:=public.purge_memory_claims();
+ IF (r->>'claims')::INT<2 OR EXISTS(SELECT 1 FROM public.memory_confirmation_claims WHERE token_hash IN ('consumed','expired'))
+ OR NOT EXISTS(SELECT 1 FROM public.memory_confirmation_claims WHERE token_hash='live') THEN RAISE EXCEPTION 'claim retention cleanup'; END IF;
+ IF has_function_privilege('anon','public.purge_memory_claims()','EXECUTE')
+ OR has_function_privilege('authenticated','public.purge_memory_claims()','EXECUTE')
+ OR NOT has_function_privilege('service_role','public.purge_memory_claims()','EXECUTE') THEN RAISE EXCEPTION 'claim purge permissions'; END IF;
 END $$;
 ROLLBACK;

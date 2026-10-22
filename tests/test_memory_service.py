@@ -605,3 +605,18 @@ async def test_disable_api_exact_confirmation_owner_version_and_default_off_read
         assert response.status_code == 200 and response.json()["settings"]["enabled"] is False
         data = (await client.get("/api/memory")).json()
         assert data["memories"] == data["uses"] == []
+
+
+async def test_service_prune_cleans_durable_claims_with_admission_off_preserving_history(
+    memory_env,
+):
+    env = memory_env
+    await save(env)
+    pending = await env.service.propose(env.owner["user_id"], env.payload)
+    env.clock.now += timedelta(minutes=11)
+    env.readiness.enabled = False
+    result = await env.service.prune()
+    assert result == {"claims": 2}
+    assert env.store._memory_state.claims == {}
+    assert (env.owner["user_id"], pending["token"]) not in env.service._previews
+    assert len((await env.service.inspect(env.owner["user_id"]))["memories"]) == 1
