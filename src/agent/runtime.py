@@ -18,6 +18,9 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.capabilities import Instrumentation
 from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+from pydantic_ai.models import Model, infer_model
+from pydantic_ai.providers import Provider, infer_provider
+from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.toolsets import AbstractToolset, CombinedToolset, PreparedToolset
 from pydantic_ai.usage import RunUsage
 
@@ -75,6 +78,15 @@ def configured_model() -> str:
     return model
 
 
+def _provider_for(name: str) -> Provider[Any]:
+    """Google credentials come from Settings, which also reads .env, not just os.environ."""
+    if name in ("google", "google-gla"):
+        from src.config import settings
+
+        return GoogleProvider(api_key=settings.google_api_key or None)
+    return infer_provider(name)
+
+
 class ModeRuntime:
     """Runs Turns for every Mode in a registry under replaceable routing and entitlement."""
 
@@ -89,6 +101,7 @@ class ModeRuntime:
         self.routing = routing or ExplicitThenDefault()
         self.entitlements = entitlements or ActivatedParticipants()
         self._agents: dict[str, Agent[ToolContext, str]] = {}
+        self._models: dict[str, Model] = {}
         self._states_safety_core: dict[str, bool] = {}
         self._model_override: ContextVar[Any | None] = ContextVar(
             f"mode_runtime_model_{id(self)}", default=None
@@ -140,6 +153,15 @@ class ModeRuntime:
             if section:
                 sections.append(section)
         return "\n".join(sections)
+
+    async def model_for(self, reference: Any) -> Any:
+        """Build named models with configured credentials; model objects pass through."""
+        if not isinstance(reference, str):
+            return reference
+        model = self._models.get(reference)
+        if model is None:
+            model = self._models[reference] = infer_model(reference, _provider_for)
+        return model
 
     async def agent_for(self, mode: ModeDefinition, *, fallback=False) -> Agent[ToolContext, str]:
         """One cached agent per Mode, offered only that Mode's Toolsets."""
@@ -219,7 +241,7 @@ class ModeRuntime:
                     try:
                         result = await agent.run(
                             text,
-                            model=primary,
+                            model=await self.model_for(primary),
                             deps=context,
                             message_history=message_history or None,
                             model_settings=mode.model.settings,
@@ -241,7 +263,7 @@ class ModeRuntime:
                     fallback_agent = await self.agent_for(mode, fallback=True)
                     result = await fallback_agent.run(
                         text,
-                        model=fallback,
+                        model=await self.model_for(fallback),
                         deps=context,
                         message_history=message_history or None,
                         model_settings=mode.model.settings,

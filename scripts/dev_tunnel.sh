@@ -101,10 +101,7 @@ BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-$(env_value TELEGRAM_BOT_TOKEN)}"
 ) &
 CHECK_PID=$!
 
-# 5. Run the API; APP_BASE_URL env var overrides .env (pydantic-settings precedence).
-# pydantic_ai reads GOOGLE_API_KEY from the process environment, not from Settings, so export it.
-GOOGLE_API_KEY="${GOOGLE_API_KEY:-$(env_value GOOGLE_API_KEY)}"
-export GOOGLE_API_KEY
+# 5. Run the API; APP_BASE_URL env var overrides .env (pydantic-settings precedence)
 # shellcheck disable=SC1091
 [[ -f .venv/bin/activate ]] && source .venv/bin/activate
 APP_BASE_URL="$URL" uvicorn src.main:app --port "$PORT" $RELOAD

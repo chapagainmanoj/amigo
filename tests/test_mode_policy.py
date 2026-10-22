@@ -467,3 +467,18 @@ def test_generic_checker_accepts_unknown_cost_null_and_rejects_forged_fixed_pric
     assert any("estimated_cost_usd" in error for error in errors)
     evidence["pricing"] = {"source": "Daily fixed pricing"}
     assert any("evidence.pricing" in error for error in check_evidence(evidence, **args))
+
+
+async def test_named_google_model_uses_configured_key_not_process_environment(monkeypatch):
+    # Settings also reads .env, which never reaches os.environ; the provider must not depend on it.
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    runtime = _policy_runtime()
+    with patch("src.config.settings") as settings:
+        settings.google_api_key = "configured-key"
+        model = await runtime.model_for("google:gemini-2.5-flash")
+    assert model.model_name == "gemini-2.5-flash"
+    assert model.client._api_client.api_key == "configured-key"
+    assert await runtime.model_for("google:gemini-2.5-flash") is model
+    scripted = FunctionModel(lambda messages, info: ModelResponse(parts=[TextPart("hi")]))
+    assert await runtime.model_for(scripted) is scripted
