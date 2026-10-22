@@ -55,3 +55,28 @@
 - Earlier fixture attempt exposed an existing naive/aware timestamp comparison in local
   claim_scheduler_effects for Activation outbox rows. Simulated fixture effects are now completed
   before the scheduler starts; broader local Activation/outbox timestamp parity remains open.
+- CLI follow-up commit: `19ac8e0`.
+
+## Phase 1b — 2026-10-22
+
+- Commit: `2bc1492`.
+- Files: .env.example; src/agent/runtime.py; src/config.py; src/runtime_config.py;
+  src/model_routing.py; src/evaluation/model_policy.py; src/evaluation/gate_a.py;
+  tests/test_model_routing.py; .scratch/amigo-complete-product/decisions/31-participant-model-choice.md.
+- Protected edits: src/config.py (owner maps/platform key; hidden input values in errors).
+- Evidence: full combined suite 740 passed in 9.11s; Gate A currency 111 passed in 5.44s;
+  global Ruff and whitespace clean; scheduler smoke passed. No live Gate A run.
+- Precedence: DEV_MODEL > owner/internal pin > per-Mode override > configured default.
+  Existing ModeDefinition primary policy preserved below explicit operator routing for compatibility.
+  Unknown prefixes fail startup; production rejects subscription CLI anywhere in configured routes.
+- Separate per-Mode/model allowlist validates retained artifact hash, current source/dependency/
+  instruction/tool/settings currency, full run scores and artifact-bound human review. It explicitly
+  excludes Gemini-only certification from generic model approval; Gate A checker still rejects
+  non-Gemini evidence. No allowlist entry fabricated or model enabled without evidence.
+- Pin warnings content-free; requested_model records resolved ID. Mock provider test verifies
+  Anthropic platform key; mocked Turn verifies anthropic:claude-haiku-5-5 requested-model record.
+- Actual owner API pin not configured/run: owner's key/identity not supplied, .env unchanged.
+  Real participants never pinned. Participant model choice deferred (decision 31).
+- Gemini totals remain 0 requests/0 tokens. No new privacy promise or production data change.
+- Root review corrected naive-UTC review-time conversion; timezone regression passes.
+- Open: owner API-pin smoke optional; actual per-Mode final evals belong to Phase 5.
