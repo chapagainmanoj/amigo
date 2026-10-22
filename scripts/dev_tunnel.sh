@@ -38,7 +38,7 @@ if ! command -v devtunnel >/dev/null; then
   exit 1
 fi
 # `user show` exits 0 even when logged out, so check its output instead
-if devtunnel user show 2>&1 | grep -qi "not logged in"; then
+if devtunnel user show 2>&1 | grep -qiE "not logged in|expired"; then
   echo "Logging in to Dev Tunnels (GitHub)..."
   devtunnel user login -g
 fi
