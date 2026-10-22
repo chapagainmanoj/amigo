@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -42,8 +43,18 @@ class Settings(BaseSettings):
     default_model: str = "gemini-3.5-flash"
     dev_model: str = ""
     ollama_base_url: str = "http://localhost:11434/v1"
+    mode_models: dict[str, str] | str = {}
+    participant_model_pins: dict[str, str] | str = {}
+    anthropic_api_key: str = ""
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    @field_validator("mode_models", "participant_model_pins", mode="before")
+    @classmethod
+    def _model_map(cls, value, info):
+        from src.model_routing import parse_model_map
+
+        return parse_model_map(value, setting=info.field_name.upper())
+
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "hide_input_in_errors": True}
 
 
 class LazySettings:

@@ -86,6 +86,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/memory/reminders.py",
     "src/memory/store.py",
     "src/memory/tasks.py",
+    "src/model_routing.py",
     "src/model_usage.py",
     "src/runtime_config.py",
     "src/schema.py",

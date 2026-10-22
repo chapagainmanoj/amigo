@@ -57,11 +57,9 @@ def require_agent_credentials(config: object) -> None:
 
 def validate_runtime_configuration(config: object) -> None:
     """Reject unsafe production settings before startup creates any side effect."""
+    _validate_model_routing(config)
     if not is_production(config):
         return
-
-    if str(getattr(config, "dev_model", "")).strip():
-        _invalid("DEV_MODEL", "is development-only")
 
     if str(getattr(config, "app_channel", "")).strip().lower() != "telegram":
         _invalid("APP_CHANNEL", "must be telegram in production")
@@ -149,3 +147,45 @@ def _require_https_origin(name: str, value: object) -> None:
 
 def _invalid(name: str, reason: str) -> None:
     raise UnsafeProductionConfigurationError(f"Invalid production setting {name}: {reason}")
+
+
+def _validate_model_routing(config: object) -> None:
+    from pathlib import Path
+
+    from src.model_routing import configured_routes
+
+    try:
+        default, dev, modes, pins = configured_routes(config)
+    except ValueError as error:
+        raise UnsafeProductionConfigurationError(str(error)) from None
+    if is_production(config):
+        if dev:
+            _invalid("DEV_MODEL", "is development-only")
+        if any(
+            model.startswith("claude-cli:") for model in [default, *modes.values(), *pins.values()]
+        ):
+            _invalid("model routing", "Claude CLI is development-only")
+    if modes:
+        from src.agent.catalogue import build_registry
+
+        registry = build_registry()
+        if set(modes) - {mode.id for mode in registry}:
+            raise UnsafeProductionConfigurationError("MODE_MODELS names an unknown Mode")
+        if is_production(config):
+            from src.evaluation.model_policy import require_evaluated_model
+
+            root = Path(__file__).resolve().parents[1]
+            for mode_id, model in modes.items():
+                try:
+                    require_evaluated_model(registry[mode_id], model, root)
+                except ValueError:
+                    raise UnsafeProductionConfigurationError(
+                        "MODE_MODELS requires current passing per-Mode/model evaluation evidence"
+                    ) from None
+    if pins:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "participant_model_pins restricted to owner/internal dogfooding accounts count=%d",
+            len(pins),
+        )

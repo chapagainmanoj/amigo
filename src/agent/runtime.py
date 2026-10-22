@@ -85,6 +85,12 @@ def _provider_for(name: str) -> Provider[Any]:
         from src.config import settings
 
         return GoogleProvider(api_key=settings.google_api_key or None)
+    if name == "anthropic":
+        from pydantic_ai.providers.anthropic import AnthropicProvider
+
+        from src.config import settings
+
+        return AnthropicProvider(api_key=settings.anthropic_api_key)
     if name == "ollama":
         from pydantic_ai.providers.ollama import OllamaProvider
 
@@ -161,18 +167,51 @@ class ModeRuntime:
                 sections.append(section)
         return "\n".join(sections)
 
-    async def model_for(self, reference: Any) -> Any:
-        """Build named models with configured credentials; model objects pass through."""
+    async def model_for(
+        self,
+        reference: Any = None,
+        *,
+        mode: ModeDefinition | None = None,
+        context: ToolContext | None = None,
+        resolve_only: bool = False,
+    ) -> Any:
+        """Resolve owner routing once, or build an explicitly supplied evaluation model."""
+        if reference is None:
+            from src.config import settings
+            from src.model_routing import resolve_model
+
+            reference = resolve_model(
+                settings,
+                mode_id=mode.id if mode else "daily",
+                user_id=context.user["user_id"] if context else None,
+            )
+            # Existing declared primary policies remain supported below operator routing.
+            if mode and mode.model.primary:
+                from src.model_routing import configured_routes
+
+                _, dev, modes, pins = configured_routes(settings)
+                if (
+                    not dev
+                    and mode.id not in modes
+                    and (context is None or context.user["user_id"] not in pins)
+                ):
+                    reference = mode.model.primary
+        if resolve_only:
+            return reference
         if not isinstance(reference, str):
             return reference
+        from src.model_routing import normalize_model
+
+        reference = normalize_model(reference)
+        if reference.startswith("claude-cli:"):
+            from src.config import settings
+            from src.runtime_config import is_production
+
+            if is_production(settings):
+                raise ValueError("Claude CLI is development-only")
         model = self._models.get(reference)
         if model is None:
             if reference.startswith("claude-cli:"):
-                from src.config import settings
-                from src.runtime_config import is_production
-
-                if is_production(settings):
-                    raise ValueError("Claude CLI is development-only")
                 from src.agent.claude_cli_model import claude_cli_model
 
                 model = claude_cli_model(reference.partition(":")[2])
@@ -241,12 +280,7 @@ class ModeRuntime:
                 message_history.append(ModelResponse(parts=[TextPart(content=message.content)]))
 
         agent = await self.agent_for(mode)
-        from src.config import settings
-
-        dev_model = settings.dev_model
-        requested = (
-            dev_model if isinstance(dev_model, str) and dev_model else None
-        ) or mode.model.primary or configured_model()
+        requested = await self.model_for(mode=mode, context=context, resolve_only=True)
         override = self._model_override.get()
         primary = model or (override[0] if override else None) or requested
         fallback = (

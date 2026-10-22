@@ -94,3 +94,93 @@ def require_evaluated_fallback(mode, root: Path) -> None:
         raise ValueError(
             f"live Mode {mode.id!r} fallback has no passing Gate A evidence"
         ) from error
+
+
+def require_evaluated_model(mode, model: str, root: Path) -> None:
+    """Validate a Mode/model allowlist artifact, without certifying production Gate A.
+
+    Reuse the full run's scoring and trace validator. Its Gemini-only certification rejection
+    is the sole deliberately excluded condition here; the Gate A entry point still rejects
+    that same artifact. All identity, currency and content hashes are mandatory independently.
+    """
+    from src.agent.modes import PLACEHOLDER_FACTS
+    from src.evaluation.gate_a import canonical_hash, is_gemini_model, tool_schema
+    from src.model_routing import normalize_model
+
+    try:
+        model = normalize_model(model)
+        manifest = json.loads((root / "evals/model-evidence.json").read_text())
+        entry = next(
+            entry
+            for entry in manifest["entries"]
+            if entry["mode_id"] == mode.id and normalize_model(entry["model"]) == model
+        )
+        artifact_path = (root / entry["artifact"]).resolve()
+        if not artifact_path.is_relative_to(root.resolve()):
+            raise ValueError("Model evidence must be a repository artifact")
+        artifact = artifact_path.read_bytes()
+        if hashlib.sha256(artifact).hexdigest() != entry["sha256"]:
+            raise ValueError("Model artifact hash mismatch")
+        evidence = json.loads(artifact)
+        inputs = evidence["release_inputs"]
+        _require_model_review(entry, evidence)
+        if (
+            inputs.get("mode_id", "daily") != mode.id
+            or normalize_model(inputs["model"]) != model
+            or normalize_model(inputs["provider_model"]) != model
+            or inputs.get("fallback_currency") != fallback_currency(mode, root)
+            or inputs.get("model_settings") != (mode.model.settings or {})
+            or inputs.get("tool_schema_sha256") != canonical_hash(tool_schema(mode_definition=mode))
+            or inputs.get("mode_instructions_sha256")
+            != canonical_hash(mode.instructions(PLACEHOLDER_FACTS))
+        ):
+            raise ValueError("Model evidence identity or execution inputs are stale")
+        from scripts.check_gate_a_evidence import check_evidence
+
+        errors = check_evidence(
+            evidence,
+            revision=inputs["git_revision"],
+            root=root,
+            suite_path=root / mode.eval_suite,
+            mode_id=mode.id,
+            mode_definition=mode,
+            model_name=model,
+            _historical_baseline=True,
+        )
+        if not is_gemini_model(model):
+            excluded = {"Non-Gemini development evidence cannot certify Gate A"}
+            if evidence.get("purpose") == "development_eval":
+                excluded.add("historical baseline must be a declared full-run artifact")
+            errors = [error for error in errors if error not in excluded]
+        if errors:
+            raise ValueError("Model evidence failed validation")
+    except (OSError, ValueError, KeyError, TypeError, StopIteration):
+        raise ValueError(
+            f"Mode {mode.id!r} model has no current passing evaluation evidence"
+        ) from None
+
+
+def _require_model_review(entry: dict, evidence: dict) -> None:
+    """The operator review binds subjective evaluation to the exact retained artifact bytes."""
+    import re
+    from datetime import UTC, datetime
+
+    from src.utils import utc_now
+
+    review = entry["human_review"]
+    reviewed = datetime.fromisoformat(review["reviewed_at"])
+    completed = datetime.fromisoformat(evidence["completed_at"])
+    current = utc_now()
+    current = current.replace(tzinfo=UTC) if current.tzinfo is None else current.astimezone(UTC)
+    if (
+        review.get("status") != "approved"
+        or review.get("artifact_sha256") != entry["sha256"]
+        or review.get("tone_reviewed") is not True
+        or not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{1,63}", review.get("reviewer", ""))
+        or not isinstance(review.get("notes"), str)
+        or not review["notes"].strip()
+        or reviewed.tzinfo is None
+        or completed.tzinfo is None
+        or not completed <= reviewed <= current
+    ):
+        raise ValueError("Model evidence requires artifact-bound human review")
