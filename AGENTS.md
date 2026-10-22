@@ -44,13 +44,31 @@ python scripts/smoke_check.py --scheduler
 
 ## Agent Guardrails
 
-### Never modify without human review
+### Authorized build scope (22 October 2026)
 
-- `.env` — production secrets
-- `migrations/*.sql` — schema changes affect production data
-- `src/config.py` — changing defaults can break all environments
-- `src/db/supabase.py` — singleton wiring
-- `scripts/smoke_check.py` — production liveness checks
+- Follow the Amigo Modes build plan, phases 0, 1, 1b, 2, 3, 4, 5, 6, on `develop`.
+- One commit per slice, ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- Migrations 017+, schema bumps, and setting evaluated Modes live are authorized.
+- Protected files are editable: `src/config.py`, `migrations/*.sql`, `src/db/supabase.py`,
+  `scripts/smoke_check.py`. List each edit in the phase review queue.
+- Never push, deploy, apply migrations to Supabase, or edit `.env`. CBT personal input stays off.
+- Stop for the owner's Phase 3 test-bot spike and after the Issue 09 threat model. Stop for
+  uncovered changes to production data, secrets, or privacy promises.
+- Append commits, touched/protected files, test/Ruff/Gate A evidence, provisional decisions,
+  and open questions to `.scratch/modular-modes/review-queue.md` after each phase; then continue
+  unless the phase requires a stop.
+- Use independent subagents for the Phase 2 Store review and every migration review; use
+  subagents for parallel slices. Report concrete test output and diffs only.
+- Daily instructions and Tool schema stay byte-identical.
+- Add newly reachable Turn modules to `INVALIDATING_INPUT_PATHS` in
+  `src/evaluation/gate_a.py`; never weaken `tests/test_gate_a_currency.py`.
+- Development/iteration uses `claude -p`, with `ANTHROPIC_API_KEY` removed from its environment;
+  Ollama is the offline backup. Gemini is for final eval batches only, with metadata-only usage
+  recorded in `.scratch/gemini-usage.jsonl`; the old eight-request cap is superseded.
+- Claude subscription CLI is development-only. Production stays on Gemini unless an evaluated
+  owner-controlled override is configured. Participant model choice/keys are deferred.
+- Participant pins are only for owner/internal dogfooding accounts. Never pin real participants
+  to Claude: Anthropic processing requires renewed consent under decision 04.
 
 ### Never auto-delete
 
@@ -68,7 +86,9 @@ python scripts/smoke_check.py --scheduler
 - **Store sync**: any change to `MemoryStore` methods must be mirrored
   in `InMemoryStore` and `FakeStore` (three implementations).
 - **Protocol changes**: any change to `MessageChannel` or
-  `ModelProvider` requires verifying all implementations.
+  `ModelProvider` requires verifying all implementations. `MessageChannel` changes cover
+  `TelegramChannel`, `CLIChannel`, `FakeChannel`, and both `FailingChannel` classes in
+  `tests/test_reminders.py` and `tests/test_scheduler.py`.
 - **Rate limits**: Gemini retries once then returns an error message.
   Do not add aggressive retry loops.
 
@@ -112,3 +132,7 @@ Issues use workflow-state labels plus severity labels. See
 ### Domain docs
 
 Amigo uses a single-context domain layout. See `docs/agents/domain.md`.
+
+## Agent response style
+
+When reporting information to me, be extremely concise and sacrifice grammar for concision.

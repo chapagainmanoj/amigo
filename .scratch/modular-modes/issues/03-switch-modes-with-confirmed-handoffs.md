@@ -212,3 +212,15 @@ checks or authorize production deployment. Reviewer notified; implementation rem
 - This is repository adoption only, not production deployment. The Store, routing, commands,
   handoff Tool/callback, grant operator script, and participant copy in this issue are still
   unimplemented. Daily remains the only live Mode, so this issue stays open.
+
+### 2026-10-22 — Build plan adopted; handoff absorbed
+
+- Topics replace in-chat switching as the primary design (ADR 0003 accepted, pending owner
+  test-bot spike). `/mode` and `/daily` remain the fallback. The build plan supersedes the
+  older migration-approval stop above; repository migrations 017+ are authorized, never Supabase.
+- Independent review of the seven Store APIs against adopted 016 remains pending (Phase 2).
+- Verify confirmation-before-execution crash loss with local Store crash injection. Migration
+  017 / Phase 4 must add durable execution claims before target execution is wired. No
+  exactly-once execution guarantee is established by 016.
+- Baseline rechecked: clean develop at e73a6bd; 638 tests passed in 16.09s. Gate A closure
+  defect from the old handoff is already fixed. No old temporary Postgres cluster is reused.

@@ -1,6 +1,7 @@
-# One Telegram Topic per Mode (proposed)
+# One Telegram Topic per Mode
 
-**Status: Proposed.** Nothing is built. Accept only after the spike below passes.
+**Status: Accepted, pending spike.** Owner selected topics on 22 October 2026.
+Implementation depends on the test-bot spike below; `/mode` remains the fallback.
 
 Migration 016 assumes one Telegram chat per participant: a Session carries one `active_mode_id`, and moving between Modes is a confirmed switch inside the same chat history. Participants would rather see each Mode as its own conversation.
 

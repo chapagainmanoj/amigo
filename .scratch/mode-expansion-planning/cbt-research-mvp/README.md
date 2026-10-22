@@ -108,3 +108,14 @@ Focused tests verify software boundaries for synthetic fixtures only; they do no
 safety, actual crisis handling, provider privacy, efficacy, or release readiness. No crisis
 classification is implemented because personal input is excluded. Source: [current research
 plan](../cbt-research-plan.md), [open protocol](../decisions/05-cbt-research-protocol.md).
+
+### 2026-10-22 — Handoff absorbed; model ladder authorized
+
+`gemini_selector.py` remains unfinished, untested live, and not wired to a runner. Phase 1
+finishes it as `model_selector.py`: Claude subscription CLI for development, Ollama offline,
+Gemini final fictional eval batches only, async client, strict eligible IDs, bounded output,
+zero retries, coordinated stop, and mock transport/privacy/cancellation tests. The old
+8-request batch cap is superseded by this ladder and metadata-only Gemini usage logging.
+No live requests have occurred. Personal input remains disabled; no clinical or provider
+retention validation is claimed. Earlier external-processing gates are superseded only for
+these authorized fictional final eval batches, not personal use.

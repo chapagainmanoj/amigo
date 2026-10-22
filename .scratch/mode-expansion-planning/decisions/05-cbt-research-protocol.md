@@ -102,3 +102,12 @@ describe the initial patterns as practitioner-reviewed. The initial synthetic co
 provisional patterns and an engineering rubric; expert validation and clinical efficacy are not
 claimed. Founder-only/no-saved-transcript boundaries remain. Personal-input/provider processing
 still needs explicit approval of the actual implementation and data contract.
+
+### 2026-10-22 — Model ladder supersedes eight-request cap
+
+Actual live Gemini request count at handoff absorption: **0 of the previously authorized 8**.
+The owner now replaces that cap: iterate on `claude -p` using the subscription (unset
+`ANTHROPIC_API_KEY`), Ollama offline backup, Gemini only for final eval batches. No hard Gemini
+cap; count requests/tokens, including failed requests, in `.scratch/gemini-usage.jsonl`, without
+content. Fictional inputs only, zero selector retries, bounded outputs and coordinated stop.
+Personal input remains off; no consent, retention, qualified review, or clinical claims change.
