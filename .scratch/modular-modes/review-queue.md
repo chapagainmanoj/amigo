@@ -80,3 +80,36 @@
 - Gemini totals remain 0 requests/0 tokens. No new privacy promise or production data change.
 - Root review corrected naive-UTC review-time conversion; timezone regression passes.
 - Open: owner API-pin smoke optional; actual per-Mode final evals belong to Phase 5.
+
+## Phase 2 — 2026-10-22
+
+- Commit: `0eb53d4`.
+- Files: tests/test_handoff_crash_window.py;
+  .scratch/modular-modes/proposals/issue03-store-review.md; this queue (Phase 1b entry).
+- Protected edits: none. Store/SQL bytes unchanged; no findings required fixes.
+- Independent Standards PASS; independent Spec PASS. Each reviewer ran 67 Store contract cases
+  (67 passed in 0.06s). Supabase coverage remains a query/RPC double, not SQL execution.
+- Crash injection at confirmation-before-execution reproduces request loss for both local Stores:
+  2 passed in 0.02s. Detailed scope and evidence in issue03-store-review.md.
+- Full combined tree: 740 passed in 9.50s; currency 111 passed in 5.44s; Ruff/whitespace clean;
+  scheduler smoke passed. No live Gate A certification; Gemini 0 requests/0 tokens.
+- Open: Phase 4 durable execution + Tool commit replay safety. Claims alone must not be described
+  as proof of exactly-once side effects.
+
+## Phase 3 — 2026-10-22 — STOP, owner test required
+
+- Commit: `7efa884`.
+- Files: scripts/spike_private_topics.py; tests/test_topic_spike.py;
+  .scratch/modular-modes/proposals/topic-spike-runbook.md.
+- Protected edits: none. No bot token or Settings loaded; no actual bot calls.
+- 25 mocked spike tests passed; combined spike/Store/crash 94 passed in 0.12s.
+  Full backend 740 passed in 9.50s; Gate A currency 111 passed in 5.44s;
+  global Ruff/whitespace passed; scheduler smoke passed. Script --help passed.
+- Probe checks test-only acknowledgement/environment production-token refusal; topic capability;
+  no configured webhook; private chat; topic creation/send; desktop/iOS/Android thread IDs;
+  unthreaded send; deleted-topic rejection. Errors/console omit token, URL and incoming content.
+- Owner must enable private topic mode on a disposable test bot, run the linked runbook, report
+  three client/version observations, unthreaded location and deleted-topic behavior. Do not paste
+  tokens. ADR remains Accepted, pending spike. Phase 4 not started; no migrations written/applied.
+- Gemini total 0 requests/0 tokens. No push, deploy, Supabase migration, .env edit, real-participant
+  Claude pin, or CBT personal input. Phase 5/6 implementation remains outstanding.
