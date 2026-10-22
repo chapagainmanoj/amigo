@@ -808,3 +808,16 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Independent cbt_selector fresh45SQL chain + Kiritimati-midnight/yesterday/foreign-owner/program/
   helperprivilege probes PASS019SHA5e3e6b30…; root180Coach/currency passed11.51s/Ruff/diffclean.
   Latestfull1401passed; no model/Gate A certification. No participant-requested Reminder change.
+
+### Owner suggestions decision — explicit opt-in
+
+- Author27128bf; protected021/assert021, local suggestion default, owned StrictBool preference API,
+  main router, DashboardView and new ModeSuggestionPreference JSX/CSS; tests.
+- Preference defaultsfalse locally/SQL. Dashboard checkbox allows explicit opt-in/out, disabling
+  pending offers on opt-out. No release gate bypass. UI error disables writes until refresh.
+- Independent cbt_selector fresh45SQLchain/owner/defaultoff/preoptinoffer/disablepending PASS at021
+  SHAb9e8e9ae…; root168suggestion/currencyPASS10.56s +2preferenceAPItestsPASS2.50s; Ruff,
+  ESLint/build/diffclean. Buildexisting>500k chunkwarning. UI source-reviewed, no browserclaimyet.
+- Reflect follow-up98e8d66 fixes independent disclosure-negation finding; reviewer reproduced
+  correction and41testsPASS2.23s. No claim of clinical review/comprehensive detection.
+  Latestfull1401passed; release Gate A evidence absent and all candidates remainPlanned.

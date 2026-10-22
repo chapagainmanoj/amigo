@@ -44,6 +44,7 @@ async def state(request):
     other = await backing.create_user(82002)
     session = await backing.create_session(user["user_id"])
     await backing.grant_mode(user["user_id"], "coach", "owner", "fictional test")
+    await backing.set_mode_suggestion_preference(user["user_id"], True)
     store = backing
     if request.param == "supabase":
         store = MemoryStore()
@@ -255,3 +256,19 @@ async def test_release_readiness_alone_cannot_bypass_default_deny_turn_clearance
     assert not await controller.offer(context, "Help me build a habit", "Current response.")
     assert not channel.sent
     assert not (await store._suggestions()).offers
+
+
+async def test_participant_preference_defaults_off_and_requires_explicit_opt_in(state):
+    s, actor = state.store, state.other["user_id"]
+    assert await s.get_mode_suggestion_preference(actor) is False
+    session = await state.backing.create_session(actor)
+    assert (
+        await s.create_mode_suggestion(actor, session["session_id"], "coach", grant_required=False)
+        is None
+    )
+    assert await s.set_mode_suggestion_preference(actor, True) is True
+    assert await s.create_mode_suggestion(
+        actor, session["session_id"], "coach", grant_required=False
+    )
+    assert await s.set_mode_suggestion_preference(actor, False) is False
+    assert await s.get_mode_suggestion_preference(actor) is False

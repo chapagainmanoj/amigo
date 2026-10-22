@@ -1,0 +1,6 @@
+.mode-suggestion-preference { margin: -12px 0 32px; max-width: 70ch; }
+.mode-suggestion-preference > label { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: .9rem; cursor: pointer; }
+.mode-suggestion-preference input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--ink); }
+.mode-suggestion-preference input:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.mode-suggestion-preference input:disabled { opacity: .6; cursor: not-allowed; }
+.mode-suggestion-preference > p { color: var(--ink-2); font-size: .85rem; margin-top: 6px; max-width: 65ch; }

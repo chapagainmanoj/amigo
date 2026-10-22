@@ -4,6 +4,7 @@ import { apiRequest, supabase } from '../supabase'
 import { timeOfDayGreeting } from '../mockData'
 import Toast from './Toast'
 import ModeChips from './ModeChips'
+import ModeSuggestionPreference from './ModeSuggestionPreference'
 
 // apiRequest attaches `status` from the response and `retryable` from the X-Retryable header.
 // A rejection carrying neither never reached the API at all, so reporting it as a conflict
@@ -194,6 +195,7 @@ export default function DashboardView() {
       </div>
 
       <ModeChips />
+      <ModeSuggestionPreference />
 
       <div className="dashboard-grid">
         {/* Main Column: Tasks */}

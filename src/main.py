@@ -15,6 +15,7 @@ from src.api.coaching import router as coaching_router
 from src.api.dashboard import router as dashboard_router
 from src.api.dependencies import get_activated_user
 from src.api.memory import router as memory_router
+from src.api.mode_suggestions import router as mode_suggestions_router
 from src.api.modes import router as modes_router
 from src.api.pairing import router as pairing_router
 from src.api.reminders import router as reminders_router
@@ -172,6 +173,7 @@ app.include_router(pairing_router)
 app.include_router(tasks_router)
 app.include_router(reminders_router)
 app.include_router(modes_router)
+app.include_router(mode_suggestions_router)
 app.include_router(coaching_router)
 app.include_router(memory_router)
 

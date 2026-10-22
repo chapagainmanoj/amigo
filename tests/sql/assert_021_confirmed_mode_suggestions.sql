@@ -7,6 +7,8 @@ DO $$ DECLARE u UUID; outsider UUID; s UUID; s2 UUID; r JSONB; id UUID; BEGIN
  INSERT INTO public.sessions(user_id,mode_id) VALUES(u,'daily') RETURNING session_id INTO s;
  IF public.create_mode_suggestion(u,s,'coach') IS NOT NULL THEN
  RAISE EXCEPTION 'ungranted offer admitted'; END IF;
+ IF public.get_mode_suggestion_preference(u) IS NOT FALSE THEN RAISE EXCEPTION 'suggestions default on'; END IF;
+ PERFORM public.set_mode_suggestion_preference(u,TRUE);
  -- Grant flag is trusted service-only input, not model or participant input.
  INSERT INTO public.mode_grants(user_id,mode_id,granted_by,reason,expires_at)
  VALUES(u,'coach','owner','fictional SQL test',now()+interval '1 day');

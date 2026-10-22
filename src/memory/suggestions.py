@@ -16,7 +16,7 @@ class LocalSuggestionState:
         self.offers = {}
 
     async def preference(self, user_id):
-        return self.preferences.get(user_id, True)
+        return self.preferences.get(user_id, False)
 
     async def set_preference(self, user_id, enabled):
         if not isinstance(enabled, bool):

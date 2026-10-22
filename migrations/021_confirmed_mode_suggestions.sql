@@ -6,7 +6,7 @@ DO $$ BEGIN
 END $$;
 CREATE TABLE public.mode_suggestion_preferences (
  user_id UUID PRIMARY KEY REFERENCES public.user_profiles(user_id) ON DELETE CASCADE,
- enabled BOOLEAN NOT NULL
+ enabled BOOLEAN NOT NULL DEFAULT FALSE
 );
 CREATE TABLE public.mode_suggestions (
  offer_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -26,7 +26,7 @@ REVOKE ALL ON public.mode_suggestion_preferences,public.mode_suggestions
 GRANT SELECT ON public.mode_suggestion_preferences,public.mode_suggestions TO service_role;
 CREATE FUNCTION public.get_mode_suggestion_preference(p_user_id UUID) RETURNS BOOLEAN
 LANGUAGE sql SECURITY DEFINER SET search_path='' AS $$
- SELECT coalesce((SELECT enabled FROM public.mode_suggestion_preferences WHERE user_id=p_user_id),TRUE);
+ SELECT coalesce((SELECT enabled FROM public.mode_suggestion_preferences WHERE user_id=p_user_id),FALSE);
 $$;
 CREATE FUNCTION public.set_mode_suggestion_preference(p_user_id UUID,p_enabled BOOLEAN)
 RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN
