@@ -593,3 +593,20 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Evidence: full1323passed38.28s; Ruff/diff clean;111 Gate A currency and Daily golden pass.
   Execution source changes invalidate older evidence. Final sole Gemini batches follow this
   source freeze; candidates remain Planned unless all required model/release evidence qualifies.
+
+## Phases 4–6 review fixes — owner stop and baseline
+
+- Owner review scope through0be20bb; subsequent authorized completed source commits20724b4,
+  11e923d andb2c824f retained. get_memory_source_message already committed11e923d across3Stores;
+  Ruff E501 fixed before this instruction. Latest full1323passed/Ruffclean, scheduler smoke passed.
+- Stopped new Phase6 work and every model job immediately. No Issue09 repository document/code
+  exists. Temporary design draft not promoted; no deploy/Supabase/.env/push changes.
+- Preserved original full Claude scores (Coach40/48,Reflect37/60,Recommender28/48), revised case
+  outputs and unchanged partial Ollama/Gemini artifacts. Separate cancellation manifests identify
+  owner stop, rather than silently changing running artifacts to passing/completed evidence.
+- Gemini totals at stop:16requests,27,572known inputtokens,5,644known outputtokens;15ok/1error,
+  one request with unknown token counts. Coach final batch partial only; other2never started.
+  No model/fallback/release certification; no further model requests during review fixes.
+- Review findings and both Owner decisions blocks read fully. All1–20 tracked for this repair
+  series. Handoff/017, budget/019 and Memory/020 changes isolated in managed checkouts; each SQL
+  change requires independent review before its separate develop integration commit.

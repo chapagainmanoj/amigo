@@ -41,3 +41,15 @@ hand.
 - Workflows that act without participant confirmation, and cross-participant workflows.
 
 ## Comments
+
+### 22 October2026 — Phase6 reuse decision and declared Coach workflow
+
+Backend0be20bb. See provisional proposal
+[phase6-08-durable-workflows.md](../proposals/phase6-08-durable-workflows.md). Coach declares v1 steps
+and participant confirmation points over existing018/019 Program/Command/outbox state. Owned
+workflow inspection omits content/tokens and performs no transitions.16 tests include worker
+replacement at enqueue/claim/dispatch/accepted boundaries on both channel paths; uncertain sends
+never retry. No external engine or second lifecycle. No trial insufficiency evidence exists.
+Declaration describes current code, not persisted per-Program version binding; future v2 needs
+explicit binding/migration review before interpreting existing Programs. Issue stays open for
+owner review/trial evidence; no generic arbitrary Tool workflow claim.

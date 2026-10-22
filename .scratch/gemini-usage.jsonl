@@ -1,0 +1,16 @@
+{"at":"2026-10-22T14:38:58.679041","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1651,"output_tokens":272,"outcome":"ok"}
+{"at":"2026-10-22T14:39:10.239986","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1651,"output_tokens":197,"outcome":"ok"}
+{"at":"2026-10-22T14:39:23.512440","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1651,"output_tokens":195,"outcome":"ok"}
+{"at":"2026-10-22T14:39:37.468474","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1660,"output_tokens":416,"outcome":"ok"}
+{"at":"2026-10-22T14:39:51.474063","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1660,"output_tokens":519,"outcome":"ok"}
+{"at":"2026-10-22T14:40:06.563277","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":null,"output_tokens":null,"outcome":"error"}
+{"at":"2026-10-22T14:40:17.738037","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1660,"output_tokens":373,"outcome":"ok"}
+{"at":"2026-10-22T14:40:28.912727","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1691,"output_tokens":398,"outcome":"ok"}
+{"at":"2026-10-22T14:40:40.661839","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":2561,"output_tokens":111,"outcome":"ok"}
+{"at":"2026-10-22T14:40:54.902342","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1691,"output_tokens":324,"outcome":"ok"}
+{"at":"2026-10-22T14:41:07.579445","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":2504,"output_tokens":213,"outcome":"ok"}
+{"at":"2026-10-22T14:41:20.776051","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1691,"output_tokens":378,"outcome":"ok"}
+{"at":"2026-10-22T14:41:34.053248","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":2551,"output_tokens":274,"outcome":"ok"}
+{"at":"2026-10-22T14:41:49.148749","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1650,"output_tokens":663,"outcome":"ok"}
+{"at":"2026-10-22T14:42:03.916788","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1650,"output_tokens":699,"outcome":"ok"}
+{"at":"2026-10-22T14:42:14.180971","model_id":"google:gemini-3.5-flash","requests":1,"input_tokens":1650,"output_tokens":612,"outcome":"ok"}

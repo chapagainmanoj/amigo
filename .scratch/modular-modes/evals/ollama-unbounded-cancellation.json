@@ -1,0 +1,28 @@
+{
+  "status": "aborted_config_iteration",
+  "reason": "Owner-authorized bounded offline profile change: hidden reasoning and three concurrent GPU queues made unbounded profile too slow. Original partial artifacts preserved unchanged; no certification.",
+  "cancelled_at": "2026-10-22T14:29:53.646130+00:00",
+  "artifacts": [
+    {
+      "mode": "coach",
+      "path": ".scratch/modular-modes/evals/coach-ollama-full.json",
+      "sha256": "e5acaa127536e76d4c37491388b6e7557a10a2a9c8b0a589dc563707ce586435",
+      "completed_executions": 3,
+      "retained_status": "running"
+    },
+    {
+      "mode": "reflect",
+      "path": ".scratch/modular-modes/evals/reflect-ollama-full.json",
+      "sha256": "37355d79918dcafae606e52d1e1b73a0833f154c9e35c80b8800df43317a1cda",
+      "completed_executions": 3,
+      "retained_status": "running"
+    },
+    {
+      "mode": "recommender",
+      "path": ".scratch/modular-modes/evals/recommender-ollama-full.json",
+      "sha256": "a2f3ace7eae075d18bcf941772565378468a7186fec3c9398ec9c62d26a4e575",
+      "completed_executions": 2,
+      "retained_status": "running"
+    }
+  ]
+}

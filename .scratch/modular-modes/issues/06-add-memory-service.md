@@ -47,3 +47,14 @@ reconfirmation, pause controls, and the inspector. Decision 26 (demand evidence)
 - Inferred profiles, mood history, or any Memory created without confirmation.
 
 ## Comments
+
+### 22 October2026 — Phase6 default-off Memory candidate built
+
+Backend0be20bb, Inspector20724b4, provenance11e923d. See provisional proposal
+[phase6-06-store-backed-memory.md](../proposals/phase6-06-store-backed-memory.md) and independent020
+verification. Owned versioned Store controls, exact previews, bounded ephemeral candidates,
+lifecycle/scopes/uses, separate/master pauses and scoped JSON/CSV/Forget/Inspector implemented.
+No Mode registers Memory Tools/context automatically. Semantic eligibility and privacy/readiness
+default deny; database admissionOFF.17 authored retrieval fixtures passed, not a general accuracy
+or prohibited-content certificate. Decisions26/30 demand/technology, real eligibility, backup
+erasure, moderated usability and limited trial remain open; no participant admission authorized.

@@ -1,0 +1,21 @@
+{
+  "status": "aborted_owner_instruction",
+  "reason": "Owner stopped new Phase6 work and model batches for review fixes",
+  "at": "2026-10-22T14:45:27.974687+00:00",
+  "artifacts": [
+    {
+      "path": ".scratch/modular-modes/evals/coach-gemini-final.json",
+      "sha256": "9fb0333a106deed09037e2a89a6a539b6a24abe96a1efb38e05b6fae201b35d2",
+      "executions": 12
+    },
+    {
+      "path": ".scratch/modular-modes/evals/gemini-final-coordinator.json",
+      "sha256": "a5f85c93d3a49b06966da9c1a280aca4339358b9939674f80ef2099c254c43ef",
+      "executions": 0
+    }
+  ],
+  "not_started": [
+    "reflect Gemini",
+    "recommender Gemini"
+  ]
+}

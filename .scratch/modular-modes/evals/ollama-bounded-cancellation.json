@@ -1,0 +1,20 @@
+{
+  "status": "aborted_owner_instruction",
+  "cancelled_at": "2026-10-22T14:42:26.470292+00:00",
+  "reason": "Owner steering: stop Phase6 work and all model/evaluation requests.",
+  "runner_exit_code": 130,
+  "controller_exit_code": 130,
+  "artifacts": [
+    {
+      "path": ".scratch/modular-modes/evals/coach-ollama-bounded-full.json",
+      "sha256": "9bef0d3f7684fed3667e23f7796fdd057401a261bb47693e4ffb675441376237",
+      "completed_executions": 28,
+      "passed_executions": 15,
+      "original_status_preserved": "running"
+    }
+  ],
+  "not_started": [
+    "reflect-ollama-bounded-full.json",
+    "recommender-ollama-bounded-full.json"
+  ]
+}

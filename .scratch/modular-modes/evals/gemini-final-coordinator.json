@@ -1,0 +1,12 @@
+{
+  "model": "google:gemini-3.5-flash",
+  "started_at": "2026-10-22T14:38:51.124720+00:00",
+  "git_revision": "b2c824ff577c64a93db9cd18928f63d4e11aa816",
+  "modes": [
+    "coach",
+    "reflect",
+    "recommender"
+  ],
+  "results": [],
+  "status": "running"
+}

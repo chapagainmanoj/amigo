@@ -46,3 +46,13 @@ decision 23 ever approves one.
 - Interaction Style adaptation.
 
 ## Comments
+
+### 22 October2026 — Phase6 disabled candidate built
+
+Backend0be20bb +sourcefollowupb2c824f. See provisional proposal
+[phase6-05-confirmed-mode-suggestions.md](../proposals/phase6-05-confirmed-mode-suggestions.md).
+Default-off current-request rules create owned metadata-only offers; confirmation rechecks
+entitlement/readiness and opens the canonical Mode without carrying history or executing a target
+Turn.54 Store/application tests +independent SQL/concurrent create/confirm proof retained.
+Decisions23/28 release/friction approval and authoritative per-Turn safety clearance remain open;
+no live suggestion admission or silent routing. Issue remains open for owner evidence/review.
