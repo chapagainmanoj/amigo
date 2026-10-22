@@ -85,11 +85,23 @@ class SessionTurnOrchestrator:
         model: Any | None,
     ) -> ModeRunResult:
         user_id = context.user["user_id"]
-        await context.store.add_message(context.session_id, user_id, "user", text)
-        stored = await ContextBuilder(context.store).get_truncated_messages(context.session_id)
+        if context.handoff_id:
+            current = await context.store.append_handoff_execution_message(
+                user_id, context.handoff_id, context.handoff_claim_token, "user", text,
+                context.channel.channel_id,
+            )
+            if not current:
+                raise RuntimeError("Handoff transcript claim unavailable")
+            prior = await ContextBuilder(context.store).get_truncated_messages(
+                context.session_id, exclude_message_id=current["message_id"],
+            )
+        else:
+            await context.store.add_message(context.session_id, user_id, "user", text)
+            stored = await ContextBuilder(context.store).get_truncated_messages(context.session_id)
+            prior = stored[:-1]
         history = tuple(
             SessionMessage(role=message["role"], content=message["content"])
-            for message in stored[:-1]
+            for message in prior
         )
         result = await self.runtime.run_mode(
             mode,
@@ -98,7 +110,16 @@ class SessionTurnOrchestrator:
             model=model,
             history=history,
         )
-        await context.store.add_message(context.session_id, user_id, "assistant", result.output)
+        if context.handoff_id:
+            saved = await context.store.append_handoff_execution_message(
+                user_id, context.handoff_id, context.handoff_claim_token,
+                "assistant", result.output,
+                context.channel.channel_id,
+            )
+            if not saved:
+                raise RuntimeError("Handoff transcript claim unavailable")
+        else:
+            await context.store.add_message(context.session_id, user_id, "assistant", result.output)
         return result
 
 

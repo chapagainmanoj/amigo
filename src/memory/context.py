@@ -48,12 +48,19 @@ class ContextBuilder:
 
         return "\n".join(lines) if lines else None
 
-    async def get_truncated_messages(self, session_id: str) -> list[dict[str, str]]:
+    async def get_truncated_messages(
+        self, session_id: str, *, exclude_message_id: str | None = None,
+    ) -> list[dict[str, str]]:
         """Get session messages, truncated to fit within token budget.
 
         Keeps newest messages first (most relevant), drops oldest if over budget.
         """
-        messages = await self.store.get_session_messages(session_id)
+        if exclude_message_id is None:
+            messages = await self.store.get_session_messages(session_id)
+        else:
+            messages = await self.store.get_session_messages(
+                session_id, exclude_message_id=exclude_message_id,
+            )
         if not messages:
             return []
 

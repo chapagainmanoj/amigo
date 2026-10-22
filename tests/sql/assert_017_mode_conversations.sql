@@ -121,6 +121,41 @@ BEGIN
  OR EXISTS(SELECT 1 FROM public.list_pending_handoff_executions()) THEN
    RAISE EXCEPTION 'terminal failed handoff remained recoverable'; END IF;
 END $$;
+DO $$
+DECLARE u UUID; src UUID; dst UUID; h UUID; r JSONB; m JSONB; token UUID;
+BEGIN
+ INSERT INTO public.user_profiles(telegram_chat_id) VALUES(91017005) RETURNING user_id INTO u;
+ INSERT INTO public.sessions(user_id,mode_id) VALUES(u,'coach') RETURNING session_id INTO src;
+ INSERT INTO public.sessions(user_id,mode_id) VALUES(u,'daily') RETURNING session_id INTO dst;
+ INSERT INTO public.mode_handoffs(user_id,session_id,source_mode_id,target_mode_id,
+ source_grant_required,target_grant_required,carried_request,expires_at,resolved_at,resolution)
+ VALUES(u,src,'coach','daily',FALSE,FALSE,'Fictional request',clock_timestamp()+interval '5 minutes',
+ clock_timestamp(),'confirmed') RETURNING handoff_id INTO h;
+ r:=public.claim_handoff_execution(u,h,'one',dst);
+ token:=(r->'handoff'->>'execution_claim_token')::UUID;
+ m:=public.append_handoff_execution_message(u,h,token,'user','Fictional request','telegram');
+ IF m IS NULL OR m<>public.append_handoff_execution_message(u,h,token,'user','Fictional request','telegram')
+ OR public.append_handoff_execution_message(u,h,token,'user','Changed request','telegram') IS NOT NULL
+ THEN RAISE EXCEPTION 'carried message idempotence/content fence'; END IF;
+ UPDATE public.mode_handoffs SET execution_claimed_at=clock_timestamp()-interval '6 minutes' WHERE handoff_id=h;
+ IF public.append_handoff_execution_message(u,h,token,'assistant','Late output','telegram') IS NOT NULL
+ THEN RAISE EXCEPTION 'expired append token accepted'; END IF;
+ r:=public.claim_handoff_execution(u,h,'two');
+ token:=(r->'handoff'->>'execution_claim_token')::UUID;
+ IF m<>public.append_handoff_execution_message(u,h,token,'user','Fictional request','telegram')
+ THEN RAISE EXCEPTION 'recovery duplicated carried message'; END IF;
+ UPDATE public.mode_handoffs SET execution_claimed_at=clock_timestamp()-interval '6 minutes' WHERE handoff_id=h;
+ r:=public.claim_handoff_execution(u,h,'three');
+ IF r->>'status'<>'unavailable' OR r->>'terminal'<>'true'
+ OR (SELECT execution_attempts FROM public.mode_handoffs WHERE handoff_id=h)<>2
+ OR (SELECT count(*) FROM public.messages WHERE session_id=dst)<>1
+ THEN RAISE EXCEPTION 'two-attempt terminal cap failed'; END IF;
+ IF public.claim_handoff_failure_notice(gen_random_uuid(),h,'attempted')
+ OR NOT public.claim_handoff_failure_notice(u,h,'attempted')
+ OR public.claim_handoff_failure_notice(u,h,'attempted')
+ OR EXISTS(SELECT 1 FROM public.list_pending_handoff_failure_notices() WHERE handoff_id=h)
+ THEN RAISE EXCEPTION 'notice owner/single-attempt/queue fence failed'; END IF;
+END $$;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000017001',TRUE);
 DO $$ BEGIN
@@ -141,7 +176,10 @@ DO $$ DECLARE t TEXT; f TEXT; BEGIN
   'save_mode_conversation(uuid,text,text,jsonb,boolean)', 'close_mode_conversation(uuid,text,text)',
   'claim_handoff_execution(uuid,uuid,text,uuid)', 'save_handoff_execution_plan(uuid,uuid,uuid,jsonb)',
   'complete_handoff_execution(uuid,uuid,uuid)', 'fail_handoff_execution(uuid,uuid,uuid,text)',
-  'list_pending_handoff_executions(integer)'] LOOP
+  'list_pending_handoff_executions(integer)',
+  'append_handoff_execution_message(uuid,uuid,uuid,text,text,text)',
+  'claim_handoff_failure_notice(uuid,uuid,text)',
+  'list_pending_handoff_failure_notices(integer)'] LOOP
   IF has_function_privilege('anon','public.'||f,'EXECUTE')
     OR has_function_privilege('authenticated','public.'||f,'EXECUTE')
     OR NOT has_function_privilege('service_role','public.'||f,'EXECUTE') THEN

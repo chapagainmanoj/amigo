@@ -931,6 +931,40 @@ class MemoryStore:
         return bool(result.data)
 
     @_observe_database_call
+    async def get_handoff_metadata(self, user_id: str, handoff_id: str) -> dict | None:
+        result = await (self.db.table("mode_handoffs").select("session_id,resolution")
+                        .eq("user_id", user_id).eq("handoff_id", handoff_id)
+                        .maybe_single().execute())
+        return result.data if result else None
+
+    @_observe_database_call
+    async def append_handoff_execution_message(
+        self, user_id: str, handoff_id: str, claim_token: str, role: str,
+        content: str, channel: str,
+    ) -> dict | None:
+        result = await self.db.rpc("append_handoff_execution_message", {
+            "p_user_id": user_id, "p_handoff_id": handoff_id, "p_claim_token": claim_token,
+            "p_role": role, "p_content": content, "p_channel": channel,
+        }).execute()
+        return result.data
+
+    @_observe_database_call
+    async def claim_handoff_failure_notice(
+        self, user_id: str, handoff_id: str, outcome: str = "attempted",
+    ) -> bool:
+        result = await self.db.rpc("claim_handoff_failure_notice", {
+            "p_user_id": user_id, "p_handoff_id": handoff_id, "p_outcome": outcome,
+        }).execute()
+        return bool(result.data)
+
+    @_observe_database_call
+    async def list_pending_handoff_failure_notices(self, limit: int = 25) -> list[dict]:
+        result = await self.db.rpc(
+            "list_pending_handoff_failure_notices", {"p_limit": limit}
+        ).execute()
+        return result.data or []
+
+    @_observe_database_call
     async def list_pending_handoff_executions(self, limit: int = 25) -> list[dict]:
         result = await self.db.rpc("list_pending_handoff_executions", {"p_limit": limit}).execute()
         return result.data or []
@@ -978,15 +1012,15 @@ class MemoryStore:
         }
 
     @_observe_database_call
-    async def get_session_messages(self, session_id: str) -> list[dict]:
-        """Get all messages in a session, ordered by time."""
-        result = await (
-            self.db.table("messages")
-            .select("role, content, created_at")
-            .eq("session_id", session_id)
-            .order("created_at")
-            .execute()
-        )
+    async def get_session_messages(
+        self, session_id: str, *, exclude_message_id: str | None = None,
+    ) -> list[dict]:
+        """Get ordered transcript DTOs; handoffs may exclude their current input."""
+        query = (self.db.table("messages").select("role, content, created_at")
+                 .eq("session_id", session_id))
+        if exclude_message_id is not None:
+            query = query.neq("message_id", exclude_message_id)
+        result = await query.order("created_at").execute()
         return result.data
 
     @_observe_database_call

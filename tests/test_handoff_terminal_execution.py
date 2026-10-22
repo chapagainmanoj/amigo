@@ -74,3 +74,34 @@ async def test_terminal_failure_rpc_contract():
             "p_reason": "execution_failed",
         },
     )
+
+
+async def test_two_attempt_cap_message_fences_and_single_notice(store):
+    api, user, other, clock = store
+    handoff, target = await confirmed(api, user)
+    first = await api.claim_handoff_execution(user, handoff, "one", execution_session_id=target)
+    token = first["handoff"]["execution_claim_token"]
+    args = (user, handoff, token, "user", "Fictional carried request", "telegram")
+    message = await api.append_handoff_execution_message(*args)
+    assert message == await api.append_handoff_execution_message(*args)
+    assert not await api.append_handoff_execution_message(
+        other, handoff, token, "user", "Fictional carried request", "telegram"
+    )
+    assert not await api.append_handoff_execution_message(
+        user, handoff, token, "user", "Replacement content", "telegram"
+    )
+    assert await api.get_session_messages(target, exclude_message_id=message["message_id"]) == []
+    clock["now"] += timedelta(minutes=6)
+    assert not await api.append_handoff_execution_message(*args)
+    second = await api.claim_handoff_execution(user, handoff, "two")
+    new_args = (user, handoff, second["handoff"]["execution_claim_token"], *args[3:])
+    assert await api.append_handoff_execution_message(*new_args) == message
+    clock["now"] += timedelta(minutes=6)
+    assert await api.claim_handoff_execution(user, handoff, "three") == {
+        "status": "unavailable", "terminal": True
+    }
+    assert len(await api.get_session_messages(target)) == 1
+    assert not await api.claim_handoff_failure_notice(other, handoff)
+    assert await api.claim_handoff_failure_notice(user, handoff)
+    assert not await api.claim_handoff_failure_notice(user, handoff)
+    assert not await api.list_pending_handoff_failure_notices()

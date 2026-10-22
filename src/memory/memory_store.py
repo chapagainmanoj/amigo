@@ -649,6 +649,25 @@ class InMemoryStore:
     ) -> bool:
         return await self._mode_state.fail_execution(user_id, handoff_id, claim_token, reason)
 
+    async def get_handoff_metadata(self, user_id: str, handoff_id: str) -> dict | None:
+        return await self._mode_state.handoff_metadata(user_id, handoff_id)
+
+    async def append_handoff_execution_message(
+        self, user_id: str, handoff_id: str, claim_token: str, role: str,
+        content: str, channel: str,
+    ) -> dict | None:
+        return await self._mode_state.append_execution_message(
+            self._messages, user_id, handoff_id, claim_token, role, content, channel,
+        )
+
+    async def claim_handoff_failure_notice(
+        self, user_id: str, handoff_id: str, outcome: str = "attempted",
+    ) -> bool:
+        return await self._mode_state.claim_failure_notice(user_id, handoff_id, outcome)
+
+    async def list_pending_handoff_failure_notices(self, limit: int = 25) -> list[dict]:
+        return await self._mode_state.pending_failure_notices(limit)
+
     async def list_pending_handoff_executions(self, limit: int = 25) -> list[dict]:
         return await self._mode_state.pending_executions(self._users.values(), limit)
 
@@ -681,11 +700,14 @@ class InMemoryStore:
             "mode_id": session.get("mode_id", "daily"),
         }
 
-    async def get_session_messages(self, session_id: str) -> list[dict]:
+    async def get_session_messages(
+        self, session_id: str, *, exclude_message_id: str | None = None,
+    ) -> list[dict]:
         return [
             {"role": m["role"], "content": m["content"], "created_at": m["created_at"]}
             for m in self._messages
             if m["session_id"] == session_id
+            and (exclude_message_id is None or m["message_id"] != exclude_message_id)
         ]
 
     async def has_session_on_local_day(

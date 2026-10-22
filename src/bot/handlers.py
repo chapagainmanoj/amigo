@@ -149,7 +149,9 @@ class BotHandlers:
                     elif data.startswith("coach:"):
                         await self.coaching.handle_callback(user, chat_id, data, conversation)
                     else:
-                        await self.handoffs.handle_callback(user, chat_id, data, conversation)
+                        await self.handoffs.handle_callback(
+                            user, chat_id, data, conversation, message_id=message_id
+                        )
             return
 
         # Legacy onboarding controls must not bypass Dashboard-first Activation.

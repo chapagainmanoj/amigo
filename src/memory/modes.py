@@ -57,6 +57,10 @@ class ModeHandoff(TypedDict):
     execution_clock_at: str | None
     execution_attempts: int
     executed_at: str | None
+    execution_user_message_id: str | None
+    execution_assistant_message_id: str | None
+    execution_failure_notice_at: str | None
+    execution_failure_notice_outcome: str | None
     execution_failed_at: str | None
     execution_failure_reason: str | None
     execution_plan: list[dict]
@@ -299,6 +303,8 @@ class LocalModeState:
                 execution_session_id=None, execution_clock_at=None, execution_attempts=0,
                 executed_at=None, execution_plan=[],
                 execution_failed_at=None, execution_failure_reason=None,
+                execution_user_message_id=None, execution_assistant_message_id=None,
+                execution_failure_notice_at=None, execution_failure_notice_outcome=None,
             )
             self.handoffs[row["handoff_id"]] = row
             return {"status": "pending", "handoff": copy.deepcopy(row)}
@@ -424,6 +430,10 @@ class LocalModeState:
             if (row.get("execution_claimed_at") and
                     await _time(row["execution_claimed_at"]) + timedelta(minutes=5) > now):
                 return {"status": "busy"}
+            if row.get("execution_attempts", 0) >= 2:
+                row.update(execution_failed_at=now.isoformat(),
+                           execution_failure_reason="attempts_exhausted")
+                return {"status": "unavailable", "terminal": True}
             bound_id = row.get("execution_session_id") or execution_session_id
             session = sessions.get(bound_id)
             if (not session or session["user_id"] != user_id
@@ -489,6 +499,58 @@ class LocalModeState:
             row.update(execution_failed_at=(await _time(utc_now())).isoformat(),
                        execution_failure_reason=reason)
             return True
+
+    async def handoff_metadata(self, user_id: str, handoff_id: str) -> dict | None:
+        async with self.lock:
+            row = self.handoffs.get(handoff_id)
+            if not row or row["user_id"] != user_id:
+                return None
+            return {"session_id": row["session_id"], "resolution": row["resolution"]}
+
+    async def append_execution_message(
+        self, messages: list[dict], user_id: str, handoff_id: str, token: str,
+        role: str, content: str, channel: str,
+    ) -> dict | None:
+        if role not in {"user", "assistant"} or not isinstance(content, str) or channel is None:
+            return None
+        async with self.lock:
+            row = self.handoffs.get(handoff_id)
+            if not await self._owns_execution(row, user_id, token):
+                return None
+            field = f"execution_{role}_message_id"
+            existing = row.get(field)
+            if existing is not None:
+                message = next((item for item in messages if item["message_id"] == existing), None)
+                if (not message or message["content"] != content
+                        or message["user_id"] != user_id or message["role"] != role
+                        or message["session_id"] != row["execution_session_id"]):
+                    return None
+                return {"message_id": existing}
+            message = dict(message_id=str(uuid.uuid4()), session_id=row["execution_session_id"],
+                           user_id=user_id, role=role, content=content, channel=channel,
+                           created_at=(await _time(utc_now())).isoformat())
+            messages.append(message)
+            row[field] = message["message_id"]
+            return {"message_id": message["message_id"]}
+
+    async def claim_failure_notice(self, user_id: str, handoff_id: str, outcome: str) -> bool:
+        if outcome not in {"attempted", "endpoint_unavailable", "owner_unavailable"}:
+            return False
+        async with self.lock:
+            row = self.handoffs.get(handoff_id)
+            if (not row or row["user_id"] != user_id or not row.get("execution_failed_at")
+                    or row.get("execution_failure_notice_at")):
+                return False
+            row.update(execution_failure_notice_at=(await _time(utc_now())).isoformat(),
+                       execution_failure_notice_outcome=outcome)
+            return True
+
+    async def pending_failure_notices(self, limit: int) -> list[dict]:
+        async with self.lock:
+            return [{"user_id": row["user_id"], "handoff_id": row["handoff_id"]}
+                    for row in self.handoffs.values()
+                    if row.get("execution_failed_at") and not row.get("execution_failure_notice_at")
+                    ][:max(1, min(limit, 100))]
 
     async def pending_executions(self, users: Iterable[dict], limit: int) -> list[dict]:
         async with self.lock:

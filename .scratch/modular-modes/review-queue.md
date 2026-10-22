@@ -753,3 +753,15 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   advisory while waiting. Unicode scope digest parity and private error probes PASS; cluster stopped.
 - Root221Memory/lock/currency tests passed12.18s; fullRuff/diffclean. Latestfull1352passed;
   no actual model/Gate A certification or live admission. Final SQL chain follows021 repairs.
+
+### Review fix3 — bounded handoff execution and transcript
+
+- Author3b5ed90; protected017/assert017, handoffs.py, turns.py/ContextBuilder, handlers callback
+  messageid, modes.py/all3Stores, bounded/terminal tests and independent proof proposal.
+- At most2 claims; second failure terminal. ensure is inside failure handling. Carried input and
+  reply append once per role under lease fence; only current carried input excluded from history.
+  Terminal notice has durable at-most-one send attempt; crash after notice claim can lose notice,
+  never duplicate it. Owned stale buttons removed. Recovery isolates each row.
+- Independent usage_gate fresh45-file SQL chain + owner/token/role/lease/content/dedup/thirdclaim/
+  notice fences PASS017SHA09e0a285…;42focusedPASS2.54s. Rootfull1401passed22.69s/Ruff/diffclean;
+ 111currency/Dailygolden included. Author scheduler smoke passed. No release certification.

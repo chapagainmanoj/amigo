@@ -103,6 +103,11 @@ ALTER TABLE public.mode_handoffs
   ADD COLUMN execution_attempts INT NOT NULL DEFAULT 0 CHECK (execution_attempts >= 0),
   ADD COLUMN executed_at TIMESTAMPTZ,
   ADD COLUMN execution_failed_at TIMESTAMPTZ,
+  ADD COLUMN execution_user_message_id UUID,
+  ADD COLUMN execution_assistant_message_id UUID,
+  ADD COLUMN execution_failure_notice_at TIMESTAMPTZ,
+  ADD COLUMN execution_failure_notice_outcome TEXT CHECK(execution_failure_notice_outcome IN
+    ('attempted','endpoint_unavailable','owner_unavailable')),
   ADD COLUMN execution_failure_reason TEXT CHECK (execution_failure_reason IN
     ('session_unavailable','target_unavailable','execution_failed','attempts_exhausted')),
   ADD COLUMN execution_plan JSONB NOT NULL DEFAULT '[]'::jsonb
@@ -137,6 +142,10 @@ BEGIN
   v_now := clock_timestamp();
   IF v_handoff.execution_claimed_at > v_now - interval '5 minutes' THEN
     RETURN jsonb_build_object('status', 'busy'); END IF;
+  IF v_handoff.execution_attempts >= 2 THEN
+    UPDATE public.mode_handoffs SET execution_failed_at=v_now,
+      execution_failure_reason='attempts_exhausted' WHERE handoff_id=p_handoff_id;
+    RETURN jsonb_build_object('status','unavailable','terminal',TRUE); END IF;
   IF v_session.session_id IS NULL
      OR (v_session.ended_at IS NOT NULL AND v_handoff.execution_session_id IS NULL)
      OR v_session.mode_id <> v_handoff.target_mode_id
@@ -203,6 +212,55 @@ DECLARE v_row public.mode_handoffs%ROWTYPE; BEGIN
  WHERE handoff_id=p_handoff_id;
  RETURN TRUE;
 END $$;
+CREATE FUNCTION public.append_handoff_execution_message(
+ p_user_id UUID,p_handoff_id UUID,p_claim_token UUID,p_role TEXT,p_content TEXT,p_channel TEXT
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE h public.mode_handoffs%ROWTYPE; v_message_id UUID; v_session_id UUID; BEGIN
+ IF p_role IS NULL OR p_role NOT IN ('user','assistant') OR p_content IS NULL OR p_channel IS NULL
+ THEN RETURN NULL; END IF;
+ -- Keep the existing claim order: owned profile/Session before the handoff row.
+ PERFORM 1 FROM public.user_profiles WHERE user_id=p_user_id FOR KEY SHARE;
+ SELECT execution_session_id INTO v_session_id FROM public.mode_handoffs
+ WHERE user_id=p_user_id AND handoff_id=p_handoff_id;
+ PERFORM 1 FROM public.sessions s WHERE s.session_id=v_session_id AND s.user_id=p_user_id FOR KEY SHARE;
+ SELECT * INTO h FROM public.mode_handoffs WHERE user_id=p_user_id AND handoff_id=p_handoff_id
+ AND execution_claim_token=p_claim_token AND executed_at IS NULL AND execution_failed_at IS NULL
+ FOR UPDATE;
+ IF NOT FOUND OR h.execution_claimed_at<=clock_timestamp()-interval '5 minutes' THEN RETURN NULL; END IF;
+ v_message_id:=CASE WHEN p_role='user' THEN h.execution_user_message_id
+                  ELSE h.execution_assistant_message_id END;
+ IF v_message_id IS NOT NULL THEN
+   IF NOT EXISTS(SELECT 1 FROM public.messages m WHERE m.message_id=v_message_id AND m.user_id=p_user_id
+     AND m.session_id=h.execution_session_id AND m.role=p_role AND m.content=p_content)
+   THEN RETURN NULL; END IF;
+ ELSE
+   INSERT INTO public.messages(session_id,user_id,role,content,channel)
+   VALUES(h.execution_session_id,p_user_id,p_role,p_content,p_channel)
+   RETURNING public.messages.message_id INTO v_message_id;
+   IF p_role='user' THEN UPDATE public.mode_handoffs SET execution_user_message_id=v_message_id
+     WHERE handoff_id=p_handoff_id;
+   ELSE UPDATE public.mode_handoffs SET execution_assistant_message_id=v_message_id
+     WHERE handoff_id=p_handoff_id; END IF;
+ END IF;
+ RETURN jsonb_build_object('message_id',v_message_id);
+END $$;
+CREATE FUNCTION public.claim_handoff_failure_notice(
+ p_user_id UUID,p_handoff_id UUID,p_outcome TEXT DEFAULT 'attempted'
+) RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$ BEGIN
+ IF p_outcome IS NULL OR p_outcome NOT IN ('attempted','endpoint_unavailable','owner_unavailable')
+ THEN RETURN FALSE; END IF;
+ UPDATE public.mode_handoffs SET execution_failure_notice_at=clock_timestamp(),
+ execution_failure_notice_outcome=p_outcome WHERE user_id=p_user_id AND handoff_id=p_handoff_id
+ AND execution_failed_at IS NOT NULL AND execution_failure_notice_at IS NULL;
+ RETURN FOUND;
+END $$;
+CREATE FUNCTION public.list_pending_handoff_failure_notices(p_limit INT DEFAULT 25)
+RETURNS TABLE(user_id UUID,handoff_id UUID)
+LANGUAGE sql SECURITY DEFINER SET search_path = '' AS $$
+ SELECT h.user_id,h.handoff_id FROM public.mode_handoffs h
+ WHERE h.execution_failed_at IS NOT NULL AND h.execution_failure_notice_at IS NULL
+ ORDER BY h.execution_failed_at LIMIT greatest(1,least(p_limit,100));
+$$;
 CREATE FUNCTION public.list_pending_handoff_executions(p_limit INT DEFAULT 25)
 RETURNS TABLE(user_id UUID, handoff_id UUID, execution_session_id UUID, target_mode_id TEXT,
               telegram_chat_id BIGINT)
@@ -219,14 +277,18 @@ REVOKE ALL ON FUNCTION public.save_mode_conversation(UUID,TEXT,TEXT,JSONB,BOOLEA
  public.claim_handoff_execution(UUID,UUID,TEXT,UUID),
  public.save_handoff_execution_plan(UUID,UUID,UUID,JSONB),
  public.complete_handoff_execution(UUID,UUID,UUID),
- public.fail_handoff_execution(UUID,UUID,UUID,TEXT), public.list_pending_handoff_executions(INT)
+ public.fail_handoff_execution(UUID,UUID,UUID,TEXT), public.list_pending_handoff_executions(INT),
+ public.append_handoff_execution_message(UUID,UUID,UUID,TEXT,TEXT,TEXT),
+ public.claim_handoff_failure_notice(UUID,UUID,TEXT), public.list_pending_handoff_failure_notices(INT)
  FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.save_mode_conversation(UUID,TEXT,TEXT,JSONB,BOOLEAN),
  public.close_mode_conversation(UUID,TEXT,TEXT),
  public.claim_handoff_execution(UUID,UUID,TEXT,UUID),
  public.save_handoff_execution_plan(UUID,UUID,UUID,JSONB),
  public.complete_handoff_execution(UUID,UUID,UUID),
- public.fail_handoff_execution(UUID,UUID,UUID,TEXT), public.list_pending_handoff_executions(INT)
+ public.fail_handoff_execution(UUID,UUID,UUID,TEXT), public.list_pending_handoff_executions(INT),
+ public.append_handoff_execution_message(UUID,UUID,UUID,TEXT,TEXT,TEXT),
+ public.claim_handoff_failure_notice(UUID,UUID,TEXT), public.list_pending_handoff_failure_notices(INT)
  TO service_role;
 DO $$ BEGIN
  IF to_regclass('public.mode_conversations') IS NULL
@@ -239,6 +301,9 @@ DO $$ BEGIN
     OR to_regprocedure('public.complete_handoff_execution(uuid,uuid,uuid)') IS NULL
     OR to_regprocedure('public.save_handoff_execution_plan(uuid,uuid,uuid,jsonb)') IS NULL
     OR to_regprocedure('public.fail_handoff_execution(uuid,uuid,uuid,text)') IS NULL
+    OR to_regprocedure('public.append_handoff_execution_message(uuid,uuid,uuid,text,text,text)') IS NULL
+    OR to_regprocedure('public.claim_handoff_failure_notice(uuid,uuid,text)') IS NULL
+    OR to_regprocedure('public.list_pending_handoff_failure_notices(integer)') IS NULL
  THEN RAISE EXCEPTION '017 objects were not created'; END IF;
  INSERT INTO public.schema_migrations(version) VALUES(17);
 END $$;
