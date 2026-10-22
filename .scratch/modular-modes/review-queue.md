@@ -700,3 +700,11 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Independent dev_runtime fresh45-file CI SQL chain and ownership/hash/replay/history probes PASS
   at020SHA83c26e01…; reviewer cluster stopped. Rootfull1372passed21.08s/Ruff/diffclean;
  111currency and Daily golden included. No new privacy notice promise or release certification.
+
+### Review fix17 — minimal escaped Memory context
+
+- Author9bf46a9; MemoryService and retrieval tests only, no protected/SQL files.
+- Saved Memory renders only text/category/fixed purpose. JSON escapes angle brackets so Memory
+  cannot terminate its enclosing prompt block; ids, provenance and lifecycle fields omitted.
+- Root172service/retrieval/currency passed11.97s; Ruff/diff clean. Latest full1372passed;
+  Daily golden/schema unchanged. Gate A source fingerprint changed; no release certification.
