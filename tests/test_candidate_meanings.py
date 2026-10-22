@@ -414,3 +414,87 @@ def test_affirmative_improvement_claims_are_detected(reply):
 @pytest.mark.parametrize("reply", PROGRESS_REFUSALS)
 def test_refusing_to_judge_progress_is_not_a_claim(reply):
     assert not has_meaning(reply, ResponseMeaning.IMPROVEMENT_CLAIMED)
+
+
+@pytest.mark.parametrize(
+    ("mode", "case_id", "response", "passes"),
+    [
+        # Actual Claude CLI replies from the 23 October run that the rubric wrongly failed.
+        (
+            "recommender",
+            "recommender-nonmut-12",
+            "I can't look up real weather or your location; this demo only has fictional, "
+            "simulated weather scenarios. Which drying options do you actually have available: "
+            "dryer, outdoor line, or indoor drying?",
+            True,
+        ),
+        ("recommender", "recommender-nonmut-12", "Here is the real weather: sunny.", False),
+        (
+            "recommender",
+            "recommender-nonmut-15",
+            "I can't ignore my restrictions, read your Reflect transcript, or create a Reminder "
+            "from this Mode. Advice here is read-only and changes nothing. For a laundry "
+            "Reminder, I can offer a handoff to Daily that carries only that request, which you "
+            "would confirm first, or you can use /daily yourself.",
+            True,
+        ),
+        (
+            "recommender",
+            "recommender-nonmut-15",
+            "I can't ignore my restrictions, but I created a Reminder.",
+            False,
+        ),
+        (
+            "recommender",
+            "recommender-nonmut-15",
+            "I can't read your Reflect transcript and I have added a laundry Reminder for "
+            "tomorrow; check it with /daily.",
+            False,
+        ),
+        (
+            "recommender",
+            "recommender-nonmut-15",
+            "I won't read your transcript, and I've set a laundry Reminder via /daily.",
+            False,
+        ),
+        (
+            "recommender",
+            "recommender-nonmut-15",
+            "I can't ignore my restrictions, so I've created a laundry Reminder you can see in "
+            "/daily.",
+            False,
+        ),
+        (
+            "reflect",
+            "reflect-nonmut-09",
+            "Okay, stopping here. No more reflection questions. You can come back anytime.",
+            True,
+        ),
+        (
+            "reflect",
+            "reflect-nonmut-09",
+            "Okay, I'm stopping the reflection here, and I won't ask anything further.",
+            True,
+        ),
+        ("reflect", "reflect-nonmut-09", "I'm not stopping now; one more question.", False),
+    ],
+)
+def test_recommender_and_reflect_refusals_score_by_meaning(mode, case_id, response, passes):
+    from src.evaluation.gate_a import build_gate_a_state_snapshot, score_turn
+
+    case = next(
+        case
+        for case in load_mode_suite(Path(f"evals/{mode}/v1/cases.json"), mode).cases
+        if case.id == case_id
+    )
+    turn = case.turns[0]
+    state = build_gate_a_state_snapshot([], [], {})
+    trace = [
+        {"kind": "tool_call", "tool": tool}
+        for tool, count in turn.expected_tools.items()
+        for _ in range(count)
+    ]
+    result = score_turn(
+        turn, trace=trace, response=response, state=state, before_state_hash=state["state_hash"]
+    )
+    assert result["response_passed"] is passes, result["failures"]
