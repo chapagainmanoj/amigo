@@ -65,4 +65,66 @@ BEGIN
  OR has_function_privilege('authenticated','public.memory_command(uuid,text,jsonb)','EXECUTE')
  OR NOT has_function_privilege('service_role','public.memory_command(uuid,text,jsonb)','EXECUTE') THEN RAISE EXCEPTION 'privilege'; END IF;
 END $$;
+DO $$ DECLARE u UUID; candidate UUID; actor UUID; p JSONB; pending TEXT; token TEXT;
+ r JSONB; settings_version INT; i INT; ses UUID;
+BEGIN
+ SELECT user_id INTO u FROM public.user_profiles WHERE telegram_chat_id=91020001;
+ p:=jsonb_build_object('category','preference','text','Fictional withdrawal slot test',
+ 'source_mode_id','daily','source_channel','dashboard','source_message_id',NULL,
+ 'source_date',to_char(current_date,'YYYY-MM-DD'),'creation_path','dashboard_explicit',
+ 'scopes',jsonb_build_array('daily'),'valid_until',NULL);
+ SELECT version INTO settings_version FROM public.memory_settings WHERE user_id=u;
+ pending:=public.memory_command(u,'prepare_memory_confirmation',jsonb_build_object('operation','save',
+ 'preview_digest',public.memory_payload_digest(p),'expected_settings_version',settings_version))->>'token';
+ INSERT INTO public.sessions(user_id,mode_id) VALUES(u,'daily') RETURNING session_id INTO ses;
+ INSERT INTO public.messages(user_id,session_id,role,content) VALUES(u,ses,'user','Fictional separate conversation');
+ FOR i IN 1..5 LOOP
+ INSERT INTO public.user_profiles(telegram_chat_id) VALUES(91020100+i) RETURNING user_id INTO actor;
+ token:=public.memory_command(actor,'prepare_memory_confirmation',jsonb_build_object('operation','save',
+ 'preview_digest',public.memory_payload_digest(p),'expected_settings_version',0))->>'token';
+ IF i<5 THEN
+ PERFORM public.memory_command(actor,'confirm_memory_save',jsonb_build_object('token',token,'payload',p,
+ 'idempotency_key','first','payload_hash','first','enable_memory',TRUE,'policy_version','memory-explicit-v1'));
+ ELSE
+ candidate:=actor;
+ BEGIN
+ PERFORM public.memory_command(actor,'confirm_memory_save',jsonb_build_object('token',token,'payload',p,
+ 'idempotency_key','first','payload_hash','first','enable_memory',TRUE,'policy_version','memory-explicit-v1'));
+ RAISE EXCEPTION 'sixth owner admitted'; EXCEPTION WHEN raise_exception THEN
+ IF SQLERRM NOT LIKE 'invalid transition: Memory trial admission cap reached' THEN RAISE; END IF; END;
+ END IF; END LOOP;
+ BEGIN
+ PERFORM public.memory_command(u,'disable_memory',jsonb_build_object('expected_version',settings_version-1,
+ 'idempotency_key','stale-disable','payload_hash','disable'));
+ RAISE EXCEPTION 'stale withdrawal accepted'; EXCEPTION WHEN raise_exception THEN
+ IF SQLERRM<>'stale version' THEN RAISE; END IF; END;
+ r:=public.memory_command(u,'disable_memory',jsonb_build_object('expected_version',settings_version,
+ 'idempotency_key','disable','payload_hash','disable'));
+ IF r->>'status'<>'disabled' OR (r->'settings'->>'enabled')::BOOLEAN
+ OR r->'settings'->>'policy_version' IS NOT NULL OR r->'settings'->>'opted_in_at' IS NOT NULL
+ THEN RAISE EXCEPTION 'withdrawal consent state'; END IF;
+ IF EXISTS(SELECT 1 FROM public.memory_versions WHERE user_id=u)
+ OR EXISTS(SELECT 1 FROM public.memory_uses WHERE user_id=u)
+ OR EXISTS(SELECT 1 FROM public.memory_confirmation_claims WHERE user_id=u)
+ OR EXISTS(SELECT 1 FROM public.memory_command_receipts WHERE user_id=u AND idempotency_key<>'disable')
+ THEN RAISE EXCEPTION 'withdrawal retained Memory data'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.messages WHERE session_id=ses) THEN RAISE EXCEPTION 'conversation deleted'; END IF;
+ IF public.memory_command(u,'disable_memory',jsonb_build_object('expected_version',settings_version,
+ 'idempotency_key','disable','payload_hash','disable'))<>r THEN RAISE EXCEPTION 'withdrawal replay'; END IF;
+ BEGIN
+ PERFORM public.memory_command(u,'confirm_memory_save',jsonb_build_object('token',pending,'payload',p,
+ 'idempotency_key','save','payload_hash','save','enable_memory',TRUE,'policy_version','memory-explicit-v1'));
+ RAISE EXCEPTION 'old token or receipt resurrected Memory'; EXCEPTION WHEN raise_exception THEN
+ IF SQLERRM NOT LIKE 'invalid transition:%' THEN RAISE; END IF; END;
+ -- The waiting sixth participant can now use the released slot.
+ PERFORM public.memory_command(candidate,'confirm_memory_save',jsonb_build_object('token',token,'payload',p,
+ 'idempotency_key','first','payload_hash','first','enable_memory',TRUE,'policy_version','memory-explicit-v1'));
+ token:=public.memory_command(u,'prepare_memory_confirmation',jsonb_build_object('operation','save',
+ 'preview_digest',public.memory_payload_digest(p),'expected_settings_version',settings_version+1))->>'token';
+ BEGIN
+ PERFORM public.memory_command(u,'confirm_memory_save',jsonb_build_object('token',token,'payload',p,
+ 'idempotency_key','fresh','payload_hash','fresh'));
+ RAISE EXCEPTION 'fresh consent skipped'; EXCEPTION WHEN raise_exception THEN
+ IF SQLERRM NOT LIKE 'invalid transition: Memory opt-in%' THEN RAISE; END IF; END;
+END $$;
 ROLLBACK;

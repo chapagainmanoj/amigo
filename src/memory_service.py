@@ -333,6 +333,17 @@ class MemoryService:
         await self._clear(user_id)
         return result
 
+    async def disable(self, user_id, expected_version):
+        try:
+            return await self.store.disable_memory(
+                user_id,
+                expected_version,
+                f"memory-disable:{expected_version}",
+                _hash({"action": "disable_memory", "version": expected_version}),
+            )
+        finally:
+            await self._clear(user_id)
+
     async def read_relevant(
         self, user_id, mode_id, turn_id, query, *, explicit_intent=False, purpose="personalize"
     ):

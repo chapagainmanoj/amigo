@@ -43,3 +43,5 @@
   .memory-actions .coaching-button { flex-grow: 1; }
   .memory-inspector .coaching-details { gap: 18px; }
 }
+
+.memory-withdraw { margin-top: 16px; }

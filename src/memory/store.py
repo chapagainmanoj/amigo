@@ -520,6 +520,20 @@ class MemoryStore:
             },
         )
 
+    async def disable_memory(self, user_id, expected_version, idempotency_key, payload_hash):
+        return await self._memory_rpc(
+            "memory_command",
+            {
+                "p_user_id": user_id,
+                "p_operation": "disable_memory",
+                "p_args": {
+                    "expected_version": expected_version,
+                    "idempotency_key": idempotency_key,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
     async def confirm_forget_all_memory(self, user_id, token, idempotency_key, payload_hash):
         return await self._memory_rpc(
             "memory_command",

@@ -633,3 +633,15 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Independent cbt_selector fresh45-file CI SQL chain PASS at019hash4638f74e…;157lock-order tests
   passed0.27s/Ruffclean. Root full1336passed20.66s, Ruff/diff clean, currency/golden included.
   No production schema/data/credentials changed; release Gate A certification absent.
+
+### Review fix13 / owner decision — Memory off forgets all and frees slot
+
+- Author545a740 integrated separately. Files migration020 (protected), assert020, durable.py,
+  all3Stores, MemoryService/API/Inspector JSX/CSS and Store/service tests; independent record
+  proposals/review-fix13-memory-withdrawal-verification.md.
+- Explicit owned disable deletes all Memoryversions/tombstones/claims/uses/oldreceipts, resets
+  enabledfalse and consent, frees trial slot. Re-enable starts fresh with first-item consent.
+  Stale confirmations cannot restore content; conversation Messages/provider copies remain.
+- Independent fresh45-file SQL chain PASS at020hashccec4ac4…;73Store/service/APItests passed,
+  author90focused passed; ESLint/build/Ruffclean. Rootfull1346passed21.46s/Ruff/diffclean;
+ 111currency/Daily golden included. Release Gate A certification absent; no live admission.

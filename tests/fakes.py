@@ -411,6 +411,12 @@ class FakeStore:
             user_id, memory_id, expected_version, idempotency_key, payload_hash
         )
 
+    async def disable_memory(self, user_id, expected_version, idempotency_key, payload_hash):
+        await self._memory_user(user_id)
+        return await self._memory_state.disable(
+            user_id, expected_version, idempotency_key, payload_hash
+        )
+
     async def confirm_forget_all_memory(self, user_id, token, idempotency_key, payload_hash):
         await self._memory_user(user_id)
         return await self._memory_state.forget_all(user_id, token, idempotency_key, payload_hash)

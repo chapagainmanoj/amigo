@@ -126,7 +126,7 @@ BEGIN
  IF NOT FOUND THEN s.user_id:=p_user_id; s.enabled:=FALSE; s.learning_paused:=FALSE;
  s.use_paused:=FALSE; s.version:=0; END IF;
  IF p_operation='get_memory_settings' THEN RETURN to_jsonb(s); END IF;
- IF p_operation IN ('confirm_memory_save','transition_memory','set_memory_pauses','forget_memory','confirm_forget_all_memory') THEN
+ IF p_operation IN ('confirm_memory_save','transition_memory','set_memory_pauses','forget_memory','confirm_forget_all_memory','disable_memory') THEN
  IF key IS NULL OR char_length(key) NOT BETWEEN 1 AND 200 OR digest IS NULL OR char_length(digest) NOT BETWEEN 1 AND 200
  THEN RAISE EXCEPTION 'Memory replay metadata required'; END IF;
  SELECT * INTO r FROM public.memory_command_receipts WHERE user_id=p_user_id AND idempotency_key=key;
@@ -231,6 +231,15 @@ BEGIN
  IF old.memory_id IS NOT NULL THEN UPDATE public.memory_versions SET state='superseded' WHERE memory_id=old.memory_id AND version=old.version; END IF;
  INSERT INTO public.memory_versions SELECT m.*;
  UPDATE public.memory_confirmation_claims SET consumed_at=clock_timestamp() WHERE token_hash=c.token_hash;
+ ELSIF p_operation='disable_memory' THEN
+ IF s.version IS DISTINCT FROM (p_args->>'expected_version')::INT THEN RAISE EXCEPTION 'stale version'; END IF;
+ DELETE FROM public.memory_uses WHERE user_id=p_user_id;
+ DELETE FROM public.memory_versions WHERE user_id=p_user_id;
+ DELETE FROM public.memory_confirmation_claims WHERE user_id=p_user_id;
+ -- Remove receipts referencing deleted versions and their content-derived hashes.
+ DELETE FROM public.memory_command_receipts WHERE user_id=p_user_id;
+ s.enabled:=FALSE; s.learning_paused:=FALSE; s.use_paused:=FALSE;
+ s.policy_version:=NULL; s.opted_in_at:=NULL;
  ELSIF p_operation='set_memory_pauses' THEN
  IF s.version IS DISTINCT FROM (p_args->>'expected_version')::INT THEN RAISE EXCEPTION 'stale version'; END IF;
  IF coalesce(p_args->>'learning',p_args->>'use') IS NULL THEN RAISE EXCEPTION 'Explicit pause required'; END IF;
@@ -273,6 +282,7 @@ BEGIN
  learning_paused=EXCLUDED.learning_paused,use_paused=EXCLUDED.use_paused,policy_version=EXCLUDED.policy_version,
  opted_in_at=EXCLUDED.opted_in_at,version=EXCLUDED.version;
  IF p_operation='set_memory_pauses' THEN result:=to_jsonb(s);
+ ELSIF p_operation='disable_memory' THEN result:=jsonb_build_object('status','disabled','settings',to_jsonb(s));
  ELSIF result IS NULL THEN result:=jsonb_build_object('memory',to_jsonb(m),'settings',to_jsonb(s)); END IF;
  INSERT INTO public.memory_command_receipts(user_id,idempotency_key,payload_hash,operation,memory_id,version,result_metadata)
  VALUES(p_user_id,key,digest,p_operation,CASE WHEN result ? 'memory' THEN m.memory_id END,

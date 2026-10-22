@@ -292,3 +292,58 @@ async def test_forget_all_inventory_stales_after_later_save_and_export_complete(
         await api.confirm_forget_all_memory(user, claim["token"], "all", "all")
     assert len((await api.inspect_memories(user, limit=1))["memories"]) == 1
     assert len((await api.export_memory_data(user))["memories"]) == 2
+
+
+async def test_disable_withdraws_deletes_versions_claims_uses_and_requires_fresh_consent(store):
+    api, backing, user, other, _ = store
+    backing._memory_state.admission_enabled = True
+    first = (await save(api, user))["memory"]
+    await save(api, other, "other")
+    await api.read_memory_context(user, "daily", "before-disable", "personalize", "coffee")
+    await save(api, user, "correct", payload(text="Fictional coffee correction"), "correct", first)
+    settings = await api.get_memory_settings(user)
+    claim = await api.prepare_memory_confirmation(
+        user, "save", memory_payload_digest(payload()), settings["version"]
+    )
+    with pytest.raises(StaleVersionError):
+        await api.disable_memory(user, settings["version"] - 1, "stale-disable", "disable")
+    result = await api.disable_memory(user, settings["version"], "disable", "disable")
+    assert result["status"] == "disabled"
+    assert result["settings"]["enabled"] is False
+    assert result["settings"]["policy_version"] is None
+    assert result["settings"]["opted_in_at"] is None
+    data = await api.export_memory_data(user)
+    assert data["memories"] == data["uses"] == []
+    assert not any(row["user_id"] == user for row in backing._memory_state.claims.values())
+    assert len((await api.export_memory_data(other))["memories"]) == 1
+    assert await api.disable_memory(user, settings["version"], "disable", "disable") == result
+    with pytest.raises(InvalidTransitionError):
+        await api.confirm_memory_save(
+            user, claim["token"], payload(), "save", "save", True, MEMORY_POLICY_VERSION
+        )
+    next_settings = await api.get_memory_settings(user)
+    next_claim = await api.prepare_memory_confirmation(
+        user, "save", memory_payload_digest(payload()), next_settings["version"]
+    )
+    with pytest.raises(InvalidTransitionError):
+        await api.confirm_memory_save(user, next_claim["token"], payload(), "fresh", "fresh")
+    fresh = await api.confirm_memory_save(
+        user, next_claim["token"], payload(), "fresh", "fresh", True, MEMORY_POLICY_VERSION
+    )
+    assert fresh["memory"]["version"] == 1
+    assert fresh["memory"]["memory_id"] != first["memory_id"]
+
+
+async def test_disable_frees_global_trial_slot_but_pause_does_not(store):
+    api, backing, user, _, _ = store
+    backing._memory_state.admission_enabled = True
+    await save(api, user)
+    for i in range(4):
+        actor = (await backing.create_user(str(930200000 + i)))["user_id"]
+        await save(api, actor)
+    waiting = (await backing.create_user("930200099"))["user_id"]
+    with pytest.raises(InvalidTransitionError):
+        await save(api, waiting)
+    settings = await api.get_memory_settings(user)
+    await api.disable_memory(user, settings["version"], "disable", "disable")
+    assert (await save(api, waiting))["settings"]["enabled"] is True

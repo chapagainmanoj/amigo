@@ -541,3 +541,67 @@ async def test_optional_proposal_missing_source_date_refuses_without_candidate(
     result = await propose_memory(SimpleNamespace(deps=context), "preference", env.payload["text"])
     assert "recorded date" in result
     assert env.service._previews == {} and env.store._memory_state.claims == {}
+
+
+async def test_disable_clears_ephemeral_previews_and_requires_fresh_consent(memory_env):
+    env = memory_env
+    await save(env)
+    pending = await env.service.propose(env.owner["user_id"], env.payload)
+    settings = await env.store.get_memory_settings(env.owner["user_id"])
+    result = await env.service.disable(env.owner["user_id"], settings["version"])
+    assert result["status"] == "disabled"
+    assert not any(actor == env.owner["user_id"] for actor, _ in env.service._previews)
+    assert (await env.service.inspect(env.owner["user_id"]))["memories"] == []
+    with pytest.raises(ValueError):
+        await env.service.confirm(
+            env.owner["user_id"],
+            pending["token"],
+            enable_memory=True,
+            policy_version=MEMORY_POLICY_VERSION,
+        )
+    fresh = await env.service.propose(env.owner["user_id"], env.payload)
+    assert fresh["requires_enable"] is True
+    with pytest.raises(ValueError):
+        await env.service.confirm(env.owner["user_id"], fresh["token"])
+
+
+async def test_disable_api_exact_confirmation_owner_version_and_default_off_readiness(memory_env):
+    env = memory_env
+    await save(env)
+    env.readiness.enabled = False
+    app = FastAPI()
+    app.state.store, app.state.memory_service = env.store, env.service
+    app.include_router(router)
+    app.dependency_overrides[get_authenticated_user_id] = lambda: env.owner["supabase_auth_id"]
+    env.store.get_activation_state = AsyncMock(return_value={"completed": True})
+    version = (await env.store.get_memory_settings(env.owner["user_id"]))["version"]
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        assert (
+            await client.post("/api/memory/disable", json={"expected_version": version})
+        ).status_code == 422
+        assert (
+            await client.post(
+                "/api/memory/disable", json={"expected_version": version, "confirmation": "wrong"}
+            )
+        ).status_code == 422
+        assert (
+            await client.post(
+                "/api/memory/disable",
+                json={
+                    "expected_version": version - 1,
+                    "confirmation": "turn off memory and forget everything",
+                },
+            )
+        ).status_code == 409
+        response = await client.post(
+            "/api/memory/disable",
+            json={
+                "expected_version": version,
+                "confirmation": "turn off memory and forget everything",
+            },
+        )
+        assert response.status_code == 200 and response.json()["settings"]["enabled"] is False
+        data = (await client.get("/api/memory")).json()
+        assert data["memories"] == data["uses"] == []

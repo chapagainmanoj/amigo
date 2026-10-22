@@ -64,6 +64,8 @@ export default function MemoryInspector({ request = apiRequest }) {
   const [confirmAll, setConfirmAll] = useState(false)
   const [forget, setForget] = useState(null)
   const [confirmForget, setConfirmForget] = useState(false)
+  const [showDisable, setShowDisable] = useState(false)
+  const [confirmDisable, setConfirmDisable] = useState(false)
   const reviewHeading = useRef(null)
   const editorHeading = useRef(null)
   const forgetHeading = useRef(null)
@@ -82,6 +84,8 @@ export default function MemoryInspector({ request = apiRequest }) {
       setEnable(false)
       setConfirmAll(false)
       setConfirmForget(false)
+      setShowDisable(false)
+      setConfirmDisable(false)
     } catch {
       setError('Memory records could not be loaded. Refresh records to try again.')
       setStale(true)
@@ -121,6 +125,8 @@ export default function MemoryInspector({ request = apiRequest }) {
         setDraft(null)
         setForget(null)
         setConfirmForget(false)
+        setShowDisable(false)
+        setConfirmDisable(false)
         setNotice(success)
       }
     } catch {
@@ -128,6 +134,8 @@ export default function MemoryInspector({ request = apiRequest }) {
       setPreview(null)
       setDraft(null)
       setForget(null)
+      setShowDisable(false)
+      setConfirmDisable(false)
       setError('The action could not be confirmed or the records changed. Refresh records before another change or export.')
     } finally { setBusy(false) }
   }
@@ -181,8 +189,18 @@ export default function MemoryInspector({ request = apiRequest }) {
           <button className="coaching-button" type="button" disabled={locked} onClick={() => post('settings', { expected_version: records.settings.version, use: !records.settings.use_paused })}>{records.settings.use_paused ? 'Resume use' : 'Pause use'}</button>
           <button className="coaching-button" type="button" disabled={locked || !canSave} onClick={() => { setDraft({ ...NEW_DRAFT, scopes: ['daily'] }); setPreview(null); setForget(null) }}>Save a Memory</button>
         </div>
+        <button className="coaching-button coaching-delete memory-withdraw" type="button" disabled={locked || (!records.settings.enabled && !hasMemory)} onClick={() => { setShowDisable(true); setConfirmDisable(false); setDraft(null); setPreview(null); setForget(null) }}>Turn Memory off and forget everything</button>
         {records.settings.learning_paused && <p className="coaching-muted">Learning is paused. Resume learning before preparing a new save or correction.</p>}
       </section>
+
+      {showDisable && <section className="memory-preview" aria-labelledby="memory-disable-heading">
+        <h2 id="memory-disable-heading">Turn Memory off and forget everything?</h2>
+        <p>This removes all saved Memory, every version, confirmation records and use history, and withdraws your Memory consent.</p>
+        <p>{FORGET_SCOPE} Backup erasure is not verified by this action.</p>
+        <p>Turning Memory on again requires fresh consent and an exact first save.</p>
+        <label className="memory-check"><input type="checkbox" checked={confirmDisable} disabled={locked} onChange={event => setConfirmDisable(event.target.checked)} /><span>I choose to turn Memory off and remove all my saved Memory records.</span></label>
+        <div className="memory-actions"><button className="coaching-button coaching-delete" type="button" disabled={locked || !confirmDisable} onClick={() => post('disable', { expected_version: records.settings.version, confirmation: 'turn off memory and forget everything' }, { success: 'Memory is off. Saved Memory records were removed. Turning it on again requires fresh consent.' })}>Turn off and forget everything</button><button className="coaching-button" type="button" disabled={busy} onClick={() => { setShowDisable(false); setConfirmDisable(false) }}>Cancel</button></div>
+      </section>}
 
       {draft && <form className="memory-editor" onSubmit={requestPreview} aria-labelledby="memory-editor-heading">
         <h2 id="memory-editor-heading" tabIndex={-1} ref={editorHeading}>{draft.operation === 'save' ? 'Choose the exact Memory' : `${label(draft.operation)} Memory`}</h2>

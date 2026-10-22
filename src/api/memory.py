@@ -51,6 +51,12 @@ class PauseRequest(BaseModel):
     use: StrictBool | None = None
 
 
+class DisableRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=0)
+    confirmation: Literal["turn off memory and forget everything"]
+
+
 class ItemRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     memory_id: UUID
@@ -177,6 +183,17 @@ async def memory_action(body: TransitionRequest, user: Actor, service: Service):
 async def forget_memory(body: ItemRequest, user: Actor, service: Service):
     try:
         result = await service.forget(user["user_id"], str(body.memory_id), body.expected_version)
+    except ValueError:
+        raise HTTPException(
+            409, "Memory action unavailable or changed. Refresh and review again."
+        ) from None
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@router.post("/api/memory/disable")
+async def disable_memory(body: DisableRequest, user: Actor, service: Service):
+    try:
+        result = await service.disable(user["user_id"], body.expected_version)
     except ValueError:
         raise HTTPException(
             409, "Memory action unavailable or changed. Refresh and review again."

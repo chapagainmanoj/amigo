@@ -560,3 +560,42 @@ class LocalMemoryState:
                 dict(status="forgotten", count=len(identities)),
                 operation="confirm_forget_all_memory",
             )
+
+    async def disable(self, user_id, version, key, digest):
+        """Withdraw consent, physically delete all items, and release the trial slot."""
+        async with self.lock:
+            replay = await self._replay(user_id, key, digest, "disable_memory")
+            if replay is not None:
+                return replay
+            settings = copy.deepcopy(await self._settings(user_id))
+            if settings["version"] != version:
+                raise StaleVersionError("Memory settings changed")
+            self.memories = {
+                identity: row
+                for identity, row in self.memories.items()
+                if row["user_id"] != user_id
+            }
+            self.uses[:] = [row for row in self.uses if row["user_id"] != user_id]
+            self.claims = {
+                token: row for token, row in self.claims.items() if row["user_id"] != user_id
+            }
+            # Deleted item references cannot be replayed or retain earlier content digests.
+            self.receipts = {
+                identity: row for identity, row in self.receipts.items() if identity[0] != user_id
+            }
+            settings.update(
+                enabled=False,
+                learning_paused=False,
+                use_paused=False,
+                policy_version=None,
+                opted_in_at=None,
+                version=version + 1,
+            )
+            self.settings[user_id] = settings
+            return await self._receipt(
+                user_id,
+                key,
+                digest,
+                dict(status="disabled", settings=settings),
+                operation="disable_memory",
+            )
