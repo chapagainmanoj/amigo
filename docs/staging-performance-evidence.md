@@ -33,7 +33,9 @@ only content-free identifiers and timings in evidence.
 
 Capture application logs from the exact trial interval. Store operations emit
 `database_operation`, `outcome`, and `duration_ms`; the runtime monitor emits
-`event_loop_delay_ms`. Summarize each interval with:
+`event_loop_delay_ms`. These routine lines are emitted only when the service runs with
+`APP_ENV=staging` (or `LOG_LEVEL=DEBUG`); other environments log only event-loop delays of
+100 ms or more. Summarize each interval with:
 
 ```bash
 python scripts/summarize_runtime_evidence.py trial.log > trial-summary.json

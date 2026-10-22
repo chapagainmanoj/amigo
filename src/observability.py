@@ -5,6 +5,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# A delay this long stalls every webhook, Reminder and Store call, so it is logged everywhere.
+SLOW_EVENT_LOOP_MS = 100.0
+
 
 async def monitor_event_loop_delay(
     stop_event: asyncio.Event,
@@ -21,14 +24,15 @@ async def monitor_event_loop_delay(
             await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
         except TimeoutError:
             delay_ms = max(0.0, (loop.time() - expected_at) * 1000)
-            logger.info("event_loop_delay_ms=%.3f", delay_ms)
+            level = logging.WARNING if delay_ms >= SLOW_EVENT_LOOP_MS else logging.INFO
+            logger.log(level, "event_loop_delay_ms=%.3f", delay_ms)
             samples += 1
             if sample_limit is not None and samples >= sample_limit:
                 return
 
 
-# Per-second and per-call evidence lines. Staging/production keep them for
-# scripts/summarize_runtime_evidence.py; locally they bury everything else.
+# Per-second and per-call evidence lines. Only staging needs them, for
+# scripts/summarize_runtime_evidence.py; elsewhere they bury everything else.
 ROUTINE_LOGGERS = ("src.observability", "src.memory.store", "apscheduler")
 
 

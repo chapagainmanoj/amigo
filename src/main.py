@@ -42,8 +42,8 @@ logging.basicConfig(
 # httpx logs every request URL at INFO, and Telegram Bot API URLs embed the bot token.
 for _noisy in ("httpx", "httpcore"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
-# Evidence environments keep routine logs; LOG_LEVEL=DEBUG brings them back locally.
-if settings.app_env.strip().lower() == "development" and settings.log_level != "DEBUG":
+# Only staging performance evidence needs routine logs; LOG_LEVEL=DEBUG brings them back.
+if settings.app_env.strip().lower() != "staging" and settings.log_level != "DEBUG":
     quiet_routine_logs()
 logger = logging.getLogger(__name__)
 

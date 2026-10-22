@@ -3,6 +3,7 @@
 import ast
 import asyncio
 import logging
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -167,7 +168,7 @@ async def test_authentication_awaits_native_async_user_verification(monkeypatch)
 
 async def test_event_loop_delay_and_store_latency_are_content_free(caplog):
     caplog.set_level(logging.INFO)
-    # Local development quiets these loggers; evidence environments emit them at INFO.
+    # Outside staging these loggers are quieted; staging evidence emits them at INFO.
     caplog.set_level(logging.INFO, logger="src.observability")
     caplog.set_level(logging.INFO, logger="src.memory.store")
     stop_event = asyncio.Event()
@@ -189,3 +190,19 @@ async def test_event_loop_delay_and_store_latency_are_content_free(caplog):
     assert "duration_ms=" in caplog.text
     assert "chat_id=" not in caplog.text
     assert "user_id=" not in caplog.text
+
+
+async def test_slow_event_loop_is_logged_even_when_routine_logs_are_quiet(caplog):
+    caplog.set_level(logging.WARNING, logger="src.observability")
+
+    async def block_loop():
+        await asyncio.sleep(0)
+        time.sleep(0.15)
+
+    blocker = asyncio.create_task(block_loop())
+    await monitor_event_loop_delay(asyncio.Event(), interval_seconds=0.01, sample_limit=1)
+    await blocker
+
+    slow = [r for r in caplog.records if r.name == "src.observability"]
+    assert [r.levelno for r in slow] == [logging.WARNING]
+    assert "event_loop_delay_ms=" in slow[0].getMessage()
