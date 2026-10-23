@@ -1026,3 +1026,4 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Evidence: pytest 1717 passed; ruff clean; deterministic subsets pass for all 4 Modes; web lint/build clean.
 - Provisional: Reflect 56/60 and Recommender 43/48 are not passing evidence; live on owner's explicit call. Coach prompt changed, so Coach 48/48 evidence is stale. No billed runs.
 - Not changed: CBT personal input stays off (no such feature switched); site copy still says Reflect/Recommender planned.
+- claude -p (sonnet, candidate, no API keys) on current code: Recommender 48/48, Reflect 58/60 (1 CLI request failure, 1 human_support rubric miss), Coach 39/48 -> length overflow from example rule -> prompt tightened -> Coach 48/48. Artifacts: .scratch/modular-modes/evals/*-claude-live*.json. Not Gemini evidence.
