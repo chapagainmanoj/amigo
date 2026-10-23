@@ -107,6 +107,9 @@ async def test_trial_coach_consent_button_records_consent_and_admits(monkeypatch
         await handlers.handle_callback(TRIAL, 1, button["callback_data"])
     consent = await store.get_proactive_consent(user["user_id"], COACH_CONSENT_VERSION)
     assert consent and consent["policy_version"] == COACH_CONSENT_VERSION
+    # The tap opens Coach straight away, with examples of what to send.
+    assert channel.last_text.startswith("Coach: ")
+    assert "Try something like:" in channel.last_text
 
     async def reply(messages, info):
         return ModelResponse(parts=[TextPart("Fictional coach reply")])
@@ -222,3 +225,88 @@ async def test_a_telegram_turn_admits_its_mode_once(monkeypatch):
         await _send(handlers, store, FULL, "plan my morning")
     assert channel.last_text == "Fictional reply"
     assert len(resolved) == 1
+
+
+def _dashboard(store, user, handlers):
+    import httpx
+    from fastapi import FastAPI
+
+    from src.api.dependencies import get_activated_user, get_store
+    from src.api.modes import router
+
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_activated_user] = lambda: user
+    app.dependency_overrides[get_store] = lambda: store
+
+    async def open_mode(user, mode_id, *, note=None):
+        return await handlers.turn_processor.open_mode(
+            user["telegram_chat_id"], user, mode_id, note=note
+        )
+
+    app.state.open_mode = open_mode
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+
+
+async def test_dashboard_click_opens_a_mode_like_typing_the_command(monkeypatch):
+    monkeypatch.setattr(settings, "access_mode", "registered")
+    store, channel = FakeStore(), FakeChannel()
+    runtime = _live_runtime()
+    handlers = BotHandlers(channel, store, SessionManager(store), FakeScheduler(), runtime)
+    user = await _activated(store, FULL)
+    async with _dashboard(store, user, handlers) as client:
+        response = await client.post("/api/modes/reflect/open", json={})
+    assert response.json()["status"] == "opened"
+    assert channel.last_text.startswith("Reflect: ")
+
+    async def reply(messages, info):
+        return ModelResponse(parts=[TextPart("Fictional reflect reply")])
+
+    async with runtime.override(model=FunctionModel(reply)):
+        await _send(handlers, store, FULL, "a meeting went badly")
+    assert channel.last_text == "Fictional reflect reply"
+
+
+async def test_dashboard_refuses_a_mode_the_account_cannot_use(monkeypatch):
+    monkeypatch.setattr(settings, "access_mode", "registered")
+    store, channel = FakeStore(), FakeChannel()
+    handlers = BotHandlers(channel, store, SessionManager(store), FakeScheduler(), _live_runtime())
+    user = await _activated(store, TRIAL)
+    async with _dashboard(store, user, handlers) as client:
+        response = await client.post("/api/modes/recommender/open", json={})
+    assert response.json()["status"] == "refused"
+    assert "isn't available on your account" in channel.last_text
+
+
+async def test_coach_template_seeds_the_coach_session_and_allows_one_program(monkeypatch):
+    monkeypatch.setattr(settings, "access_mode", "registered")
+    store, channel = FakeStore(), FakeChannel()
+    runtime = _live_runtime()
+    handlers = BotHandlers(channel, store, SessionManager(store), FakeScheduler(), runtime)
+    user = await _activated(store, FULL)
+    seen = []
+
+    async def reply(messages, info):
+        seen.append(str(messages))
+        return ModelResponse(parts=[TextPart("Which time suits you?")])
+
+    async with _dashboard(store, user, handlers) as client:
+        listed = (await client.get("/api/coaching/templates")).json()
+        assert listed["current_program"] is None
+        assert "workout" in {row["id"] for row in listed["templates"]}
+        response = await client.post("/api/modes/coach/open", json={"template_id": "workout"})
+        assert response.json()["status"] == "opened"
+        assert channel.last_text.startswith("You picked “Work out regularly”")
+        async with runtime.override(model=FunctionModel(reply)):
+            await _send(handlers, store, FULL, "Mon Wed Fri at 7am")
+        assert "30-minute workout" in seen[-1]
+
+        await store.draft_coaching_program(
+            user["user_id"], "draft-1", "hash-1", goal="Work out", success_measure="30 minutes",
+            check_in_days=[1, 3, 5], check_in_time="07:00", timezone="UTC",
+        )
+        again = await client.post("/api/modes/coach/open", json={"template_id": "read"})
+        assert again.status_code == 409
+        assert (await client.post(
+            "/api/modes/daily/open", json={"template_id": "read"}
+        )).status_code == 404

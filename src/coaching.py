@@ -127,7 +127,7 @@ class CoachingController:
         )
         return "Draft shown. Only the participant's approval button can start it."
 
-    async def handle_consent(self, user, recipient, data, conversation=None):
+    async def handle_consent(self, user, recipient, data, conversation=None) -> bool:
         """Record the participant's own tap on the reviewed Coach processing notice."""
         from src.mode_readiness import COACH_CONSENT_VERSION, coach_readiness
 
@@ -135,12 +135,9 @@ class CoachingController:
             await self.channel.send_message(
                 recipient, "Coach is unavailable.", conversation=conversation
             )
-            return
+            return False
         await self.store.set_coaching_consent(user["user_id"], COACH_CONSENT_VERSION)
-        await self.channel.send_message(
-            recipient, "Thanks. Coach is ready: send /mode coach to start.",
-            conversation=conversation,
-        )
+        return True
 
     async def handle_callback(self, user, recipient, data, conversation=None):
         try:

@@ -1,6 +1,7 @@
 """Authenticated user turn processing."""
 
 import logging
+import uuid
 
 from src.access import trial_exhausted, trial_finished_message
 from src.agent.runtime import ModeRuntime, default_runtime
@@ -72,6 +73,28 @@ class TurnProcessor:
         )
         await self.channel.send_message(chat_id, response, conversation=context.conversation)
         await self.suggestions.offer(context, text, response)
+
+    async def open_mode(
+        self, chat_id: int, user: dict, mode_id: str, *, note: str | None = None
+    ) -> tuple[bool, str]:
+        """Do exactly what typing /mode <id> does, for a dashboard click.
+
+        Returns whether the Mode opened and what the participant was sent. A note (a chosen
+        Coach template) is sent after the intro and kept in the Mode's Session, so the Mode's
+        next Turn sees it.
+        """
+        command = "/daily" if mode_id == "daily" else f"/mode {mode_id}"
+        prepared = await self.modes.prepare(chat_id, user, command, f"dashboard-{uuid.uuid4()}")
+        context = prepared.context
+        await self.channel.send_message(
+            chat_id, prepared.response, buttons=prepared.buttons,
+            conversation=context.conversation,
+        )
+        opened = prepared.mode is not None
+        if opened and note:
+            await self.channel.send_message(chat_id, note, conversation=context.conversation)
+            await self.store.add_message(context.session_id, user["user_id"], "assistant", note)
+        return opened, prepared.response
 
     async def _handle_feedback(
         self, chat_id: int, user: dict, session_id: str, text: str, *, conversation=None

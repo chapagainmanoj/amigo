@@ -163,7 +163,9 @@ class BotHandlers:
                             user, chat_id, data, conversation
                         )
                     elif data.startswith("consent:"):
-                        await self.coaching.handle_consent(user, chat_id, data, conversation)
+                        if await self.coaching.handle_consent(user, chat_id, data, conversation):
+                            # The tap answered "/mode coach": open Coach rather than ask again.
+                            await self.turn_processor.open_mode(chat_id, user, "coach")
                     elif data.startswith("coach:"):
                         await self.coaching.handle_callback(user, chat_id, data, conversation)
                     else:

@@ -108,9 +108,7 @@ class ModeController:
                     grant_required=grant_required(user, mode),
                 )
             context.conversation = await self.conversations.ensure(user, selected, chat_id=chat_id)
-            return PreparedModeTurn(
-                context, selected, mode.intro()
-            )
+            return PreparedModeTurn(context, selected, mode.intro(), mode=mode)
         if context.conversation is None:
             context.conversation = await self.conversations.ensure(user, selected, chat_id=chat_id)
         return PreparedModeTurn(context, selected, mode=mode)

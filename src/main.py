@@ -147,6 +147,18 @@ app.state.store = store
 app.state.channel = channel
 app.state.bot_username = bot_username
 app.state.memory_service = handlers.memory.service
+
+
+async def _open_mode(user, mode_id, *, note=None):
+    """Dashboard Mode switch, under the same per-participant lock as webhook Turns."""
+    recipient = await channel.recipient_for(user)
+    if recipient is None:
+        return None
+    async with update_coordinator.serializer.hold(recipient):
+        return await handlers.turn_processor.open_mode(recipient, user, mode_id, note=note)
+
+
+app.state.open_mode = _open_mode
 app.include_router(activation_router)
 app.include_router(dashboard_router)
 app.include_router(pairing_router)
