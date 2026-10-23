@@ -26,7 +26,7 @@ def test_preview_refuses_production():
 async def test_preview_lists_and_runs_planned_modes_without_changing_catalogue():
     with patch("src.cli.settings", Settings(_env_file=None)):
         runtime = _preview_runtime()
-    assert {mode.id for mode in await build_registry().live()} == {"daily"}
+    assert {mode.id for mode in await build_registry().live()} == {"daily", "coach"}
     assert {mode.id for mode in await runtime.registry.live()} == {
         "daily", "coach", "reflect", "recommender",
     }

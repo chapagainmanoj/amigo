@@ -10,7 +10,7 @@ from src.agent.context import (
     todays_tasks,
     yesterday_summary,
 )
-from src.agent.modes import ModeDefinition, TurnFacts
+from src.agent.modes import ModeDefinition, ModelPolicy, TurnFacts
 from src.agent.prompts import build_system_prompt
 from src.agent.recommender import recommender_context, recommender_instructions
 from src.agent.reflect import REFLECT_CANDIDATE
@@ -54,8 +54,10 @@ COACH = ModeDefinition(
         "Help me pursue one goal or habit I choose through a plan, check-ins, progress review, "
         "and adjustment."
     ),
-    status="planned",
+    status="live",
     instructions=coach_instructions,
+    # Evaluated on this model (coach-gemini-3.8-flash.json); Daily keeps the configured default.
+    model=ModelPolicy(primary="google:gemini-3.8-flash"),
     entry_guard=coach_entry_guard,
     toolsets=(COACHING,),
     context=(coaching_context,),

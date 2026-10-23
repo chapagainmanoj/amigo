@@ -22,7 +22,8 @@ from src.turns import default_turn_orchestrator  # noqa: E402
 
 async def evaluate_mode(mode, *, candidate=False) -> list[str]:
     orchestrator = default_turn_orchestrator
-    if candidate:
+    # Admission guards are participant policy, not model behaviour (as in run_gate_a_eval).
+    if candidate or mode.entry_guard is not None:
         from src.agent.runtime import ModeRuntime
         from src.turns import SessionTurnOrchestrator
 

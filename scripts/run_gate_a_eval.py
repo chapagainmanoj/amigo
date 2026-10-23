@@ -264,7 +264,9 @@ async def _run_execution(
 ) -> dict:
     store, deps, aliases = await _setup_case(case, suite, repetition, mode_id)
     orchestrator = default_turn_orchestrator
-    if candidate:
+    # A participant admission guard is not model behaviour; live Modes are evaluated without it,
+    # exactly as candidates are.
+    if candidate or build_registry()[mode_id].entry_guard is not None:
         from src.turns import SessionTurnOrchestrator
 
         orchestrator = SessionTurnOrchestrator(ModeRuntime(_evaluation_registry(mode_id, True)))

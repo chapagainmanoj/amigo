@@ -46,14 +46,14 @@ export const PAGES = {
     html: 'products/index.html',
     title: 'Modes — Amigo',
     description:
-      'Amigo is built around Modes you switch on yourself. Daily is the one that works today. ' +
-      'Coach, Reflect and Recommender are planned, and each one can still end in no.',
+      'Amigo is built around Modes you switch on yourself. Daily and Coach work today. ' +
+      'Reflect and Recommender are planned, and each one can still end in no.',
     image: '/og-products.png',
     imageAlt: 'Amigo modes — four modes, one of them exists',
     social: {
       description:
-        'Four modes. One of them exists. Here is what each one is for, and what each still ' +
-        'has to prove.',
+        'Four modes. Two of them exist. Here is what each one is for, and what the others ' +
+        'still have to prove.',
     },
   },
   guide: {

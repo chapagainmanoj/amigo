@@ -2,22 +2,21 @@
  * Every word on the modes page.
  *
  * Every claim below traces to .scratch/amigo-complete-product/decisions/14-mode-and-adaptation-contract.md
- * and the "Roadmap, not available" column of docs/capability-matrix.md. Daily is the only Mode in
- * the shipped column, so it is the only one written in the present tense. The other three use
- * "would" throughout, on purpose: the contract says a roadmap item must never be described in the
+ * and docs/capability-matrix.md. Daily and Coach are live, so they are the only ones written in
+ * the present tense. The other two use "would" throughout, on purpose: the contract says a roadmap item must never be described in the
  * present tense, and that each Mode can still end in a documented "do not build".
  */
 
 import { NON_CLINICAL_BOUNDARY } from './shared'
 
 export const MODES_HEADER = {
-  titleLead: 'Four modes. One of them',
+  titleLead: 'Four modes. Two of them',
   titleEmphasis: 'exists',
   lead:
     'Amigo is not meant to stay a reminder bot. The plan is a small set of modes you switch on ' +
-    'deliberately, each with its own contract for what it may and may not do. Daily is built and ' +
-    'working. The other three are written down, argued over, and unbuilt — and each one can ' +
-    'still end in a documented no.',
+    'deliberately, each with its own contract for what it may and may not do. Daily and Coach ' +
+    'are built and working. The other two are written down and argued over, but not yet open ' +
+    '— and each one can still end in a documented no.',
 }
 
 export const MODES = [
@@ -42,22 +41,22 @@ export const MODES = [
   },
   {
     name: 'Coach',
-    status: 'Planned · next candidate',
+    status: 'Available · free trial',
+    shipped: true,
     job: 'Pursue one goal I picked, with a plan, a check-in rhythm I set, and an honest review.',
     body:
-      'Closest to what Amigo already promises, so it is first in line. One program at a time, ' +
-      'fourteen days by default, on the days and at the time you choose. Progress is what you ' +
+      'One program at a time, on the days you choose. You say the goal and how you will measure ' +
+      'it; Amigo drafts a plan, and nothing starts until you approve it. Progress is what you ' +
       'report — not a number Amigo infers about you.',
     can: [
-      'Would hold one program: goal, cadence, check-ins, progress',
-      'Would cap itself at one message a day, inside your quiet hours',
-      'Would run a weekly review: continue, adjust, pause, or stop',
+      'Holds one program: your goal, your measure, the check-in days you pick',
+      'Sends at most one check-in a day, inside your quiet hours',
+      'Pauses or stops whenever you say, with /program',
     ],
     cannot: [
-      'Would not create ordinary Tasks or Reminders without handing back to Daily first',
-      'Would make no expert claim, and use no guilt or streak-loss pressure',
+      'Does not create ordinary Tasks or Reminders without handing back to Daily first',
+      'Makes no expert claim, and uses no guilt or streak-loss pressure',
     ],
-    gate: 'Needs three separate people to show the same recurring problem before design starts.',
   },
   {
     name: 'Reflect',

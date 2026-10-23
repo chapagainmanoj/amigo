@@ -175,7 +175,7 @@ async def test_refusal_has_no_model_fields_no_store_writes(caplog):
     )
     with caplog.at_level("INFO"):
         reply = await SessionTurnOrchestrator(ModeRuntime(build_registry())).handle_turn(
-            context, "private", requested_mode="coach"
+            context, "private", requested_mode="reflect"
         )
     record = _record(caplog)
     assert "isn't available" in reply

@@ -14,8 +14,8 @@ The checked-in schema chain reaches migration 021 and the application requires e
 The channel-neutral Mode routing, isolated Sessions, grants, confirmed handoffs, and dashboard
 availability implementation are release-gated pending integration review and complete owner
 application-flow evidence. The owner's topic spike passed on Desktop and iOS; Android was not
-tested. No Supabase migration or production deployment is asserted. Daily remains the only live
-Mode; Coach, Reflect and Recommender are Planned. Activation also remains release-gated pending
+tested. No Supabase migration or production deployment is asserted. Daily and Coach are live
+Modes; Reflect and Recommender are Planned. Activation also remains release-gated pending
 clean-account staging evidence.
 
 | Shipped in the current prototype | Beta experiment or release-gated | Roadmap, not available |
@@ -79,8 +79,11 @@ quiet hours, remaining proactive capacity, one check-in/day,
 one missed follow-up then silence. Weekly review replaces a chosen check-in. Returning to Coach resumes that gate; program approval and extension remain separate choices.
 
 Coach, Reflect and fictional laundry Recommender have authored instructions, isolated Toolsets
-and versioned fictional evaluation suites. They remain Planned pending the sole final Gemini
-batch after shared source changes stop. Candidate runner output cannot certify release/fallback.
+and versioned fictional evaluation suites. Coach is live on `google:gemini-3.8-flash` (48/48,
+`.scratch/modular-modes/evals/coach-gemini-3.8-flash.json`) for every activated participant once
+the owner sets `COACH_TRIAL_ENABLED`; each trial participant also taps I agree on its processing
+notice. Reflect (56/60) and Recommender (43/48) failed their gemini-3.8-flash batches and remain
+Planned. Candidate runner output cannot certify release/fallback.
 No provider fallback is declared without complete current evidence and human review.
 
 Coach and Reflect additionally deny real admission by default. Missing reviewed notices,

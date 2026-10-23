@@ -175,7 +175,10 @@ export const PRIVACY = {
           <li>Security and audit events, and usage records that identify you: 90 days.</li>
           <li>Totals that contain no content and identify nobody: up to 12 months.</li>
           <li>A minimal record that a deletion happened, with no content: 12 months.</li>
-          <li>Backups age out within 30 days, and a restore reapplies completed deletions.</li>
+          <li>
+            Database backups are kept on our provider&rsquo;s schedule, which we aim to hold to 30
+            days or less. If we ever restore one, we reapply the deletions already done.
+          </li>
           <li>
             The waitlist: until you unsubscribe, ask us to delete your address, or the announcement
             has gone out. {RETENTION_PROMISE}

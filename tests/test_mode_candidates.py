@@ -12,12 +12,15 @@ from scripts.run_gate_a_eval import _evaluation_registry, _run_execution
 from src.agent.catalogue import build_registry
 from src.evaluation.gate_a import load_mode_suite, tool_schema
 
+# Candidate evaluation never changes the application catalogue.
+CATALOGUE_STATUS = {"coach": "live", "reflect": "planned", "recommender": "planned"}
+
 
 @pytest.mark.parametrize("mode_id", ["coach", "reflect", "recommender"])
 async def test_declared_candidate_scripted_suite_passes(mode_id):
     mode = _evaluation_registry(mode_id, True)[mode_id]
     assert await run_mode_deterministic_eval.evaluate_mode(mode, candidate=True) == []
-    assert build_registry()[mode_id].status == "planned"
+    assert build_registry()[mode_id].status == CATALOGUE_STATUS[mode_id]
 
 
 def test_daily_cannot_use_candidate_bypass():
@@ -52,7 +55,7 @@ async def test_candidate_runner_seeds_only_isolated_synthetic_grant():
     )
     assert result["passed"]
     assert result["turns"][0]["state"]["tasks"] == []
-    assert build_registry()[mode_id].status == "planned"
+    assert build_registry()[mode_id].entry_guard is not None
 
 
 def test_candidate_cannot_mutate_application_definition():

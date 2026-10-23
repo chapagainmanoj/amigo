@@ -371,11 +371,11 @@ def test_mode_ids_are_stable_identifiers():
         _journal(id="Coach Mode")
 
 
-def test_the_catalogue_registers_daily_live_and_the_rest_planned():
+def test_the_catalogue_registers_daily_and_coach_live_and_the_rest_planned():
     statuses = {mode.id: mode.status for mode in build_registry()}
     assert statuses == {
         "daily": "live",
-        "coach": "planned",
+        "coach": "live",
         "reflect": "planned",
         "recommender": "planned",
     }
@@ -552,10 +552,10 @@ async def test_a_requested_mode_is_honoured_and_refused_when_unavailable():
     script = _Script()
     async with default_runtime.override(model=FunctionModel(script.respond)):
         reply = await SessionTurnOrchestrator(default_runtime).handle_turn(
-            context, "hi", requested_mode="coach"
+            context, "hi", requested_mode="reflect"
         )
 
-    assert reply == "Coach isn't available yet."
+    assert reply == "Reflect isn't available yet."
     assert script.requests == []
     assert store.messages == []
 

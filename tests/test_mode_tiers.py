@@ -154,3 +154,17 @@ async def test_crisis_routing_still_fires_for_full_access(monkeypatch):
         await _send(handlers, store, FULL, "/mode reflect")
         await _send(handlers, store, FULL, "I am thinking about suicide")
     assert "emergency" in channel.last_text.lower()
+
+
+async def test_coach_is_live_and_routes_to_its_evaluated_model(monkeypatch):
+    from src.agent.runtime import default_runtime
+
+    monkeypatch.setattr(settings, "dev_model", "")
+    monkeypatch.setattr(settings, "mode_models", "")
+    monkeypatch.setattr(settings, "participant_model_pins", "")
+    coach = build_registry()["coach"]
+    assert coach.status == "live"
+    reference = await default_runtime.model_for(mode=coach, resolve_only=True)
+    assert reference == "google:gemini-3.8-flash"
+    assert build_registry()["reflect"].status == "planned"
+    assert build_registry()["recommender"].status == "planned"

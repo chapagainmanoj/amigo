@@ -40,12 +40,12 @@ async def test_failed_provider_close_still_closes_store_and_continues_other_rows
     service = ModeConversationService(store, channel)
     users = [await store.create_user(chat_id) for chat_id in (8812401, 8812402)]
     for user in users:
-        ref = await channel.create_conversation(user["telegram_chat_id"], "Coach")
+        ref = await channel.create_conversation(user["telegram_chat_id"], "Reflect")
         await store.save_mode_conversation(
-            user["user_id"], "coach", channel.channel_id, endpoint_dict(ref)
+            user["user_id"], "reflect", channel.channel_id, endpoint_dict(ref)
         )
     channel.close_conversation = AsyncMock(side_effect=[RuntimeError("provider failure"), None])
-    await service.close_expired()  # Coach remains Planned and must close.
+    await service.close_expired()  # Reflect remains Planned and must close.
     assert channel.close_conversation.await_count == 2
     for user in users:
         rows = await store.list_mode_conversations()
