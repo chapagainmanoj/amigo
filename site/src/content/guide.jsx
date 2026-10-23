@@ -26,7 +26,7 @@ export const GUIDE_PAGE = {
         <ul className="legal-list">
           <li>
             Open the{' '}
-            <a href={SITE.dashboard} className="legal-link">
+            <a href={SITE.signup} className="legal-link">
               Amigo dashboard
             </a>{' '}
             and sign up with your email address.

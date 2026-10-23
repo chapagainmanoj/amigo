@@ -14,22 +14,6 @@ export default function SiteNav({ active = 'home' }) {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Both pages render a waitlist form with id="waitlist", so this normally scrolls in place. If a
-  // page ever ships without one, the href is left alone and the browser navigates home to it.
-  const handleJoinClick = (e) => {
-    const target = document.getElementById('waitlist')
-    if (!target) return
-
-    e.preventDefault()
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    target.scrollIntoView({ behavior: prefersReduced ? 'auto' : 'smooth' })
-    const input = target.querySelector('input[type="email"]')
-    if (input) {
-      // focus after small delay for smooth scroll completion
-      setTimeout(() => input.focus(), prefersReduced ? 50 : 300)
-    }
-  }
-
   return (
     <header className={`site-nav ${scrolled ? 'scrolled' : ''}`}>
       <div className="site-nav-inner">
@@ -54,7 +38,7 @@ export default function SiteNav({ active = 'home' }) {
           <a href={SITE.dashboard} className="site-nav-link">
             {NAV.dashboard}
           </a>
-          <a href="/#waitlist" onClick={handleJoinClick} className="site-nav-cta">
+          <a href={SITE.signup} className="site-nav-cta">
             <span className="cta-full">{NAV.cta}</span>
             <span className="cta-short" aria-hidden="true">{NAV.ctaShort}</span>
           </a>

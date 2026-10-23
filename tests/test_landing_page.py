@@ -126,7 +126,7 @@ def test_dashboard_drops_the_retired_dark_tokens():
     assert not offenders, "Retired dark-theme tokens remain:\n" + "\n".join(offenders)
 
 
-def test_the_waitlist_cta_does_not_spend_the_signal_colour():
+def test_the_start_cta_does_not_spend_the_signal_colour():
     """--signal belongs to the reminder bubble alone.
 
     The whole point of the accent is that it marks the one moment the product exists. Putting
@@ -135,11 +135,11 @@ def test_the_waitlist_cta_does_not_spend_the_signal_colour():
     """
     css = (SITE_SRC / "styles" / "site.css").read_text(encoding="utf-8")
 
-    button_rule = re.search(r"\.waitlist-button\s*\{([^}]*)\}", css)
-    assert button_rule, ".waitlist-button rule not found in site.css"
-    assert "var(--ink)" in button_rule.group(1), "The waitlist CTA must be filled with --ink"
+    button_rule = re.search(r"\.start-cta-button\s*\{([^}]*)\}", css)
+    assert button_rule, ".start-cta-button rule not found in site.css"
+    assert "var(--ink)" in button_rule.group(1), "The Start CTA must be filled with --ink"
     assert "var(--signal)" not in button_rule.group(1), (
-        "The waitlist CTA must not use --signal; it belongs to the reminder bubble alone"
+        "The Start CTA must not use --signal; it belongs to the reminder bubble alone"
     )
 
     reminder_rule = re.search(r"\.telegram-bubble--reminder\s*\{([^}]*)\}", css)

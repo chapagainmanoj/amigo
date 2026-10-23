@@ -2,8 +2,7 @@
  * The contact page.
  *
  * One address and no form. A form would mean a second processor holding whatever people type,
- * disclosed on /privacy/ and contradicting the claim that submitting the waitlist is the only
- * network request the site makes. A mailto costs a click and keeps that claim true.
+ * disclosed on /privacy/ and contradicting the claim that the site sends nothing anywhere. A mailto costs a click and keeps that claim true.
  *
  * Response times come from decision 03 (one business day for support) and decision 04 (seven
  * calendar days to finish a data request). Nothing here invents a commitment that is not already

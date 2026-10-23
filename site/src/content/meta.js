@@ -16,6 +16,7 @@ export const SITE = {
   origin: 'https://amigo.manojc.link',
   // Where participants sign up, pair Telegram and see their Tasks.
   dashboard: 'https://amigo-dashboard.onrender.com/',
+  signup: 'https://amigo-dashboard.onrender.com/?signup',
   themeColor: '#FBF8F2',
   locale: 'en',
   contactEmail: 'amigo@manojc.link',

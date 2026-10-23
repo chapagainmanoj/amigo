@@ -11,7 +11,7 @@ import { NON_CLINICAL_BOUNDARY } from './shared'
 
 export const MODES_HEADER = {
   titleLead: 'Four modes. Two of them',
-  titleEmphasis: 'exists',
+  titleEmphasis: 'exist',
   lead:
     'Amigo is not meant to stay a reminder bot. The plan is a small set of modes you switch on ' +
     'deliberately, each with its own contract for what it may and may not do. Daily and Coach ' +

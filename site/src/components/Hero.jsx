@@ -1,6 +1,6 @@
 import Reveal from './Reveal'
 import StatRow from './StatRow'
-import WaitlistForm from './WaitlistForm'
+import StartCta from './StartCta'
 import { HERO } from '../content/home'
 
 export default function Hero() {
@@ -13,7 +13,7 @@ export default function Hero() {
           <br className="hero-br" /> {HERO.titleRest} <em>{HERO.titleEmphasis}</em>.
         </h1>
         <p className="hero-lead">{HERO.lead}</p>
-        <WaitlistForm variant="hero" />
+        <StartCta />
         <p className="hero-micro">{HERO.micro}</p>
       </Reveal>
       <StatRow />

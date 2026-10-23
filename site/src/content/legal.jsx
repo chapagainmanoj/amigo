@@ -144,8 +144,8 @@ export const PRIVACY = {
             <li>
               {WAITLIST_PROCESSOR ? (
                 <>
-                  <strong>{WAITLIST_PROCESSOR}</strong> — only if you join the waitlist: stores your
-                  address and sends the confirmation and announcement emails.
+                  <strong>{WAITLIST_PROCESSOR}</strong> — only if you joined the waitlist before it
+                  closed: holds your address until the announcement email is sent.
                 </>
               ) : (
                 <>
@@ -260,16 +260,16 @@ export const PRIVACY = {
             </li>
           </ul>
           <p>
-            Submitting the waitlist form is the only network request this site makes, and only
-            with the consent box ticked. You do not have to take our word for it — the source is
-            public under {SITE.licence}.
+            This site sends nothing anywhere: signing up happens on the dashboard, which is covered
+            above. You do not have to take our word for it — the source is public under{' '}
+            {SITE.licence}.
           </p>
         </>
       ),
     },
     {
       heading: 'Age',
-      body: <p>Amigo is for adults. Please do not sign up or join the waitlist if you are under 18.</p>,
+      body: <p>Amigo is for adults. Please do not sign up if you are under 18.</p>,
     },
     {
       heading: 'Changes',

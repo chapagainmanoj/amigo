@@ -94,41 +94,25 @@ def test_the_site_collects_nothing_the_privacy_page_denies_collecting():
     )
 
 
-def test_the_waitlist_cannot_go_live_without_naming_its_processor():
-    """Decision 04 requires every processor to be disclosed before it receives anything.
-
-    The page is honest while WAITLIST_PROCESSOR is null — it says the provider has not been
-    chosen. The moment a real endpoint ships, that sentence becomes a lie, so the two have to be
-    changed together.
-    """
+def test_the_closed_waitlist_stays_disclosed_and_the_site_collects_nothing():
+    """The waitlist form is gone, but addresses already collected are still held until the
+    announcement goes out, so /privacy/ must keep naming the provider. The site itself must not
+    regain a form endpoint without the notice being updated."""
     privacy = PRIVACY.read_text(encoding="utf-8")
-    processor = re.search(r"export const WAITLIST_PROCESSOR = (.+)", privacy)
-    assert processor, "WAITLIST_PROCESSOR is no longer declared in content/legal.jsx"
-    named = processor.group(1).strip().rstrip(";") != "null"
-
-    env_example = (ROOT / "site" / ".env.example").read_text(encoding="utf-8")
-    endpoint_shipped = bool(
-        re.search(r"^VITE_WAITLIST_ENDPOINT=\S+", env_example, flags=re.MULTILINE)
-    )
-
-    if endpoint_shipped and not named:
-        raise AssertionError(
-            "site/.env.example ships a waitlist endpoint but content/legal.jsx still says the "
-            "email provider has not been chosen. Name it in WAITLIST_PROCESSOR before any "
-            "address is collected."
+    processor = re.search(r"export const WAITLIST_PROCESSOR = '(.+)'", privacy)
+    assert processor, "WAITLIST_PROCESSOR must keep naming the provider holding existing entries"
+    for source in sorted(SITE_SRC.rglob("*.js*")):
+        assert "VITE_WAITLIST" not in source.read_text(encoding="utf-8"), (
+            f"{source.relative_to(ROOT)} reads a waitlist endpoint again; update /privacy/ first"
         )
 
 
-def test_the_faq_and_the_privacy_page_promise_the_same_retention():
-    """Two pages, one answer.
-
-    Both quote RETENTION_PROMISE from content/shared.jsx, so they cannot disagree. This fails if
-    either writes the sentence out by hand again, which is how the two drifted apart before.
-    """
+def test_the_privacy_page_quotes_the_waitlist_retention_promise():
+    """The promise made to existing waitlist addresses lives once, in content/shared.jsx."""
     promise = re.search(r"export const RETENTION_PROMISE =\s*'([^']+)'", _collapsed(SHARED))
     assert promise, "RETENTION_PROMISE is no longer declared in content/shared.jsx"
 
-    for path in (PRIVACY, HOME):
+    for path in (PRIVACY,):
         source = path.read_text(encoding="utf-8")
         assert "RETENTION_PROMISE" in source, (
             f"{path.relative_to(ROOT)} no longer quotes RETENTION_PROMISE. The privacy page and "
@@ -140,12 +124,14 @@ def test_the_faq_and_the_privacy_page_promise_the_same_retention():
         )
 
 
-def test_the_notice_is_linked_where_the_address_is_handed_over():
-    """Consent is informed only if the notice is reachable at the point of collection."""
-    shared = SHARED.read_text(encoding="utf-8")
-    assert "consentLink" in shared and "/privacy/" in shared, (
-        "the waitlist consent row no longer links to /privacy/"
-    )
+def test_the_notice_is_linked_where_data_is_handed_over():
+    """Consent is informed only if the notice is reachable where people sign up and decide."""
     assert "/privacy/" in HOME.read_text(encoding="utf-8"), (
-        "the FAQ answer about email no longer links to /privacy/"
+        "the FAQ answer about data no longer links to /privacy/"
+    )
+    onboarding = (ROOT / "web" / "src" / "components" / "ActivationJourney.jsx").read_text(
+        encoding="utf-8"
+    )
+    assert "/privacy/" in onboarding, (
+        "the dashboard's acknowledgement step no longer links to the privacy notice"
     )

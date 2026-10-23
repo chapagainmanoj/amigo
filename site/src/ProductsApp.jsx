@@ -60,7 +60,7 @@ export default function ProductsApp() {
             <GateTrack />
           </section>
 
-          <ClosingCta titleId="modes-cta-title" anchorId="waitlist" />
+          <ClosingCta titleId="modes-cta-title" />
         </div>
       </main>
       <SiteFooter />

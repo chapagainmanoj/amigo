@@ -816,94 +816,7 @@ a {
   color: var(--ink-2);
 }
 
-/* Waitlist form ----------------------------------------------------------- */
-
-.waitlist-form-container {
-  max-width: 520px;
-}
-
-.waitlist-closing .waitlist-form-container,
-.waitlist-form-container.waitlist-closing {
-  margin-inline: auto;
-}
-
-.waitlist-inputs {
-  display: flex;
-  gap: 8px;
-}
-
-.waitlist-input {
-  flex: 1;
-  min-width: 0;
-  min-height: 48px;
-  padding: 12px 15px;
-  border: 1px solid var(--ink-2);
-  border-radius: 6px;
-  background: var(--oat);
-  color: var(--ink);
-  font-family: inherit;
-  font-size: 1rem;
-  transition: border-color 150ms ease;
-}
-
-.waitlist-input::placeholder {
-  color: var(--ink-2);
-  opacity: 1;
-}
-
-.waitlist-input:focus {
-  outline: none;
-  border-color: var(--ink);
-}
-
-.waitlist-input-error {
-  border-color: var(--signal-deep);
-}
-
-.waitlist-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 48px;
-  padding: 12px 22px;
-  border: none;
-  border-radius: 6px;
-  background: var(--ink);
-  color: var(--oat);
-  font-family: inherit;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 120ms ease;
-}
-
-.waitlist-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ink) 90%, var(--sand));
-}
-
-.waitlist-fallback-link {
-  color: var(--ink);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  font-weight: 500;
-  transition: color 150ms ease;
-}
-
-.waitlist-fallback-link:hover {
-  color: var(--ink-2);
-}
-
-.waitlist-button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.waitlist-button-loading {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
+/* Closing CTA ------------------------------------------------------------ */
 
 .spinner {
   width: 13px;
@@ -917,81 +830,6 @@ a {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
-
-.waitlist-consent {
-  display: grid;
-  grid-template-columns: 18px 1fr;
-  gap: 9px;
-  align-items: start;
-  margin-top: 14px;
-}
-
-.waitlist-checkbox {
-  width: 16px;
-  height: 16px;
-  margin-top: 3px;
-  accent-color: var(--ink);
-}
-
-.waitlist-consent-label {
-  color: var(--ink-2);
-  font-size: 0.875rem;
-  line-height: 1.45;
-  cursor: pointer;
-}
-
-.waitlist-consent-link {
-  color: var(--ink);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  white-space: nowrap;
-  transition: color 150ms ease;
-}
-
-.waitlist-consent-link:hover {
-  color: var(--ink-2);
-}
-
-.waitlist-error,
-.waitlist-notice {
-  margin-top: 12px;
-  color: var(--signal-deep);
-  font-size: 0.875rem;
-}
-
-.waitlist-notice {
-  color: var(--ink-2);
-}
-
-/* Dev-only affordance; never rendered by a production build. */
-.waitlist-preview-note {
-  max-width: 52ch;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--rule);
-  color: var(--ink-2);
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-
-.waitlist-success {
-  max-width: 520px;
-  padding: 18px 20px;
-  border: 1px solid var(--rule);
-  border-radius: 14px;
-  background: var(--sand);
-}
-
-.waitlist-success-closing {
-  margin-inline: auto;
-}
-
-.waitlist-success-text {
-  font-size: 0.9375rem;
-  line-height: 1.55;
-}
-
-/* Closing CTA ------------------------------------------------------------- */
 
 .closing-cta-section {
   padding-block: 0 var(--rhythm);
@@ -1017,9 +855,49 @@ a {
   color: var(--ink-2);
 }
 
-.closing-cta-content .waitlist-form-container {
-  margin-inline: auto;
-  text-align: left;
+/* Start CTA --------------------------------------------------------------- */
+
+.start-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-top: 28px;
+}
+
+.start-cta-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 12px 22px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--oat);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 120ms ease;
+}
+
+.start-cta-button:hover {
+  background: color-mix(in srgb, var(--ink) 90%, var(--sand));
+}
+
+.start-cta-secondary {
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+  font-size: 0.9375rem;
+  text-decoration: none;
+}
+
+.start-cta-secondary:hover {
+  border-bottom-color: var(--ink);
+}
+
+.closing-cta-content .start-cta {
+  justify-content: center;
 }
 
 /* Footer ------------------------------------------------------------------ */
@@ -1663,14 +1541,6 @@ a {
   .stat-cell:last-child {
     border-bottom: 0;
   }
-
-  .waitlist-inputs {
-    flex-direction: column;
-  }
-
-  .waitlist-button {
-    width: 100%;
-  }
 }
 
 /* Reduced motion ---------------------------------------------------------- */
@@ -1696,7 +1566,7 @@ a {
     opacity: 0.6 !important;
   }
 
-  .waitlist-button,
+  .start-cta-button,
   .site-nav,
   .site-nav-cta {
     transition: none !important;

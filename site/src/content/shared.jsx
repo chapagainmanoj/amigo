@@ -20,8 +20,8 @@ export const NAV = {
   guide: 'Guide',
   dashboard: 'Sign in',
   // The nav CTA is the narrowest element on the page; the short label takes over on phones.
-  cta: 'Join the waitlist',
-  ctaShort: 'Waitlist',
+  cta: 'Start free',
+  ctaShort: 'Start',
 }
 
 export const FOOTER = {
@@ -38,47 +38,16 @@ export const FOOTER = {
   ],
 }
 
-/** The waitlist form, in every state it can be in. */
-export const WAITLIST = {
-  emailLabel: 'Email address',
-  emailPlaceholder: 'you@example.com',
-  submit: 'Join the waitlist',
-  submitting: 'Sending',
-  consent: 'Email me once, when Amigo opens.',
-  // The notice belongs where consent is given, not only in the footer: this is the point at
-  // which someone hands over an address.
-  consentLink: { label: 'What we do with it', href: '/privacy/' },
-  success: (
-    <>
-      Check your inbox. Click the link in the confirmation email and you&rsquo;re on the list.
-    </>
-  ),
-  errors: {
-    consent: 'Please tick the box so we know you want the email.',
-    email: 'Please enter a valid email address.',
-    // Deliberately the same line for every failure the network can produce. A visitor cannot act
-    // on a status code, and a provider's own error text would leak whether an address is known.
-    network: 'That didn\u2019t go through \u2014 try again in a moment.',
-    unconfigured: 'Waitlist signup isn\u2019t configured yet.',
-  },
-  unconfigured: (
-    <>
-      We are not running open enrollment yet. You can track milestones and releases on{' '}
-      <a href={SITE.repo} target="_blank" rel="noopener noreferrer" className="waitlist-fallback-link">
-        GitHub
-      </a>
-      .
-    </>
-  ),
-  previewNote:
-    'Dev preview — no endpoint set, so nothing is sent. Add VITE_WAITLIST_ENDPOINT to site/.env ' +
-    'to post for real.',
+/** The primary call to action: signup happens on the dashboard. */
+export const START_CTA = {
+  primary: 'Start free',
+  secondary: 'See how it works',
 }
 
 /** Closes both the home page and the modes page. */
 export const CLOSING_CTA = {
-  title: 'One message, when there is something to try.',
-  lead: 'No newsletter, no countdowns. We will not email you again until Amigo opens.',
+  title: 'Try it on something you actually need to do.',
+  lead: 'The first 30 messages are free. Sign up, connect Telegram, and send the first one.',
 }
 
 /**

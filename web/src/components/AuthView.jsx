@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { supabase, isSupabaseConfigured } from '../supabase'
 
 export default function AuthView() {
-  const [isSignUp, setIsSignUp] = useState(false)
+  // The marketing site's "Start free" links here with ?signup so new people land on Create Account.
+  const [isSignUp, setIsSignUp] = useState(
+    () => new URLSearchParams(window.location.search).has('signup'),
+  )
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)

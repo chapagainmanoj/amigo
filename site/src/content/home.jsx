@@ -7,10 +7,10 @@
  */
 
 import { SITE } from './meta'
-import { NON_CLINICAL_NOTE, RETENTION_PROMISE } from './shared'
+import { NON_CLINICAL_NOTE } from './shared'
 
 export const HERO = {
-  kicker: 'Invitation-only · Not yet open',
+  kicker: 'Open beta · Free trial',
   // Split across two lines at a chosen point rather than wherever the column happens to break.
   titleLead: 'Most task apps are',
   titleRest: 'abandoned in a',
@@ -18,7 +18,7 @@ export const HERO = {
   lead:
     'Not because people stop caring. Because the app is one more thing to open, groom, and ' +
     'feel guilty about. Amigo doesn’t ask you to open anything.',
-  micro: 'No newsletter, no launch countdown. One message when there is something real to try.',
+  micro: '30 free messages. No card, no app to install — just Telegram.',
 }
 
 // Two facts about the market, then the answer. The third cell breaks the pattern on purpose: it
@@ -230,18 +230,19 @@ export const FAQ = {
       q: 'What will it cost?',
       a: (
         <>
-          Nothing during the invitation beta. Beyond that we&rsquo;re testing a hypothesis of about
-          US$9 per month. That&rsquo;s research, not a price list.
+          The trial is free: 30 messages. During the beta, full access is free too — ask for it
+          on the contact page. Beyond that we&rsquo;re testing a hypothesis of about US$9 per
+          month. That&rsquo;s research, not a price list.
         </>
       ),
     },
     {
-      q: 'What do you do with my email?',
+      q: 'What happens to my data?',
       a: (
         <>
-          Store it to send you one message when Amigo opens, and nothing else. No newsletter, no
-          sharing, no advertising. You can unsubscribe or ask us to delete it at any time.{' '}
-          {RETENTION_PROMISE}{' '}
+          Your messages, Tasks and Reminders are stored to run Amigo, and Google&rsquo;s Gemini
+          processes your messages to write replies. No selling, no advertising, no training a
+          model on your content, and you can ask us to export or delete it at any time.{' '}
           <a href="/privacy/" className="faq-link">
             The full notice
           </a>{' '}
