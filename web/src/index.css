@@ -900,3 +900,7 @@ input:focus,
   border-color: var(--rule);
   color: var(--ink-2);
 }
+
+.coach-templates-collapsed {
+  flex-basis: 100%;
+}

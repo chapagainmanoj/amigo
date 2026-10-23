@@ -156,7 +156,7 @@ async def test_mode_commands_are_model_free_and_both_entry_paths_choose_coach(en
     assert env.channel.sent[-1].get("conversation") == ref
     await env.enter("daily")
     await env.send("/mode")
-    assert "Choose a Mode" in env.channel.last_text
+    assert "You're in Daily" in env.channel.last_text
     assert len(env.script.requests) == 1
 
 

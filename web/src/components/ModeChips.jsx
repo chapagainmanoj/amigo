@@ -131,7 +131,15 @@ export default function ModeChips() {
           </p>
         </div>
       )}
-      {coach && <CoachTemplates onPick={(templateId) => openMode(coach, templateId)} busy={busyId !== null} />}
+      {coach && (
+        <CoachTemplates
+          // Full grid in Coach; elsewhere a one-line opener so it doesn't crowd other Modes.
+          key={current === 'coach' ? 'coach' : 'other'}
+          collapsed={current !== 'coach'}
+          onPick={(templateId) => openMode(coach, templateId)}
+          busy={busyId !== null}
+        />
+      )}
     </div>
   )
 }

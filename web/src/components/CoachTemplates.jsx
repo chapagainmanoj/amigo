@@ -3,10 +3,11 @@ import { apiRequest } from '../supabase'
 
 // Ready-made Coach goals. Picking one opens Coach in Telegram with the goal and measure filled
 // in; the participant replies there with their check-in time. One Program at a time.
-export default function CoachTemplates({ onPick, busy }) {
+export default function CoachTemplates({ onPick, busy, collapsed = false }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(false)
   const [picked, setPicked] = useState(null)
+  const [expanded, setExpanded] = useState(!collapsed)
 
   const load = useCallback(async () => {
     try {
@@ -27,6 +28,19 @@ export default function CoachTemplates({ onPick, busy }) {
 
   if (error || data === null) return null
   const current = data.current_program
+
+  if (!expanded) {
+    return (
+      <p className="coach-templates-note coach-templates-collapsed">
+        {current
+          ? <>Coach program running: <strong>{current.goal}</strong>.</>
+          : 'Want a coaching program?'}{' '}
+        <button type="button" className="mode-howto-copy" onClick={() => setExpanded(true)}>
+          Browse templates
+        </button>
+      </p>
+    )
+  }
 
   return (
     <section className="coach-templates" aria-labelledby="coach-templates-title">

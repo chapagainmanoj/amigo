@@ -308,3 +308,34 @@ async def test_coach_template_seeds_the_coach_session_and_allows_one_program(mon
         assert (await client.post(
             "/api/modes/daily/open", json={"template_id": "read"}
         )).status_code == 404
+
+
+async def test_mode_list_names_the_current_mode_and_switches_on_tap(monkeypatch):
+    monkeypatch.setattr(settings, "access_mode", "registered")
+    store, channel = FakeStore(), FakeChannel()
+    handlers = BotHandlers(channel, store, SessionManager(store), FakeScheduler(), _live_runtime())
+    await _activated(store, FULL)
+    await _send(handlers, store, FULL, "/mode")
+    assert channel.last_text.startswith("You're in Daily.")
+    taps = [b["callback_data"] for b in channel.sent[-1]["buttons"][0]]
+    assert taps == ["mode:coach", "mode:reflect", "mode:recommender"]
+
+    with patch.object(store, "get_activation_state", return_value={"completed": True}):
+        await handlers.handle_callback(FULL, 7, "mode:reflect")
+    assert channel.edited[-1] == {"chat_id": FULL, "message_id": 7, "buttons": None}
+    assert channel.last_text.startswith("Reflect: ")
+    await _send(handlers, store, FULL, "/mode")
+    assert channel.last_text.startswith("You're in Reflect.")
+    assert "mode:reflect" not in [b["callback_data"] for b in channel.sent[-1]["buttons"][0]]
+
+
+async def test_trial_mode_list_hides_full_access_modes_and_refuses_a_forged_tap(monkeypatch):
+    monkeypatch.setattr(settings, "access_mode", "registered")
+    store, channel = FakeStore(), FakeChannel()
+    handlers = BotHandlers(channel, store, SessionManager(store), FakeScheduler(), _live_runtime())
+    await _activated(store, TRIAL)
+    await _send(handlers, store, TRIAL, "/mode")
+    assert [b["callback_data"] for b in channel.sent[-1]["buttons"][0]] == ["mode:coach"]
+    with patch.object(store, "get_activation_state", return_value={"completed": True}):
+        await handlers.handle_callback(TRIAL, 8, "mode:recommender")
+    assert "isn't available on your account" in channel.last_text

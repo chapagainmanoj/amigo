@@ -52,11 +52,20 @@ class ModeController:
             entered_by="topic" if addressed_mode is not None else "command",
         )
         if command == "/mode" and len(parts) == 1:
-            available = []
+            current = selected or "daily"
+            lines, buttons = [], []
             for mode in await self.runtime.registry.live():
-                if await self.runtime.entitlements.allows(context, mode):
-                    available.append(f"/mode {mode.id} — {mode.purpose}")
-            return PreparedModeTurn(context, selected, "Choose a Mode:\n" + "\n".join(available))
+                if not await self.runtime.entitlements.allows(context, mode):
+                    continue
+                if mode.id == current:
+                    lines.insert(0, f"You're in {mode.name}. Tap to switch, or type a command:")
+                    lines.append(f"{mode.name} (current) — {mode.purpose}")
+                else:
+                    lines.append(f"/mode {mode.id} — {mode.purpose}")
+                    buttons.append({"text": mode.name, "callback_data": f"mode:{mode.id}"})
+            return PreparedModeTurn(
+                context, selected, "\n".join(lines), [buttons] if buttons else None
+            )
         if is_mode_command:
             if (command == "/daily" and len(parts) != 1) or (
                 command == "/mode" and len(parts) != 2

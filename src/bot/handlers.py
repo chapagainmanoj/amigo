@@ -151,7 +151,7 @@ class BotHandlers:
             )
             return
 
-        if data.startswith(("handoff:", "coach:", "suggest:", "memory:", "consent:")):
+        if data.startswith(("handoff:", "coach:", "suggest:", "memory:", "consent:", "mode:")):
             user = await self.store.get_user_by_chat_id(chat_id)
             if user and user.get("supabase_auth_id"):
                 activation = await self.store.get_activation_state(user["supabase_auth_id"])
@@ -162,6 +162,14 @@ class BotHandlers:
                         await self.turn_processor.suggestions.handle_callback(
                             user, chat_id, data, conversation
                         )
+                    elif data.startswith("mode:"):
+                        # A tap on the /mode list: same path as typing /mode <id>.
+                        await self.channel.edit_message_buttons(
+                            chat_id, message_id, buttons=None, conversation=conversation
+                        )
+                        mode_id = data.split(":", 1)[1]
+                        if mode_id:
+                            await self.turn_processor.open_mode(chat_id, user, mode_id)
                     elif data.startswith("consent:"):
                         if await self.coaching.handle_consent(user, chat_id, data, conversation):
                             # The tap answered "/mode coach": open Coach rather than ask again.
