@@ -43,6 +43,13 @@ export default function SiteNav({ active = 'home' }) {
           >
             {NAV.products}
           </a>
+          <a
+            href="/guide/"
+            className={`site-nav-link ${active === 'guide' ? 'site-nav-link--current' : ''}`}
+            aria-current={active === 'guide' ? 'page' : undefined}
+          >
+            {NAV.guide}
+          </a>
           <a href="/#waitlist" onClick={handleJoinClick} className="site-nav-cta">
             <span className="cta-full">{NAV.cta}</span>
             <span className="cta-short" aria-hidden="true">{NAV.ctaShort}</span>

@@ -56,6 +56,16 @@ export const PAGES = {
         'has to prove.',
     },
   },
+  guide: {
+    path: '/guide/',
+    html: 'guide/index.html',
+    title: 'How to use Amigo',
+    description:
+      'Set up Amigo in five minutes: create an account, connect Telegram, send your first ' +
+      'Tasks, answer Reminders, and switch Modes.',
+    image: '/og.png',
+    imageAlt: 'Amigo — accountability that lives in your chat',
+  },
   contact: {
     path: '/contact/',
     html: 'contact/index.html',

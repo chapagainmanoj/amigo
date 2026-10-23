@@ -3,6 +3,8 @@ import { CheckCircle, MessageCircle } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { apiRequest } from '../supabase'
 
+const GUIDE_URL = 'https://amigo.manojc.link/guide/'
+
 export default function ConnectView({ pairedUser, onPairSuccess }) {
   const [pairingData, setPairingData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -50,7 +52,8 @@ export default function ConnectView({ pairedUser, onPairSuccess }) {
           Connect Telegram
         </h1>
         <p style={{ color: 'var(--ink-2)' }}>
-          Pair Telegram to chat with Amigo and receive reminders.
+          Pair Telegram to chat with Amigo and receive reminders.{' '}
+          <a href={GUIDE_URL} target="_blank" rel="noreferrer">How to use Amigo</a>
         </p>
       </div>
 

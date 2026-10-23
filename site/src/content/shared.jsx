@@ -17,6 +17,7 @@ import { SITE } from './meta'
 export const NAV = {
   wordmarkLabel: 'Amigo home',
   products: 'Products',
+  guide: 'Guide',
   // The nav CTA is the narrowest element on the page; the short label takes over on phones.
   cta: 'Join the waitlist',
   ctaShort: 'Waitlist',
@@ -27,6 +28,7 @@ export const FOOTER = {
   licence: SITE.licence,
   links: [
     { label: 'Products', href: '/products/' },
+    { label: 'Guide', href: '/guide/' },
     { label: 'Privacy', href: '/privacy/' },
     { label: 'Contact', href: '/contact/' },
     { label: 'GitHub', href: SITE.repo, external: true },

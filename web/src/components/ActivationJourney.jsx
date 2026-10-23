@@ -46,6 +46,8 @@ function ErrorMessage({ error }) {
   return <div className="activation-error" role="alert">{error}</div>
 }
 
+const GUIDE_URL = 'https://amigo.manojc.link/guide/'
+
 export default function ActivationJourney({ session, state, refresh, onFinish }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -233,7 +235,7 @@ export default function ActivationJourney({ session, state, refresh, onFinish })
               ) : (
                 <button className="btn-primary" onClick={fetchPairing} disabled={busy}>Generate new single-use link</button>
               )}
-              <p className="activation-help">This page detects Pairing automatically. If Telegram says the link expired or was already used, generate a new one here.</p>
+              <p className="activation-help">This page detects Pairing automatically. If Telegram says the link expired or was already used, generate a new one here. New to Amigo? Read <a href={GUIDE_URL} target="_blank" rel="noreferrer">how to use Amigo</a>.</p>
             </>
           )}
 
