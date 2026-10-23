@@ -44,6 +44,7 @@ async def test_mode_endpoint_uses_owned_grants_and_channel_links(monkeypatch):
     expiry = "2026-11-01T12:00:00+00:00"
     store = SimpleNamespace(
         count_participant_messages=AsyncMock(return_value=0),
+        get_active_session=AsyncMock(return_value=None),
         list_mode_conversations=AsyncMock(
             return_value=[
                 {
@@ -115,6 +116,7 @@ async def test_missing_grant_denies_live_mode_link(monkeypatch):
     )
     store = SimpleNamespace(
         count_participant_messages=AsyncMock(return_value=0),
+        get_active_session=AsyncMock(return_value=None),
         list_mode_conversations=AsyncMock(return_value=[]),
         get_active_mode_grant=AsyncMock(return_value=None),
     )
@@ -152,6 +154,7 @@ async def test_live_granted_mode_has_no_link_when_processing_guard_denies(monkey
     monkeypatch.setattr(modes, "build_registry", lambda: [definition])
     store = SimpleNamespace(
         count_participant_messages=AsyncMock(return_value=0),
+        get_active_session=AsyncMock(return_value=None),
         list_mode_conversations=AsyncMock(return_value=[]),
         get_active_mode_grant=AsyncMock(return_value={"expires_at": "2026-11-01"}),
     )

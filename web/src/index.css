@@ -882,3 +882,21 @@ input:focus,
   color: var(--signal-deep);
   font-size: 0.75rem;
 }
+
+/* Current Mode: the one the Telegram chat is in now. */
+.mode-chip--current,
+.mode-chip--current:hover {
+  border-color: var(--signal-deep);
+  background: var(--signal-deep);
+  color: var(--oat);
+}
+
+.mode-chip--locked {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mode-chip--locked:hover {
+  border-color: var(--rule);
+  color: var(--ink-2);
+}

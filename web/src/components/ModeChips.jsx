@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckSquare } from 'lucide-react'
+import { Check, CheckSquare } from 'lucide-react'
 import { apiRequest } from '../supabase'
 import CoachTemplates from './CoachTemplates'
 
@@ -12,30 +12,46 @@ export default function ModeChips() {
   const [busyId, setBusyId] = useState(null)
   // What the last click did: { id, opened, message }.
   const [result, setResult] = useState(null)
+  const [current, setCurrent] = useState(null)
 
   useEffect(() => {
     let cancelled = false
-    apiRequest('/api/modes').then((data) => {
+    const load = () => apiRequest('/api/modes').then((data) => {
       if (!cancelled) {
         setModes(data.modes)
         setAccess(data.access ?? null)
+        setCurrent(data.current_mode ?? null)
+        setError(false)
       }
     }).catch(() => {
       if (!cancelled) setError(true)
     })
-    return () => { cancelled = true }
+    load()
+    // /mode or /daily typed in Telegram changes the current Mode; catch up on return to the tab.
+    const onVisible = () => { if (document.visibilityState === 'visible') load() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   // Same as typing the command in Telegram: the server switches the chat and sends the intro.
   const openMode = async (mode, templateId) => {
+    if (mode.id === current && !templateId) {
+      setResult({ id: mode.id, opened: true, already: true })
+      return true
+    }
     setBusyId(mode.id)
     try {
       const data = await apiRequest(`/api/modes/${mode.id}/open`, {
         method: 'POST',
         body: JSON.stringify(templateId ? { template_id: templateId } : {}),
       })
-      setResult({ id: mode.id, opened: data.status === 'opened', message: data.message })
-      return data.status === 'opened'
+      const opened = data.status === 'opened'
+      if (opened) setCurrent(mode.id)
+      setResult({ id: mode.id, opened, message: data.message })
+      return opened
     } catch (err) {
       setResult({ id: mode.id, opened: false, message: err.message || 'Could not switch. Try again.' })
       return false
@@ -58,15 +74,19 @@ export default function ModeChips() {
             mode.purpose,
             mode.grant_expires_at ? `Access until ${new Date(mode.grant_expires_at).toLocaleDateString()}` : null,
           ].filter(Boolean).join(' · ')
+          const isCurrent = mode.id === current
           const content = <>
-            {mode.id === 'daily' && <CheckSquare size={14} strokeWidth={1.8} />}
+            {isCurrent
+              ? <Check size={14} strokeWidth={2.2} />
+              : mode.id === 'daily' && <CheckSquare size={14} strokeWidth={1.8} />}
             <span>
               {busyId === mode.id ? `Switching to ${mode.name}…` : mode.name}
+              {isCurrent && ' · current'}
               {mode.available && mode.consent_required && ' · agree in Telegram'}
               {!mode.available && ` · ${mode.status === 'live' ? 'Full access' : mode.status}`}
             </span>
           </>
-          const className = `mode-chip${mode.available ? ' mode-chip--active' : ''}`
+          const className = `mode-chip${isCurrent ? ' mode-chip--current' : ''}${mode.available ? '' : ' mode-chip--locked'}`
           return mode.available ? (
             <button
               key={mode.id}
@@ -74,6 +94,7 @@ export default function ModeChips() {
               className={className}
               title={title}
               disabled={busyId !== null}
+              aria-pressed={isCurrent}
               aria-controls="mode-howto"
               onClick={() => openMode(mode)}
             >
@@ -94,10 +115,11 @@ export default function ModeChips() {
       {shown && (
         <div id="mode-howto" className="mode-howto" role="status" aria-label={`${shown.name} status`}>
           <p className="mode-howto-title">
-            {result.opened ? `Switched to ${shown.name} in Telegram` : `${shown.name} didn't open`}
+            {result.opened ? `You're in ${shown.name}` : `${shown.name} didn't open`}
           </p>
           {!result.opened && <p>{result.message}</p>}
-          {result.opened && (
+          {result.already && <p>Your Telegram chat is already in {shown.name}.</p>}
+          {result.opened && !result.already && (
             <p>
               Amigo sent you a message there with a few things to try.
               {shown.deep_link && <> <a href={shown.deep_link} target="_blank" rel="noreferrer">Open chat</a></>}

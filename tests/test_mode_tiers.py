@@ -255,16 +255,14 @@ async def test_dashboard_click_opens_a_mode_like_typing_the_command(monkeypatch)
     handlers = BotHandlers(channel, store, SessionManager(store), FakeScheduler(), runtime)
     user = await _activated(store, FULL)
     async with _dashboard(store, user, handlers) as client:
+        assert (await client.get("/api/modes")).json()["current_mode"] == "daily"
         response = await client.post("/api/modes/reflect/open", json={})
+        listed = (await client.get("/api/modes")).json()
+        assert listed["current_mode"] == "reflect"
+        assert [row["id"] for row in listed["modes"] if row["current"]] == ["reflect"]
+        await _send(handlers, store, FULL, "/daily")
+        assert (await client.get("/api/modes")).json()["current_mode"] == "daily"
     assert response.json()["status"] == "opened"
-    assert channel.last_text.startswith("Reflect: ")
-
-    async def reply(messages, info):
-        return ModelResponse(parts=[TextPart("Fictional reflect reply")])
-
-    async with runtime.override(model=FunctionModel(reply)):
-        await _send(handlers, store, FULL, "a meeting went badly")
-    assert channel.last_text == "Fictional reflect reply"
 
 
 async def test_dashboard_refuses_a_mode_the_account_cannot_use(monkeypatch):

@@ -34,6 +34,9 @@ async def list_modes(
         chat_id=0,
         timezone=user.get("timezone") or "UTC", turn_id="mode-availability",
     )
+    # The open Daily-control Session holds the chat's current Mode, the field /mode updates.
+    control = await store.get_active_session(user["user_id"], "daily")
+    current_mode = (control or {}).get("active_mode_id") or "daily"
     result = []
     for mode in build_registry():
         grant = await store.get_active_mode_grant(user["user_id"], mode.id)
@@ -63,6 +66,7 @@ async def list_modes(
             "status": mode.status,
             "available": available,
             "consent_required": consent_required,
+            "current": mode.id == current_mode,
             "grant_expires_at": grant["expires_at"] if grant else None,
             "deep_link": link,
         })
@@ -74,7 +78,7 @@ async def list_modes(
         "messages_used": None if full else await store.count_participant_messages(user["user_id"]),
         "message_limit": None if full else settings.trial_message_limit,
     }
-    return {"modes": result, "access": access}
+    return {"modes": result, "access": access, "current_mode": current_mode}
 
 
 class OpenModeRequest(BaseModel):
