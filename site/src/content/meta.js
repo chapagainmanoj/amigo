@@ -14,6 +14,8 @@ export const SITE = {
   // Absolute, because og:image and og:url must be: Slack, Twitter and Facebook do not resolve
   // relative paths, and a relative og:image is silently dropped rather than reported.
   origin: 'https://amigo.manojc.link',
+  // Where participants sign up, pair Telegram and see their Tasks.
+  dashboard: 'https://amigo-dashboard.onrender.com/',
   themeColor: '#FBF8F2',
   locale: 'en',
   contactEmail: 'amigo@manojc.link',

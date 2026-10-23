@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SITE } from '../content/meta'
 import { NAV } from '../content/shared'
 
 export default function SiteNav({ active = 'home' }) {
@@ -38,7 +39,7 @@ export default function SiteNav({ active = 'home' }) {
         <div className="site-nav-actions">
           <a
             href="/products/"
-            className={`site-nav-link ${active === 'products' ? 'site-nav-link--current' : ''}`}
+            className={`site-nav-link site-nav-link--secondary ${active === 'products' ? 'site-nav-link--current' : ''}`}
             aria-current={active === 'products' ? 'page' : undefined}
           >
             {NAV.products}
@@ -49,6 +50,9 @@ export default function SiteNav({ active = 'home' }) {
             aria-current={active === 'guide' ? 'page' : undefined}
           >
             {NAV.guide}
+          </a>
+          <a href={SITE.dashboard} className="site-nav-link">
+            {NAV.dashboard}
           </a>
           <a href="/#waitlist" onClick={handleJoinClick} className="site-nav-cta">
             <span className="cta-full">{NAV.cta}</span>

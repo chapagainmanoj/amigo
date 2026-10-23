@@ -18,6 +18,7 @@ export const NAV = {
   wordmarkLabel: 'Amigo home',
   products: 'Products',
   guide: 'Guide',
+  dashboard: 'Sign in',
   // The nav CTA is the narrowest element on the page; the short label takes over on phones.
   cta: 'Join the waitlist',
   ctaShort: 'Waitlist',
@@ -29,6 +30,7 @@ export const FOOTER = {
   links: [
     { label: 'Products', href: '/products/' },
     { label: 'Guide', href: '/guide/' },
+    { label: 'Dashboard', href: SITE.dashboard },
     { label: 'Privacy', href: '/privacy/' },
     { label: 'Contact', href: '/contact/' },
     { label: 'GitHub', href: SITE.repo, external: true },

@@ -186,6 +186,7 @@ a {
 
 .site-nav-link {
   padding: 8px 10px;
+  white-space: nowrap;
   color: var(--ink-2);
   font-size: 0.9rem;
   text-decoration: none;
@@ -213,6 +214,25 @@ a {
 
 .cta-short {
   display: none;
+}
+
+.site-nav-cta {
+  white-space: nowrap;
+}
+
+/* Four nav items do not fit a 320-390px phone; Products stays reachable from the footer. */
+@media (max-width: 420px) {
+  .site-nav-actions {
+    gap: 2px;
+  }
+
+  .site-nav-link {
+    padding: 8px 6px;
+  }
+
+  .site-nav-link--secondary {
+    display: none;
+  }
 }
 
 /* Hero -------------------------------------------------------------------- */

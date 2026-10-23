@@ -24,7 +24,13 @@ export const GUIDE_PAGE = {
       heading: '1. Create your account',
       body: (
         <ul className="legal-list">
-          <li>Open the Amigo dashboard and sign up with your email address.</li>
+          <li>
+            Open the{' '}
+            <a href={SITE.dashboard} className="legal-link">
+              Amigo dashboard
+            </a>{' '}
+            and sign up with your email address.
+          </li>
           <li>Confirm the email Amigo sends you, then sign in.</li>
           <li>Read and accept the beta limits.</li>
           <li>
