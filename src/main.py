@@ -197,10 +197,9 @@ async def lifespan(app: FastAPI):
         monitor_stop.set()
         await monitor_task
         reminder_scheduler.shutdown()
-        try:
-            await channel.bot.delete_webhook()
-        except Exception as e:
-            logger.warning("Failed to delete Telegram webhook: %s", e)
+        # The webhook is deliberately left registered. During a rolling deploy the old instance
+        # stops after the new one has set it, and an idle spin-down must stay wakeable by
+        # Telegram; deleting it here would leave the bot unreachable.
 
 
 app = FastAPI(title="Amigo", lifespan=lifespan)
