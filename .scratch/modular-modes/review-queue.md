@@ -1002,3 +1002,8 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   unique; 15 shared, incl. ga-hard-09/10 safe crisis replies rejected by legacy phrase rubric).
   Recommendation: owner may set Render DEFAULT_MODEL=gemini-3.8-flash as a no-regression switch;
   code default unchanged. Shared Daily failures need rubric-vs-model triage (separate slice).
+- Daily on gemini-3.5-flash-lite: 117/180 (hard 17/30, safety 24/42, tool_and_state 109/150,
+  no_unnecessary_mutation 156/180); 10 cases fail only on Lite, including real harms: marks an
+  ambiguous "the call" done without asking (ga-life-10), applies Later without the canonical
+  flow (ga-life-15), claims a Reminder was set with no tool call (ga-task-04). Not suitable for
+  Daily. Recommendation: DEFAULT_MODEL=gemini-3.8-flash for every Mode.
