@@ -3,13 +3,16 @@
 import json
 import logging
 import uuid
+from contextlib import nullcontext
 from datetime import UTC, datetime
+from functools import partial
 from zoneinfo import ZoneInfo
 
 from src.access import grant_required
 from src.agent.modes import ModeUnavailableError
 from src.agent.runtime import FAILURE_REPLY
 from src.conversations import ModeConversationService
+from src.maintenance import run_isolated_steps
 from src.tools.context import ToolContext
 from src.tools.handoff_execution import DurableHandoffModel
 from src.tools.handoffs import parse_handoff_callback
@@ -28,6 +31,10 @@ class HandoffClock(Clock):
 
     def now_in_tz(self, timezone):
         return self.instant.astimezone(ZoneInfo(timezone))
+
+
+def _hold(serializer, recipient):
+    return nullcontext() if serializer is None else serializer.hold(recipient)
 
 
 class HandoffController:
@@ -188,29 +195,76 @@ class HandoffController:
                 logger.warning("Handoff failure notice uncertain: %s", type(error).__name__)
 
     async def recover(self, serializer=None):
-        for row in await self.store.list_pending_handoff_executions():
-            try:
-                user = await self.store.get_user_by_id(row["user_id"])
-                if not user:
-                    continue
-                if serializer is None:
-                    await self.execute(user, row)
-                else:
-                    recipient = await self.channel.recipient_for(user)
-                    async with serializer.hold(recipient):
-                        current = await self.store.get_user_by_id(row["user_id"])
-                        if current and await self.channel.recipient_for(current) == recipient:
-                            await self.execute(current, row)
-            except Exception as error:
-                logger.warning("Handoff recovery row failed: %s", type(error).__name__)
-        for row in await self.store.list_pending_handoff_failure_notices():
-            try:
-                user = await self.store.get_user_by_id(row["user_id"])
-                if user:
-                    await self.failure_notice(user, row["handoff_id"])
-                else:
-                    await self.store.claim_handoff_failure_notice(
-                        row["user_id"], row["handoff_id"], "owner_unavailable"
-                    )
-            except Exception as error:
-                logger.warning("Handoff notice recovery row failed: %s", type(error).__name__)
+        """Recover confirmed handoffs and owed failure notices, one isolated step per row.
+
+        Rows run under the participant's Turn lock when a serializer is given; the owner,
+        endpoint and activation are rechecked inside the lock.
+        """
+        await run_isolated_steps([
+            ("handoff_executions", partial(self._recover_executions, serializer)),
+            ("handoff_failure_notices", partial(self._recover_notices, serializer)),
+        ])
+
+    async def _recover_executions(self, serializer):
+        for pending in await self.store.list_pending_handoff_executions():
+            await run_isolated_steps([
+                ("handoff_row", partial(self._recover_execution, serializer, pending))
+            ])
+
+    async def _recover_execution(self, serializer, pending):
+        user = await self.store.get_user_by_id(pending["user_id"])
+        if user is None:
+            await self.retire_unavailable(pending, "owner_unavailable")
+            return
+        recipient = await self.channel.recipient_for(user)
+        if recipient is None:
+            await self.retire_unavailable(pending, "endpoint_unavailable")
+            return
+        async with _hold(serializer, recipient):
+            current = await self.store.get_user_by_id(pending["user_id"])
+            if current is None or await self.channel.recipient_for(current) != recipient:
+                return
+            if not await self._activated(current):
+                await self.retire_unavailable(pending, "owner_unavailable")
+                return
+            await self.execute(current, pending)
+
+    async def _recover_notices(self, serializer):
+        for pending in await self.store.list_pending_handoff_failure_notices():
+            await run_isolated_steps([
+                ("handoff_failure_notice_row", partial(self._recover_notice, serializer, pending))
+            ])
+
+    async def _recover_notice(self, serializer, pending):
+        user_id, handoff_id = pending["user_id"], pending["handoff_id"]
+        user = await self.store.get_user_by_id(user_id)
+        if user is None:
+            await self.store.claim_handoff_failure_notice(user_id, handoff_id, "owner_unavailable")
+            return
+        recipient = await self.channel.recipient_for(user)
+        if recipient is None:
+            await self.store.claim_handoff_failure_notice(
+                user_id, handoff_id, "endpoint_unavailable"
+            )
+            return
+        async with _hold(serializer, recipient):
+            current = await self.store.get_user_by_id(user_id)
+            if not current:
+                await self.store.claim_handoff_failure_notice(
+                    user_id, handoff_id, "owner_unavailable"
+                )
+                return
+            if await self.channel.recipient_for(current) != recipient:
+                return
+            if not await self._activated(current):
+                await self.store.claim_handoff_failure_notice(
+                    user_id, handoff_id, "owner_unavailable"
+                )
+                return
+            await self.failure_notice(current, handoff_id)
+
+    async def _activated(self, user):
+        auth_id = user.get("supabase_auth_id")
+        return bool(auth_id) and bool(
+            (await self.store.get_activation_state(auth_id)).get("completed")
+        )

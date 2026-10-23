@@ -3,7 +3,6 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from functools import partial
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -78,66 +77,7 @@ bot_username: str | None = None
 
 async def _recover_pending_handoffs() -> None:
     """Recovery uses the same recipient lock as webhook Turns, without recursive locking."""
-    await run_isolated_steps([
-        ("handoff_executions", _recover_handoff_executions),
-        ("handoff_failure_notices", _recover_handoff_notices),
-    ])
-
-
-async def _recover_handoff_executions():
-    for pending in await store.list_pending_handoff_executions():
-        await run_isolated_steps([("handoff_row", partial(_recover_one_handoff, pending))])
-
-
-async def _recover_one_handoff(pending):
-    user = await store.get_user_by_id(pending["user_id"])
-    if user is None:
-        await handlers.handoffs.retire_unavailable(pending, "owner_unavailable")
-        return
-    recipient = await channel.recipient_for(user)
-    if recipient is None:
-        await handlers.handoffs.retire_unavailable(pending, "endpoint_unavailable")
-        return
-    async with update_coordinator.serializer.hold(recipient):
-        user = await store.get_user_by_id(pending["user_id"])
-        if user is None or await channel.recipient_for(user) != recipient:
-            return
-        auth_id = user.get("supabase_auth_id")
-        if not auth_id or not (await store.get_activation_state(auth_id)).get("completed"):
-            await handlers.handoffs.retire_unavailable(pending, "owner_unavailable")
-            return
-        await handlers.handoffs.execute(user, pending)
-
-
-async def _recover_handoff_notices():
-    for pending in await store.list_pending_handoff_failure_notices():
-        await run_isolated_steps([
-            ("handoff_failure_notice_row", partial(_recover_one_handoff_notice, pending))
-        ])
-
-
-async def _recover_one_handoff_notice(pending):
-    user_id, handoff_id = pending["user_id"], pending["handoff_id"]
-    user = await store.get_user_by_id(user_id)
-    if user is None:
-        await store.claim_handoff_failure_notice(user_id, handoff_id, "owner_unavailable")
-        return
-    recipient = await channel.recipient_for(user)
-    if recipient is None:
-        await store.claim_handoff_failure_notice(user_id, handoff_id, "endpoint_unavailable")
-        return
-    async with update_coordinator.serializer.hold(recipient):
-        current = await store.get_user_by_id(user_id)
-        if not current:
-            await store.claim_handoff_failure_notice(user_id, handoff_id, "owner_unavailable")
-            return
-        if await channel.recipient_for(current) != recipient:
-            return
-        auth_id = current.get("supabase_auth_id")
-        if not auth_id or not (await store.get_activation_state(auth_id)).get("completed"):
-            await store.claim_handoff_failure_notice(user_id, handoff_id, "owner_unavailable")
-            return
-        await handlers.handoffs.failure_notice(current, handoff_id)
+    await handlers.handoffs.recover(update_coordinator.serializer)
 
 
 async def _refresh_coach_admission():

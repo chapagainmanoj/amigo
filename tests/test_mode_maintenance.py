@@ -107,42 +107,33 @@ async def test_main_maintenance_isolates_every_stage_and_resets_failed_readiness
     assert worker.admission_enabled is False
 
 
-async def test_handoff_recovery_isolates_participant_read_failure(monkeypatch):
-    import src.main as main
+async def test_handoff_recovery_isolates_participant_read_failure():
+    from src.handoffs import HandoffController
 
-    execute = AsyncMock()
+    class Stub(SimpleNamespace):
+        """Hashable and weak-referenceable, as ModeConversationService requires."""
+
+        __hash__ = object.__hash__
+
     user = {"user_id": "second", "supabase_auth_id": "auth"}
-    monkeypatch.setattr(
-        main,
-        "store",
-        SimpleNamespace(
-            list_pending_handoff_executions=AsyncMock(
-                return_value=[
-                    {"user_id": "first"},
-                    {"user_id": "second"},
-                ]
-            ),
-            get_user_by_id=AsyncMock(side_effect=[RuntimeError("DB"), user, user]),
-            get_activation_state=AsyncMock(return_value={"completed": True}),
+    store = Stub(
+        list_pending_handoff_executions=AsyncMock(
+            return_value=[
+                {"user_id": "first"},
+                {"user_id": "second"},
+            ]
         ),
+        list_pending_handoff_failure_notices=AsyncMock(return_value=[]),
+        get_user_by_id=AsyncMock(side_effect=[RuntimeError("DB"), user, user]),
+        get_activation_state=AsyncMock(return_value={"completed": True}),
     )
-    monkeypatch.setattr(main, "channel", SimpleNamespace(recipient_for=AsyncMock(return_value=42)))
+    channel = Stub(recipient_for=AsyncMock(return_value=42))
 
     @asynccontextmanager
     async def hold(_recipient):
         yield
 
-    monkeypatch.setattr(
-        main,
-        "update_coordinator",
-        SimpleNamespace(
-            serializer=SimpleNamespace(
-                hold=hold,
-            )
-        ),
-    )
-    monkeypatch.setattr(
-        main, "handlers", SimpleNamespace(handoffs=SimpleNamespace(execute=execute))
-    )
-    await main._recover_pending_handoffs()
-    execute.assert_awaited_once_with(user, {"user_id": "second"})
+    handoffs = HandoffController(store, channel, None, None, None)
+    handoffs.execute = AsyncMock()
+    await handoffs.recover(SimpleNamespace(hold=hold))
+    handoffs.execute.assert_awaited_once_with(user, {"user_id": "second"})
