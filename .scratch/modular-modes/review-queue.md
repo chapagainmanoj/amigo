@@ -1017,3 +1017,12 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Evidence: pytest 1714 passed; ruff clean. No billed model runs.
 - Open: src/turns.py and Mode modules are Gate A inputs, so earlier Gate A evidence is now stale; re-run needs owner approval (billed lock).
 - Not changed: conversations.close_expired keeps entitled()+live check without the entry guard on purpose (a missing consent tap must not close the conversation).
+
+## Owner request 23 Oct 2026: all Modes live, examples, dashboard switch, Coach templates
+
+- 13a1d95 Reflect + Recommender live (full access only, gemini-3.8-flash pin); Mode intros list examples; Coach prompt: example answers + drinking/smoking as habit with see-a-doctor line.
+- ad72e6d POST /api/modes/{id}/open, GET /api/coaching/templates (8 templates), I agree tap opens Coach.
+- web commit: chips switch on click; CoachTemplates grid.
+- Evidence: pytest 1717 passed; ruff clean; deterministic subsets pass for all 4 Modes; web lint/build clean.
+- Provisional: Reflect 56/60 and Recommender 43/48 are not passing evidence; live on owner's explicit call. Coach prompt changed, so Coach 48/48 evidence is stale. No billed runs.
+- Not changed: CBT personal input stays off (no such feature switched); site copy still says Reflect/Recommender planned.
