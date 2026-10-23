@@ -1612,7 +1612,7 @@ class MemoryStore:
                 "*, tasks(title, status, user_id), "
                 "user_profiles!reminders_user_id_fkey(telegram_chat_id), "
                 "reminder_occurrences(occurrence_id, "
-                "reminder_delivery_attempts(attempt_id, attempt_number, finished_at))"
+                "reminder_delivery_attempts(attempt_id, attempt_number, started_at, finished_at))"
             )
             .in_("status", ["pending", "sending", "sent"])
             .execute()

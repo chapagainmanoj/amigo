@@ -20,11 +20,24 @@ logger = logging.getLogger(__name__)
 # Reminders missed by less than this window still fire on restart
 MISSED_FIRE_WINDOW = timedelta(minutes=15)
 RECONCILIATION_INTERVAL_SECONDS = 60
+# An unfinished delivery attempt younger than this may still be in flight: reconciliation runs
+# every minute alongside live sends, so it only settles attempts a crash or restart abandoned.
+DELIVERY_ATTEMPT_LEASE = timedelta(minutes=2)
 POLLING_INTERVAL_SECONDS = 10
 _SYSTEM_JOB_IDS = {
     "scheduler-outbox-worker", "scheduler-reconciliation", "mode-conversation-maintenance",
 }
 SCHEDULER_OWNER_KEY = "beta-scheduler"
+
+
+def _attempt_expired(attempt: dict, now: datetime) -> bool:
+    started = attempt.get("started_at")
+    if not started:
+        return True
+    started_at = datetime.fromisoformat(started) if isinstance(started, str) else started
+    if started_at.tzinfo is not None:
+        started_at = started_at.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+    return now - started_at >= DELIVERY_ATTEMPT_LEASE
 
 
 class ReminderScheduler:
@@ -100,6 +113,8 @@ class ReminderScheduler:
                     ),
                     None,
                 )
+                if unfinished and not _attempt_expired(unfinished, now):
+                    continue
                 if unfinished:
                     await self.store.finish_reminder_delivery(
                         attempt_id=unfinished["attempt_id"],

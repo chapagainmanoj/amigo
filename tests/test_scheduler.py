@@ -251,6 +251,10 @@ async def test_reconciliation_does_not_retry_an_unfinished_delivery_attempt():
     claimed = await store.claim_reminder_for_send(
         reminder["reminder_id"], user["user_id"], "interrupted-attempt"
     )
+    attempt_id = claimed["attempt"]["attempt_id"]
+    store.reminder_delivery_attempts[attempt_id]["started_at"] = (
+        now - timedelta(minutes=3)
+    ).isoformat()
     scheduler = ReminderScheduler(FakeChannel(), store, FixedClock(now))
 
     report = await scheduler.reconcile()
@@ -301,3 +305,24 @@ async def test_uncertain_recovery_summary_is_counted_and_not_replayed(monkeypatc
     assert reservation["kind"] == "recovery" and reservation["state"] == "uncertain"
     await scheduler._send_recovery_summary(user["user_id"], user["telegram_chat_id"], [reminder])
     assert channel.send_message.await_count == 1
+
+
+async def test_reconciliation_leaves_an_in_flight_delivery_attempt_alone():
+    """Reconciliation runs every minute beside live sends; a fresh attempt may still succeed."""
+    now = datetime(2026, 6, 14, 10, 0)
+    store = FakeStore()
+    user, _, reminder = await _create_user_task_reminder(
+        store, scheduled_time=now - timedelta(minutes=1)
+    )
+    claimed = await store.claim_reminder_for_send(
+        reminder["reminder_id"], user["user_id"], "in-flight-attempt"
+    )
+    attempt = store.reminder_delivery_attempts[claimed["attempt"]["attempt_id"]]
+    attempt["started_at"] = (now - timedelta(seconds=20)).isoformat()
+    scheduler = ReminderScheduler(FakeChannel(), store, FixedClock(now))
+
+    report = await scheduler.reconcile()
+
+    assert report["failed"] == 0
+    assert reminder["status"] == "sending"
+    assert attempt.get("finished_at") is None
