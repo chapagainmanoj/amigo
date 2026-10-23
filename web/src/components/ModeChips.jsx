@@ -29,11 +29,16 @@ export default function ModeChips() {
         {modes?.map((mode) => {
           const title = [
             mode.purpose,
+            mode.consent_required ? 'Send /mode coach in Telegram and tap I agree to start' : null,
             mode.grant_expires_at ? `Access until ${new Date(mode.grant_expires_at).toLocaleDateString()}` : null,
           ].filter(Boolean).join(' · ')
           const content = <>
             {mode.id === 'daily' && <CheckSquare size={14} strokeWidth={1.8} />}
-            <span>{mode.name}{!mode.available && ` · ${mode.status === 'live' ? 'Access required' : mode.status}`}</span>
+            <span>
+              {mode.name}
+              {mode.available && mode.consent_required && ' · agree in Telegram'}
+              {!mode.available && ` · ${mode.status === 'live' ? 'Full access' : mode.status}`}
+            </span>
           </>
           const className = `mode-chip${mode.available ? ' mode-chip--active' : ''}`
           return mode.available && mode.deep_link ? (

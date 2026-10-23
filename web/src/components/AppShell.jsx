@@ -139,7 +139,7 @@ export default function AppShell({ session }) {
         </nav>
 
         <div style={{ marginTop: 'auto', borderTop: '1px solid var(--rule)', paddingTop: '24px' }}>
-          <div style={{ padding: '0 12px', marginBottom: '16px', color: 'var(--ink-2)', fontSize: '0.85rem', wordBreak: 'break-all' }}>
+          <div title={session?.user?.email} style={{ padding: '0 12px', marginBottom: '16px', color: 'var(--ink-2)', fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {session?.user?.email}
           </div>
           <button 

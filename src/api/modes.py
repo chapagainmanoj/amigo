@@ -8,6 +8,7 @@ from src.access import entitled, is_full_access_user
 from src.agent.catalogue import build_registry
 from src.api.dependencies import get_activated_user, get_store
 from src.channels.base import ConversationRef
+from src.mode_readiness import COACH_PROCESSING_NOTICE
 from src.tools.context import ToolContext
 
 router = APIRouter()
@@ -27,13 +28,17 @@ async def list_modes(
     for mode in build_registry():
         grant = await store.get_active_mode_grant(user["user_id"], mode.id)
         available = mode.status == "live" and await entitled(store, user, mode)
+        consent_required = False
         if available and mode.entry_guard is not None:
             context = ToolContext(
                 store=store, scheduler=None, channel=channel, user=user, session_id="",
                 chat_id=await channel.recipient_for(user) if channel else 0,
                 timezone=user.get("timezone") or "UTC", turn_id="mode-availability",
             )
-            available = not bool(await mode.entry_guard(context))
+            refusal = await mode.entry_guard(context)
+            # Only the participant's own I agree tap is missing: the Mode is open to them.
+            consent_required = refusal == COACH_PROCESSING_NOTICE
+            available = not refusal or consent_required
         address = next((
             row for row in conversations
             if row["mode_id"] == mode.id and row["channel"] == channel_id
@@ -52,6 +57,7 @@ async def list_modes(
             "purpose": mode.purpose,
             "status": mode.status,
             "available": available,
+            "consent_required": consent_required,
             "grant_expires_at": grant["expires_at"] if grant else None,
             "deep_link": link,
         })

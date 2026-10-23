@@ -43,7 +43,7 @@ export default function ModeSuggestionPreference({ request = apiRequest }) {
     <label id="mode-suggestion-setting"><input type="checkbox" checked={enabled === true}
       disabled={busy || enabled === null || Boolean(error)} onChange={event => change(event.target.checked)} />
       <span>Allow Mode suggestions</span></label>
-    <p>Optional and off by default. Each offer needs your confirmation; availability still depends on release approval.</p>
+    <p>When a message fits another Mode better, Amigo can offer to switch. Off by default, and nothing switches without your tap.</p>
     {busy && <p role="status">Updating Mode suggestion settings…</p>}
     {notice && <p role="status">{notice}</p>}
     {error && <div className="coaching-error" role="alert"><p>{error}</p><button className="coaching-button" type="button" disabled={busy} onClick={load}>Refresh settings</button></div>}

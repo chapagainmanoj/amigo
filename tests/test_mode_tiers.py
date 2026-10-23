@@ -168,3 +168,29 @@ async def test_coach_is_live_and_routes_to_its_evaluated_model(monkeypatch):
     assert reference == "google:gemini-3.8-flash"
     assert build_registry()["reflect"].status == "planned"
     assert build_registry()["recommender"].status == "planned"
+
+
+async def test_modes_api_shows_coach_open_pending_consent_for_trial_users(monkeypatch):
+    import httpx
+    from fastapi import FastAPI
+
+    from src.api.dependencies import get_activated_user, get_store
+    from src.api.modes import router
+
+    monkeypatch.setattr(settings, "coach_trial_enabled", True)
+    store = FakeStore()
+    user = await _activated(store, TRIAL)
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_activated_user] = lambda: user
+    app.dependency_overrides[get_store] = lambda: store
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        before = {row["id"]: row for row in (await client.get("/api/modes")).json()["modes"]}
+        await store.set_coaching_consent(user["user_id"], COACH_CONSENT_VERSION)
+        after = {row["id"]: row for row in (await client.get("/api/modes")).json()["modes"]}
+
+    assert before["coach"]["available"] and before["coach"]["consent_required"]
+    assert after["coach"]["available"] and not after["coach"]["consent_required"]
+    assert not before["reflect"]["available"]
