@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { CheckCircle2, Circle, Clock, MessageSquare, Trash2, Plus } from 'lucide-react'
 import { apiRequest, supabase } from '../supabase'
 import { timeOfDayGreeting } from '../mockData'
@@ -54,10 +54,27 @@ export default function DashboardView() {
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [greeting, setGreeting] = useState(timeOfDayGreeting())
 
+  // A failed refresh keeps the last snapshot on screen and says so; it never rejects, so an
+  // action that succeeded is not reported as failed because the refresh after it did.
   const fetchSnapshot = useCallback(async () => {
-    const nextSnapshot = await apiRequest('/api/dashboard/snapshot')
-    setSnapshot(nextSnapshot)
+    try {
+      setSnapshot(await apiRequest('/api/dashboard/snapshot'))
+    } catch (error) {
+      setToastMsg(
+        error?.status === undefined
+          ? 'Could not reach Amigo — check your connection'
+          : 'Could not load your latest plan — showing what we had'
+      )
+    }
   }, [])
+
+  // Realtime events arrive in bursts (one Turn can touch tasks, reminders and sessions), so
+  // they share one trailing refresh instead of one request each.
+  const refreshTimer = useRef(null)
+  const scheduleRefresh = useCallback(() => {
+    clearTimeout(refreshTimer.current)
+    refreshTimer.current = setTimeout(fetchSnapshot, 500)
+  }, [fetchSnapshot])
 
   const tasks = snapshot.tasks.today
   const inboxTasks = snapshot.tasks.inbox
@@ -74,34 +91,18 @@ export default function DashboardView() {
   useEffect(() => {
     fetchSnapshot()
 
-    // Realtime channel subscriptions
-    const tasksChannel = supabase
-      .channel('tasks-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
-        fetchSnapshot()
-      })
-      .subscribe()
-
-    const remindersChannel = supabase
-      .channel('reminders-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'reminders' }, () => {
-        fetchSnapshot()
-      })
-      .subscribe()
-
-    const sessionsChannel = supabase
-      .channel('sessions-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => {
-        fetchSnapshot()
-      })
-      .subscribe()
+    const channels = ['tasks', 'reminders', 'sessions'].map((table) =>
+      supabase
+        .channel(`${table}-realtime`)
+        .on('postgres_changes', { event: '*', schema: 'public', table }, scheduleRefresh)
+        .subscribe()
+    )
 
     return () => {
-      supabase.removeChannel(tasksChannel)
-      supabase.removeChannel(remindersChannel)
-      supabase.removeChannel(sessionsChannel)
+      clearTimeout(refreshTimer.current)
+      channels.forEach((channel) => supabase.removeChannel(channel))
     }
-  }, [fetchSnapshot])
+  }, [fetchSnapshot, scheduleRefresh])
 
   const handleResolveTask = async (task, outcome) => {
     if (task.status && task.status !== 'pending') return
