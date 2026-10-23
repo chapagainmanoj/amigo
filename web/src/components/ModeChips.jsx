@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 import { CheckSquare } from 'lucide-react'
 import { apiRequest } from '../supabase'
+import CoachTemplates from './CoachTemplates'
+
+const command = (mode) => (mode.id === 'daily' ? '/daily' : `/mode ${mode.id}`)
 
 export default function ModeChips() {
   const [modes, setModes] = useState(null)
   const [access, setAccess] = useState(null)
   const [error, setError] = useState(false)
-  const [openId, setOpenId] = useState(null)
-  const [copied, setCopied] = useState(null)
+  const [busyId, setBusyId] = useState(null)
+  // What the last click did: { id, opened, message }.
+  const [result, setResult] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -22,16 +26,26 @@ export default function ModeChips() {
     return () => { cancelled = true }
   }, [])
 
-  const command = (mode) => (mode.id === 'daily' ? '/daily' : `/mode ${mode.id}`)
-  const copyCommand = async (mode) => {
+  // Same as typing the command in Telegram: the server switches the chat and sends the intro.
+  const openMode = async (mode, templateId) => {
+    setBusyId(mode.id)
     try {
-      await navigator.clipboard.writeText(command(mode))
-      setCopied(mode.id)
-    } catch {
-      // Clipboard can be blocked; the command is visible to type instead.
+      const data = await apiRequest(`/api/modes/${mode.id}/open`, {
+        method: 'POST',
+        body: JSON.stringify(templateId ? { template_id: templateId } : {}),
+      })
+      setResult({ id: mode.id, opened: data.status === 'opened', message: data.message })
+      return data.status === 'opened'
+    } catch (err) {
+      setResult({ id: mode.id, opened: false, message: err.message || 'Could not switch. Try again.' })
+      return false
+    } finally {
+      setBusyId(null)
     }
   }
-  const open = modes?.find((mode) => mode.id === openId)
+
+  const shown = modes?.find((mode) => mode.id === result?.id)
+  const coach = modes?.find((mode) => mode.id === 'coach' && mode.available)
 
   return (
     <div className="mode-chips-bar" aria-label="Amigo modes">
@@ -47,7 +61,7 @@ export default function ModeChips() {
           const content = <>
             {mode.id === 'daily' && <CheckSquare size={14} strokeWidth={1.8} />}
             <span>
-              {mode.name}
+              {busyId === mode.id ? `Switching to ${mode.name}…` : mode.name}
               {mode.available && mode.consent_required && ' · agree in Telegram'}
               {!mode.available && ` · ${mode.status === 'live' ? 'Full access' : mode.status}`}
             </span>
@@ -59,9 +73,9 @@ export default function ModeChips() {
               type="button"
               className={className}
               title={title}
-              aria-expanded={openId === mode.id}
+              disabled={busyId !== null}
               aria-controls="mode-howto"
-              onClick={() => { setOpenId(openId === mode.id ? null : mode.id); setCopied(null) }}
+              onClick={() => openMode(mode)}
             >
               {content}
             </button>
@@ -77,25 +91,25 @@ export default function ModeChips() {
             : `Trial: ${access.messages_used} of ${access.message_limit} messages used`}
         </span>
       )}
-      {open && (
-        <div id="mode-howto" className="mode-howto" role="region" aria-label={`Start ${open.name}`}>
-          <p className="mode-howto-title">Start {open.name} in Telegram</p>
-          <ol>
-            <li>
-              Open Amigo in Telegram
-              {open.deep_link && <> — <a href={open.deep_link} target="_blank" rel="noreferrer">open chat</a></>}
-            </li>
-            <li>
-              Send <code>{command(open)}</code>{' '}
-              <button type="button" className="mode-howto-copy" onClick={() => copyCommand(open)}>
-                {copied === open.id ? 'Copied' : 'Copy'}
-              </button>
-            </li>
-            {open.consent_required && <li>Read the note about your data and tap <strong>I agree</strong></li>}
-          </ol>
-          {open.id !== 'daily' && <p className="mode-howto-note">Send <code>/daily</code> any time to switch back.</p>}
+      {shown && (
+        <div id="mode-howto" className="mode-howto" role="status" aria-label={`${shown.name} status`}>
+          <p className="mode-howto-title">
+            {result.opened ? `Switched to ${shown.name} in Telegram` : `${shown.name} didn't open`}
+          </p>
+          {!result.opened && <p>{result.message}</p>}
+          {result.opened && (
+            <p>
+              Amigo sent you a message there with a few things to try.
+              {shown.deep_link && <> <a href={shown.deep_link} target="_blank" rel="noreferrer">Open chat</a></>}
+            </p>
+          )}
+          <p className="mode-howto-note">
+            Prefer typing? Send <code>{command(shown)}</code> in the chat
+            {shown.id !== 'daily' && <>, and <code>/daily</code> to switch back</>}.
+          </p>
         </div>
       )}
+      {coach && <CoachTemplates onPick={(templateId) => openMode(coach, templateId)} busy={busyId !== null} />}
     </div>
   )
 }
