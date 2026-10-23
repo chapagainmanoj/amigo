@@ -14,7 +14,7 @@ const STEPS = [
 ]
 
 const STEP_INDEX = Object.fromEntries(STEPS.map(([key], index) => [key, index]))
-const POLICY_VERSION = '2026-08-29'
+const POLICY_VERSION = '2026-10-23'
 
 function Progress({ step, expanded }) {
   const active = step === 'email_verification' ? 0 : (STEP_INDEX[step] ?? 0)
@@ -62,6 +62,8 @@ export default function ActivationJourney({ session, state, refresh, onFinish })
     privacy_and_retention: false,
     participant_rights: false,
     non_clinical: false,
+    adult: false,
+    processors: false,
   })
   const [profile, setProfile] = useState(() => ({
     preferred_name: '',
@@ -201,13 +203,15 @@ export default function ActivationJourney({ session, state, refresh, onFinish })
             <>
               <p className="activation-kicker">Before connecting Telegram</p>
               <h1>Know what this beta can do</h1>
-              <p>Amigo turns conversations into everyday Tasks and Telegram Reminders. It is an early beta, not an emergency, monitoring, medical, or clinical service.</p>
+              <p>Amigo turns conversations into everyday Tasks and Telegram Reminders. It is an early beta, not an emergency, monitoring, medical, or clinical service. Please don&rsquo;t share medical, financial, identity, or emergency details with it. Read the <a href="https://amigo.manojc.link/privacy/" target="_blank" rel="noreferrer">privacy notice</a> before you continue.</p>
               <div className="activation-checks">
                 {[
                   ['beta_limits', 'I understand the beta can fail and I will verify important reminders.'],
                   ['privacy_and_retention', 'I understand messages and task data are stored to provide the service.'],
                   ['participant_rights', 'I can ask for support, export, correction, or deletion of my data.'],
                   ['non_clinical', 'I understand Amigo does not diagnose, treat, supervise, or keep me safe.'],
+                  ['adult', 'I am 18 or older.'],
+                  ['processors', 'I have read the privacy notice, including AI processing by Google and storage that may be outside my country.'],
                 ].map(([key, label]) => (
                   <label key={key} className="activation-checkbox">
                     <input type="checkbox" checked={checks[key]} onChange={(event) => setChecks({ ...checks, [key]: event.target.checked })} />

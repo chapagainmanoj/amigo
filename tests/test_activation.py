@@ -281,6 +281,8 @@ async def test_activation_api_enforces_verified_order_and_exact_confirmation():
                 "privacy_and_retention": True,
                 "participant_rights": False,
                 "non_clinical": True,
+                "adult": True,
+                "processors": True,
             },
         )
         assert incomplete.status_code == 422
@@ -293,6 +295,8 @@ async def test_activation_api_enforces_verified_order_and_exact_confirmation():
                 "privacy_and_retention": True,
                 "participant_rights": True,
                 "non_clinical": True,
+                "adult": True,
+                "processors": True,
             },
         )
         assert accepted.status_code == 200
@@ -362,6 +366,8 @@ async def test_unverified_activation_api_stays_at_email_verification():
                 "privacy_and_retention": True,
                 "participant_rights": True,
                 "non_clinical": True,
+                "adult": True,
+                "processors": True,
             },
         )
         assert response.status_code == 403
@@ -533,6 +539,8 @@ async def test_activation_profile_rejects_bad_input_with_400(field, value):
                 "privacy_and_retention": True,
                 "participant_rights": True,
                 "non_clinical": True,
+                "adult": True,
+                "processors": True,
             },
         )
         response = await client.post("/api/activation/profile", json=payload)
@@ -699,3 +707,42 @@ async def test_no_dashboard_source_hardcodes_a_telegram_bot_handle():
         if "t.me/" in line
     ]
     assert offenders == []
+
+
+@pytest.mark.parametrize("missing", ["adult", "processors"])
+async def test_age_and_processor_acknowledgements_are_required(missing):
+    """Decision 04: 18+ and processor/cross-border processing are acknowledged before Pairing."""
+    store = InMemoryStore()
+    app = FastAPI()
+    app.state.store = store
+    app.include_router(activation_router)
+
+    async def authenticated_identity():
+        return AuthenticatedIdentity("auth-consent", True, "person@example.test")
+
+    async def configured_store():
+        return store
+
+    app.dependency_overrides[get_authenticated_identity] = authenticated_identity
+    app.dependency_overrides[get_store] = configured_store
+    payload = {
+        "policy_version": ACTIVATION_POLICY_VERSION,
+        "beta_limits": True,
+        "privacy_and_retention": True,
+        "participant_rights": True,
+        "non_clinical": True,
+        "adult": True,
+        "processors": True,
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        refused = await client.post(
+            "/api/activation/acknowledge", json={**payload, missing: False}
+        )
+        stale = await client.post(
+            "/api/activation/acknowledge", json={**payload, "policy_version": "2026-08-29"}
+        )
+        assert (await client.get("/api/activation")).json()["step"] == "limits"
+    assert refused.status_code == 422
+    assert stale.status_code == 409

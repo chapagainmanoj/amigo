@@ -34,6 +34,8 @@ class AcknowledgeRequest(BaseModel):
     privacy_and_retention: bool
     participant_rights: bool
     non_clinical: bool
+    adult: bool
+    processors: bool
 
 
 class ProfileRequest(BaseModel):
@@ -104,6 +106,8 @@ async def acknowledge_activation(
             acknowledgement.privacy_and_retention,
             acknowledgement.participant_rights,
             acknowledgement.non_clinical,
+            acknowledgement.adult,
+            acknowledgement.processors,
         )
     ):
         raise HTTPException(status_code=422, detail="All setup acknowledgements are required.")

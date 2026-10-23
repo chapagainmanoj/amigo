@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-ACTIVATION_POLICY_VERSION = "2026-08-29"
+# Acknowledgements are immutable per account (migration 013); a new version applies to new
+# signups. Renewing existing accounts' acknowledgement needs a migration.
+ACTIVATION_POLICY_VERSION = "2026-10-23"
 ACTIVATION_TEST_TASK_TITLE = "Private Amigo test reminder"
 ACTIVATION_TEST_DELAY = timedelta(minutes=2)
 ACTIVATION_TEST_EARLIEST = timedelta(seconds=60)
