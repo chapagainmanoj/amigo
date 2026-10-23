@@ -14,6 +14,7 @@ import sys
 from dataclasses import replace
 from datetime import UTC, timedelta
 
+from src.access import grant_required
 from src.activation import ACTIVATION_POLICY_VERSION
 from src.bot.handlers import BotHandlers
 from src.bot.update_claims import ParticipantTurnSerializer
@@ -115,7 +116,7 @@ async def _grant_preview_modes(store: InMemoryStore, runtime) -> list[str]:
     user = await store.get_user_by_chat_id(DEV_CHAT_ID)
     granted = []
     for mode in runtime.registry:
-        if mode.entitlement == "grant":
+        if grant_required(user, mode):
             await store.grant_mode(
                 user["user_id"], mode.id, PREVIEW_OPERATOR, "local CLI preview"
             )

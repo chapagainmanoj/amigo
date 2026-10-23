@@ -11,8 +11,8 @@ from src.runtime_config import UnsafeProductionConfigurationError, parse_allowed
 
 logger = logging.getLogger(__name__)
 
-# Modes open to trial participants; every other live Mode needs full access.
-TRIAL_MODES = frozenset({"daily", "coach"})
+# A Mode with this entitlement is for full-access chats, or anyone holding an operator grant.
+FULL_ACCESS = "full_access"
 
 
 def is_full_access(chat_id: int | str | None) -> bool:
@@ -33,6 +33,21 @@ def is_full_access(chat_id: int | str | None) -> bool:
 
 def is_full_access_user(user: dict) -> bool:
     return is_full_access(user.get("telegram_chat_id"))
+
+
+def grant_required(user: dict, mode) -> bool:
+    """Whether opening this Mode for this participant needs an active operator grant."""
+    if mode.entitlement == "grant":
+        return True
+    return mode.entitlement == FULL_ACCESS and not is_full_access_user(user)
+
+
+async def entitled(store, user: dict, mode) -> bool:
+    if mode.entitlement not in {"activated", "grant", FULL_ACCESS}:
+        return False
+    if not grant_required(user, mode):
+        return True
+    return bool(await store.get_active_mode_grant(user["user_id"], mode.id))
 
 
 def trial_finished_message(chat_id: int) -> str:

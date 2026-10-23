@@ -127,6 +127,21 @@ class CoachingController:
         )
         return "Draft shown. Only the participant's approval button can start it."
 
+    async def handle_consent(self, user, recipient, data, conversation=None):
+        """Record the participant's own tap on the reviewed Coach processing notice."""
+        from src.mode_readiness import COACH_CONSENT_VERSION, coach_readiness
+
+        if data != f"consent:{COACH_CONSENT_VERSION}" or not await coach_readiness.complete():
+            await self.channel.send_message(
+                recipient, "Coach is unavailable.", conversation=conversation
+            )
+            return
+        await self.store.set_coaching_consent(user["user_id"], COACH_CONSENT_VERSION)
+        await self.channel.send_message(
+            recipient, "Thanks. Coach is ready: send /mode coach to start.",
+            conversation=conversation,
+        )
+
     async def handle_callback(self, user, recipient, data, conversation=None):
         try:
             parts = data.split(":")
@@ -134,12 +149,14 @@ class CoachingController:
                 return
             action, identifier = parts[1], str(uuid.UUID(parts[2]))
             if action not in {"pause", "stop"}:
+                from src.access import entitled
                 from src.agent.catalogue import build_registry
                 from src.mode_readiness import coach_entry_guard
 
-                grant = await self.store.get_active_mode_grant(user["user_id"], "coach")
+                coach = build_registry()["coach"]
+                allowed = await entitled(self.store, user, coach)
                 refusal = await coach_entry_guard(SimpleNamespace(store=self.store, user=user))
-                if build_registry()["coach"].status != "live" or not grant or refusal:
+                if coach.status != "live" or not allowed or refusal:
                     await self.channel.send_message(
                         recipient, refusal or "Coach is unavailable.", conversation=conversation
                     )

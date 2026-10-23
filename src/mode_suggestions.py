@@ -3,6 +3,7 @@
 import re
 from dataclasses import dataclass
 
+from src.access import grant_required
 from src.agent.modes import ModeUnavailableError
 from src.agent.runtime import FAILURE_REPLY
 from src.tools.context import ToolContext
@@ -79,7 +80,7 @@ class ModeSuggestionController:
             context.user["user_id"],
             context.session_id,
             target,
-            grant_required=mode.entitlement == "grant",
+            grant_required=grant_required(context.user, mode),
         )
         if offer:
             await self.channel.send_message(

@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 
+from src.access import FULL_ACCESS
 from src.agent.coach import coach_instructions, coaching_context
 from src.agent.context import (
     active_reminder_ids,
@@ -58,13 +59,12 @@ COACH = ModeDefinition(
     entry_guard=coach_entry_guard,
     toolsets=(COACHING,),
     context=(coaching_context,),
-    entitlement="grant",
     eval_suite="evals/coach/v1/cases.json",
     invalidating_inputs=("src/agent/coach.py", "src/tools/coaching.py", "src/coaching.py"),
     handoffs=("daily",),
 )
 
-REFLECT = replace(REFLECT_CANDIDATE, entry_guard=reflect_entry_guard)
+REFLECT = replace(REFLECT_CANDIDATE, entry_guard=reflect_entry_guard, entitlement=FULL_ACCESS)
 
 RECOMMENDER = ModeDefinition(
     id="recommender",
@@ -77,7 +77,7 @@ RECOMMENDER = ModeDefinition(
     instructions=recommender_instructions,
     toolsets=(LAUNDRY,),
     context=(recommender_context,),
-    entitlement="grant",
+    entitlement=FULL_ACCESS,
     eval_suite="evals/recommender/v1/cases.json",
     invalidating_inputs=("src/agent/recommender.py", "src/tools/recommender.py"),
     handoffs=("daily",),

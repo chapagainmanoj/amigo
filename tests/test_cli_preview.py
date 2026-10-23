@@ -32,7 +32,8 @@ async def test_preview_lists_and_runs_planned_modes_without_changing_catalogue()
     }
     store = InMemoryStore()
     await _seed_dev_user(store)
-    assert set(await _grant_preview_modes(store, runtime)) == {"coach", "reflect", "recommender"}
+    # Coach is open to every activated participant; the rest need full access or a grant.
+    assert set(await _grant_preview_modes(store, runtime)) == {"reflect", "recommender"}
     channel = FakeChannel()
     handlers = BotHandlers(
         channel, store, SessionManager(store), FakeScheduler(), mode_runtime=runtime

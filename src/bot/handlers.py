@@ -151,7 +151,7 @@ class BotHandlers:
             )
             return
 
-        if data.startswith(("handoff:", "coach:", "suggest:", "memory:")):
+        if data.startswith(("handoff:", "coach:", "suggest:", "memory:", "consent:")):
             user = await self.store.get_user_by_chat_id(chat_id)
             if user and user.get("supabase_auth_id"):
                 activation = await self.store.get_activation_state(user["supabase_auth_id"])
@@ -162,6 +162,8 @@ class BotHandlers:
                         await self.turn_processor.suggestions.handle_callback(
                             user, chat_id, data, conversation
                         )
+                    elif data.startswith("consent:"):
+                        await self.coaching.handle_consent(user, chat_id, data, conversation)
                     elif data.startswith("coach:"):
                         await self.coaching.handle_callback(user, chat_id, data, conversation)
                     else:

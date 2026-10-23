@@ -54,13 +54,14 @@ async def test_failed_provider_close_still_closes_store_and_continues_other_rows
 
 
 async def test_failed_grant_lookup_does_not_close_valid_row_or_block_later_participant():
+    # Reflect needs a grant for chats without full access, so its lookup decides.
     store, channel = FakeStore(), FakeChannel(threads=True)
     service = ModeConversationService(store, channel)
     users = [await store.create_user(chat_id) for chat_id in (8812403, 8812404)]
     for user in users:
-        ref = await channel.create_conversation(user["telegram_chat_id"], "Coach")
+        ref = await channel.create_conversation(user["telegram_chat_id"], "Reflect")
         await store.save_mode_conversation(
-            user["user_id"], "coach", channel.channel_id, endpoint_dict(ref)
+            user["user_id"], "reflect", channel.channel_id, endpoint_dict(ref)
         )
     store.get_active_mode_grant = AsyncMock(side_effect=[RuntimeError("DB failure"), None])
     await service.close_expired()

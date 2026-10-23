@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
+from src.access import entitled, is_full_access_user
 from src.agent.catalogue import build_registry
 from src.api.dependencies import get_activated_user, get_store
 from src.channels.base import ConversationRef
@@ -25,10 +26,7 @@ async def list_modes(
     result = []
     for mode in build_registry():
         grant = await store.get_active_mode_grant(user["user_id"], mode.id)
-        entitled = mode.entitlement == "activated" or (
-            mode.entitlement == "grant" and grant is not None
-        )
-        available = mode.status == "live" and entitled
+        available = mode.status == "live" and await entitled(store, user, mode)
         if available and mode.entry_guard is not None:
             context = ToolContext(
                 store=store, scheduler=None, channel=channel, user=user, session_id="",
@@ -57,4 +55,12 @@ async def list_modes(
             "grant_expires_at": grant["expires_at"] if grant else None,
             "deep_link": link,
         })
-    return {"modes": result}
+    from src.config import settings
+
+    full = is_full_access_user(user)
+    access = {
+        "tier": "full" if full else "trial",
+        "messages_used": None if full else await store.count_participant_messages(user["user_id"]),
+        "message_limit": None if full else settings.trial_message_limit,
+    }
+    return {"modes": result, "access": access}

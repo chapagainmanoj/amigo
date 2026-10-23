@@ -122,7 +122,7 @@ async def test_real_draft_tool_only_exact_participant_callback_activates_once(co
     assert await env.store.get_coaching_program(env.other["user_id"]) is None
 
 
-@pytest.mark.parametrize("denial", ["kill", "withdrawal", "activation", "grant"])
+@pytest.mark.parametrize("denial", ["kill", "withdrawal", "activation"])
 async def test_old_approval_cannot_bypass_current_admission(coach_app, monkeypatch, denial):
     env = coach_app
     _, approval = await env.draft()

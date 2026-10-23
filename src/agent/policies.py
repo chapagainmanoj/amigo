@@ -33,6 +33,15 @@ class ActivatedParticipants:
         return mode.entitlement == "activated"
 
 
+class TieredEntitlements:
+    """Activated Modes for everyone; full-access Modes for allowlisted chats or grant holders."""
+
+    async def allows(self, context: ToolContext, mode: ModeDefinition) -> bool:
+        from src.access import entitled
+
+        return await entitled(context.store, context.user, mode)
+
+
 class GrantedParticipants:
     """Activated Modes retain their policy; grant Modes require an active operator grant."""
 

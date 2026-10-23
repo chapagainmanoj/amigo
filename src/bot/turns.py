@@ -43,7 +43,8 @@ class TurnProcessor:
         context = prepared.context
         if prepared.response is not None:
             await self.channel.send_message(
-                chat_id, prepared.response, conversation=context.conversation
+                chat_id, prepared.response, buttons=prepared.buttons,
+                conversation=context.conversation,
             )
             return
         if prepared.mode_id == "coach":

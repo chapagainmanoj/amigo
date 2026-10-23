@@ -3,8 +3,10 @@
 import logging
 from dataclasses import dataclass
 
+from src.access import grant_required
 from src.agent.modes import ModeUnavailableError
 from src.conversations import ModeConversationService
+from src.mode_readiness import COACH_CONSENT_BUTTONS, COACH_PROCESSING_NOTICE
 from src.tools.context import ToolContext
 from src.wellbeing import reflect_safety_response
 
@@ -16,6 +18,7 @@ class PreparedModeTurn:
     context: ToolContext
     mode_id: str
     response: str | None = None
+    buttons: list | None = None
 
 
 class ModeController:
@@ -66,7 +69,13 @@ class ModeController:
         except ModeUnavailableError as error:
             if not is_mode_command and control is not None and selected != "daily":
                 await self.store.set_active_mode(user_id, control["session_id"], "daily")
-            return PreparedModeTurn(context, selected or "daily", error.participant_message)
+            buttons = (
+                COACH_CONSENT_BUTTONS
+                if error.participant_message == COACH_PROCESSING_NOTICE else None
+            )
+            return PreparedModeTurn(
+                context, selected or "daily", error.participant_message, buttons
+            )
         except Exception as error:
             from src.agent.runtime import FAILURE_REPLY
 
@@ -81,7 +90,8 @@ class ModeController:
         result = {"status": "set"}
         if (session.get("active_mode_id") or "daily") != selected:
             result = await self.store.set_active_mode(
-                user_id, session["session_id"], selected, grant_required=mode.entitlement == "grant"
+                user_id, session["session_id"], selected,
+                grant_required=grant_required(user, mode),
             )
         if result["status"] != "set":
             return PreparedModeTurn(
@@ -93,7 +103,7 @@ class ModeController:
             if (control.get("active_mode_id") or "daily") != selected:
                 await self.store.set_active_mode(
                     user_id, control["session_id"], selected,
-                    grant_required=mode.entitlement == "grant",
+                    grant_required=grant_required(user, mode),
                 )
             context.conversation = await self.conversations.ensure(user, selected, chat_id=chat_id)
             return PreparedModeTurn(

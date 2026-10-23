@@ -34,8 +34,8 @@ from src.agent.modes import (
 from src.agent.policies import (
     EntitlementPolicy,
     ExplicitThenDefault,
-    GrantedParticipants,
     RoutingPolicy,
+    TieredEntitlements,
 )
 from src.agent.registry import ModeRegistry
 from src.agent.safety import (
@@ -124,7 +124,7 @@ class ModeRuntime:
     ):
         self.registry = registry
         self.routing = routing or ExplicitThenDefault()
-        self.entitlements = entitlements or GrantedParticipants()
+        self.entitlements = entitlements or TieredEntitlements()
         self._agents: dict[str, Agent[ToolContext, str]] = {}
         self._models: dict[tuple[str, bool], Model] = {}
         self._states_safety_core: dict[str, bool] = {}

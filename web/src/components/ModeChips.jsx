@@ -4,12 +4,16 @@ import { apiRequest } from '../supabase'
 
 export default function ModeChips() {
   const [modes, setModes] = useState(null)
+  const [access, setAccess] = useState(null)
   const [error, setError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     apiRequest('/api/modes').then((data) => {
-      if (!cancelled) setModes(data.modes)
+      if (!cancelled) {
+        setModes(data.modes)
+        setAccess(data.access ?? null)
+      }
     }).catch(() => {
       if (!cancelled) setError(true)
     })
@@ -41,6 +45,13 @@ export default function ModeChips() {
           )
         })}
       </div>
+      {access?.tier === 'trial' && (
+        <span className="mode-chips-trial" role="status">
+          {access.messages_used >= access.message_limit
+            ? <>Trial finished · <a href="https://amigo.manojc.link/contact/">Contact us for full access</a></>
+            : `Trial: ${access.messages_used} of ${access.message_limit} messages used`}
+        </span>
+      )}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import logging
 from functools import partial
 from weakref import WeakKeyDictionary
 
+from src.access import entitled
 from src.channels.base import ConversationRef, endpoint_dict
 from src.maintenance import run_isolated_steps
 
@@ -89,11 +90,12 @@ class ModeConversationService:
             mode = registry[row["mode_id"]]
         except UnknownModeError:
             mode = None
-        grant = await self.store.get_active_mode_grant(row["user_id"], row["mode_id"])
-        if mode and mode.status == "live" and (mode.entitlement != "grant" or grant):
+        user = await self.store.get_user_by_id(row["user_id"])
+        # A failed entitlement lookup raises here and leaves the row open.
+        allowed = mode is not None and user is not None and await entitled(self.store, user, mode)
+        if allowed and mode.status == "live":
             return
         try:
-            user = await self.store.get_user_by_id(row["user_id"])
             if user is not None:
                 ref = ConversationRef(row["channel"], row["endpoint"])
                 recipient = await self.channel.recipient_for(user)

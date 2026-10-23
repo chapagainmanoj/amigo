@@ -543,6 +543,17 @@ input:focus {
   flex-shrink: 0;
 }
 
+.mode-chips-trial {
+  font-size: 12px;
+  color: var(--ink-2);
+  flex-shrink: 0;
+}
+
+.mode-chips-trial a {
+  color: inherit;
+  text-decoration: underline;
+}
+
 .mode-chips-row {
   display: flex;
   flex-direction: row;

@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
+from src.access import grant_required
 from src.agent.modes import ModeUnavailableError
 from src.agent.runtime import FAILURE_REPLY
 from src.conversations import ModeConversationService
@@ -109,7 +110,7 @@ class HandoffController:
                     user["user_id"],
                     control["session_id"],
                     mode_id,
-                    grant_required=mode.entitlement == "grant",
+                    grant_required=grant_required(user, mode),
                 )
             primary = await self.runtime.execution_model_for(mode, context)
             model = DurableHandoffModel(primary, self.store, user["user_id"], handoff, context)

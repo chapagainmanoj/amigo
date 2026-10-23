@@ -5,6 +5,7 @@ import uuid
 
 from pydantic_ai import FunctionToolset, RunContext
 
+from src.access import grant_required
 from src.tools.context import ToolContext
 
 HANDOFFS: FunctionToolset[ToolContext] = FunctionToolset(max_retries=0)
@@ -49,8 +50,8 @@ async def propose_handoff(
         return "That Mode isn't available. Nothing was passed."
     pending = await deps.store.create_handoff(
         deps.user["user_id"], deps.session_id, source.id, target.id, carried_request,
-        source_grant_required=source.entitlement == "grant",
-        target_grant_required=target.entitlement == "grant",
+        source_grant_required=grant_required(deps.user, source),
+        target_grant_required=grant_required(deps.user, target),
     )
     if pending["status"] != "pending":
         return "The handoff could not be proposed. Nothing was passed."
