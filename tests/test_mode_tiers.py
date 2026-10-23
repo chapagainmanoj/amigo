@@ -156,7 +156,7 @@ async def test_crisis_routing_still_fires_for_full_access(monkeypatch):
     assert "emergency" in channel.last_text.lower()
 
 
-async def test_coach_is_live_and_routes_to_its_evaluated_model(monkeypatch):
+async def test_specialized_modes_are_live_on_their_evaluated_model(monkeypatch):
     from src.agent.runtime import default_runtime
 
     monkeypatch.setattr(settings, "dev_model", "")
@@ -166,8 +166,12 @@ async def test_coach_is_live_and_routes_to_its_evaluated_model(monkeypatch):
     assert coach.status == "live"
     reference = await default_runtime.model_for(mode=coach, resolve_only=True)
     assert reference == "google:gemini-3.8-flash"
-    assert build_registry()["reflect"].status == "planned"
-    assert build_registry()["recommender"].status == "planned"
+    for mode_id in ("reflect", "recommender"):
+        mode = build_registry()[mode_id]
+        assert mode.status == "live"
+        assert await default_runtime.model_for(mode=mode, resolve_only=True) == (
+            "google:gemini-3.8-flash"
+        )
 
 
 async def test_modes_api_shows_coach_open_pending_consent_for_trial_users(monkeypatch):

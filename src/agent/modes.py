@@ -77,6 +77,15 @@ class ModeDefinition:
     entry_guard: ContextProvider | None = None
     workflows: tuple[WorkflowDefinition, ...] = ()
     limits: str = "Amigo is experimental and cannot provide clinical care or monitoring."
+    # Short first messages shown when the Mode opens, so the participant knows what to send.
+    examples: tuple[str, ...] = ()
+
+    def intro(self) -> str:
+        """What the participant sees on entering this Mode."""
+        text = f"{self.name}: {self.purpose}\n{self.limits}"
+        if self.examples:
+            text += "\n\nTry something like:\n" + "\n".join(f"• {e}" for e in self.examples)
+        return text
 
     def __post_init__(self):
         if not _MODE_ID.match(self.id):

@@ -44,6 +44,11 @@ DAILY = ModeDefinition(
     context=(yesterday_summary, todays_tasks, pending_task_ids, active_reminder_ids),
     eval_suite="evals/gate_a/v1/cases.json",
     invalidating_inputs=("src/agent/prompts.py", "evals/gate_a/v1/cases.json"),
+    examples=(
+        "Add 'call the bank' to today",
+        "Remind me to stretch at 6pm",
+        "What's left on my plan?",
+    ),
 )
 
 COACH = ModeDefinition(
@@ -64,9 +69,27 @@ COACH = ModeDefinition(
     eval_suite="evals/coach/v1/cases.json",
     invalidating_inputs=("src/agent/coach.py", "src/tools/coaching.py", "src/coaching.py"),
     handoffs=("daily",),
+    examples=(
+        "Walk 20 minutes, 3 days a week",
+        "Read 10 pages every weekday evening",
+        "Have 4 alcohol-free days each week",
+    ),
 )
 
-REFLECT = replace(REFLECT_CANDIDATE, entry_guard=reflect_entry_guard, entitlement=FULL_ACCESS)
+# Reflect and Recommender run on the model their suites were evaluated on (56/60 and 43/48, not
+# passing). They are live for full-access accounts only, on the owner's call (23 Oct 2026).
+REFLECT = replace(
+    REFLECT_CANDIDATE,
+    status="live",
+    model=ModelPolicy(primary="google:gemini-3.8-flash"),
+    entry_guard=reflect_entry_guard,
+    entitlement=FULL_ACCESS,
+    examples=(
+        "Debrief a meeting that didn't go well",
+        "Help me think through a decision I'm stuck on",
+        "Do a quick weekly review",
+    ),
+)
 
 RECOMMENDER = ModeDefinition(
     id="recommender",
@@ -75,7 +98,8 @@ RECOMMENDER = ModeDefinition(
         "Help me choose among options in one approved domain using my stated preferences and "
         "explainable trade-offs."
     ),
-    status="planned",
+    status="live",
+    model=ModelPolicy(primary="google:gemini-3.8-flash"),
     instructions=recommender_instructions,
     toolsets=(LAUNDRY,),
     context=(recommender_context,),
@@ -83,6 +107,10 @@ RECOMMENDER = ModeDefinition(
     eval_suite="evals/recommender/v1/cases.json",
     invalidating_inputs=("src/agent/recommender.py", "src/tools/recommender.py"),
     handoffs=("daily",),
+    examples=(
+        "Which detergent for sensitive skin?",
+        "Cold or warm wash for dark jeans?",
+    ),
 )
 
 

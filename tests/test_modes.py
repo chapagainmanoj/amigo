@@ -371,13 +371,13 @@ def test_mode_ids_are_stable_identifiers():
         _journal(id="Coach Mode")
 
 
-def test_the_catalogue_registers_daily_and_coach_live_and_the_rest_planned():
+def test_the_catalogue_registers_every_mode_live():
     statuses = {mode.id: mode.status for mode in build_registry()}
     assert statuses == {
         "daily": "live",
         "coach": "live",
-        "reflect": "planned",
-        "recommender": "planned",
+        "reflect": "live",
+        "recommender": "live",
     }
 
 
@@ -555,7 +555,7 @@ async def test_a_requested_mode_is_honoured_and_refused_when_unavailable():
             context, "hi", requested_mode="reflect"
         )
 
-    assert reply == "Reflect isn't available yet."
+    assert reply == "Reflect isn't available on your account."
     assert script.requests == []
     assert store.messages == []
 

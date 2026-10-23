@@ -109,7 +109,7 @@ class ModeController:
                 )
             context.conversation = await self.conversations.ensure(user, selected, chat_id=chat_id)
             return PreparedModeTurn(
-                context, selected, f"{mode.name}: {mode.purpose}\n{mode.limits}"
+                context, selected, mode.intro()
             )
         if context.conversation is None:
             context.conversation = await self.conversations.ensure(user, selected, chat_id=chat_id)

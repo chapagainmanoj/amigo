@@ -13,7 +13,7 @@ from src.agent.catalogue import build_registry
 from src.evaluation.gate_a import load_mode_suite, tool_schema
 
 # Candidate evaluation never changes the application catalogue.
-CATALOGUE_STATUS = {"coach": "live", "reflect": "planned", "recommender": "planned"}
+CATALOGUE_STATUS = {"coach": "live", "reflect": "live", "recommender": "live"}
 
 
 @pytest.mark.parametrize("mode_id", ["coach", "reflect", "recommender"])
@@ -63,7 +63,7 @@ def test_candidate_cannot_mutate_application_definition():
     candidate = _evaluation_registry("reflect", True)["reflect"]
     assert candidate.status == "live" and candidate.entry_guard is None
     assert original.entry_guard is not None
-    assert replace(candidate, status="planned", entry_guard=original.entry_guard) == original
+    assert replace(candidate, entry_guard=original.entry_guard) == original
 
 
 def test_punctuation_prohibition_matches_literal_not_empty_normalization():

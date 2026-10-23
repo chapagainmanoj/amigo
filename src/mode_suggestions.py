@@ -181,7 +181,7 @@ class ModeSuggestionController:
             # Fence publication after endpoint creation; an uncertain notice never resends itself.
             if await self.store.complete_mode_suggestion_opening(user["user_id"], parts[2], token):
                 await self.channel.send_message(
-                    chat_id, f"{mode.name}: {mode.purpose}\n{mode.limits}", conversation=ref
+                    chat_id, mode.intro(), conversation=ref
                 )
         except Exception:
             released = await self.store.release_mode_suggestion_opening(
