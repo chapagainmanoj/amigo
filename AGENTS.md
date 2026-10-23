@@ -62,8 +62,12 @@ python scripts/smoke_check.py --scheduler
 - Add newly reachable Turn modules to `INVALIDATING_INPUT_PATHS` in
   `src/evaluation/gate_a.py`; never weaken `tests/test_gate_a_currency.py`.
 - Development/iteration uses `claude -p`, with `ANTHROPIC_API_KEY` removed from its environment;
-  Ollama is the offline backup. Gemini is for final eval batches only, with metadata-only usage
-  recorded in `.scratch/gemini-usage.jsonl`; the old eight-request cap is superseded.
+  Ollama is the offline backup.
+- **Billed models are locked (owner, 23 Oct 2026).** Do not run evals, tests or experiments on any
+  billed provider (Gemini, OpenAI, DeepSeek, Anthropic API) unless the owner explicitly allows that
+  specific run in the current conversation. Model routing is fixed: Daily on `DEFAULT_MODEL`
+  (Render), Coach pinned to `google:gemini-3.8-flash`; do not change either without owner approval.
+  Any approved billed run records metadata-only usage in `.scratch/gemini-usage.jsonl`.
 - Claude subscription CLI is development-only. Production stays on Gemini unless an evaluated
   owner-controlled override is configured. Participant model choice/keys are deferred.
 - Participant pins are only for owner/internal dogfooding accounts. Never pin real participants
