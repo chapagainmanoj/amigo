@@ -164,9 +164,13 @@ class BotHandlers:
                         )
                     elif data.startswith("mode:"):
                         # A tap on the /mode list: same path as typing /mode <id>.
-                        await self.channel.edit_message_buttons(
-                            chat_id, message_id, buttons=None, conversation=conversation
-                        )
+                        try:
+                            await self.channel.edit_message_buttons(
+                                chat_id, message_id, buttons=None, conversation=conversation
+                            )
+                        except Exception as error:
+                            # An old list may no longer be editable; still switch.
+                            logger.warning("Mode list not cleared: %s", type(error).__name__)
                         mode_id = data.split(":", 1)[1]
                         if mode_id:
                             await self.turn_processor.open_mode(chat_id, user, mode_id)

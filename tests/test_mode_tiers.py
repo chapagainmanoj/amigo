@@ -339,3 +339,18 @@ async def test_trial_mode_list_hides_full_access_modes_and_refuses_a_forged_tap(
     with patch.object(store, "get_activation_state", return_value={"completed": True}):
         await handlers.handle_callback(TRIAL, 8, "mode:recommender")
     assert "isn't available on your account" in channel.last_text
+
+
+async def test_mode_tap_still_switches_when_the_old_list_cannot_be_edited(monkeypatch):
+    monkeypatch.setattr(settings, "access_mode", "registered")
+    store, channel = FakeStore(), FakeChannel()
+    handlers = BotHandlers(channel, store, SessionManager(store), FakeScheduler(), _live_runtime())
+    await _activated(store, FULL)
+
+    async def too_old(*args, **kwargs):
+        raise RuntimeError("message can't be edited")
+
+    monkeypatch.setattr(channel, "edit_message_buttons", too_old)
+    with patch.object(store, "get_activation_state", return_value={"completed": True}):
+        await handlers.handle_callback(FULL, 9, "mode:coach")
+    assert channel.last_text.startswith("Coach: ")

@@ -63,6 +63,8 @@ class ModeController:
                 else:
                     lines.append(f"/mode {mode.id} — {mode.purpose}")
                     buttons.append({"text": mode.name, "callback_data": f"mode:{mode.id}"})
+            if not lines or not lines[0].startswith("You're in"):
+                lines.insert(0, "Tap a Mode to switch, or type a command:")
             return PreparedModeTurn(
                 context, selected, "\n".join(lines), [buttons] if buttons else None
             )
