@@ -1007,3 +1007,13 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   ambiguous "the call" done without asking (ga-life-10), applies Later without the canonical
   flow (ga-life-15), claims a Reminder was set with no tool call (ga-task-04). Not suitable for
   Daily. Recommendation: DEFAULT_MODEL=gemini-3.8-flash for every Mode.
+
+## Review findings batch 2 (23 Oct 2026)
+
+- 06ba168 refactor: one handoff recovery path in HandoffController (main.py logic moved; CLI now also rechecks activation).
+- 25fd8e2 refactor: one Mode admission check `admit()`; Telegram Turn resolves once (regression test added, fails without fix).
+- docs: architecture.md updated (Coach live, tiers, admit, recovery).
+- Touched: src/handoffs.py, src/main.py, src/agent/policies.py, src/agent/runtime.py, src/api/modes.py, src/bot/modes.py, src/bot/turns.py, src/coaching.py, src/turns.py. No protected files.
+- Evidence: pytest 1714 passed; ruff clean. No billed model runs.
+- Open: src/turns.py and Mode modules are Gate A inputs, so earlier Gate A evidence is now stale; re-run needs owner approval (billed lock).
+- Not changed: conversations.close_expired keeps entitled()+live check without the entry guard on purpose (a missing consent tap must not close the conversation).
