@@ -1704,7 +1704,17 @@ class MemoryStore:
     async def get_dashboard_snapshot(self, user_id: str) -> dict:
         """Return one transactionally consistent dashboard read model."""
         result = await self.db.rpc("get_dashboard_snapshot", {"p_user_id": user_id}).execute()
-        return result.data
+        snapshot = result.data
+        # Migration 010 measures ended_at - started_at, but timeout and midnight closes stamp
+        # ended_at lazily when the next message arrives, possibly days later. Match
+        # build_dashboard_snapshot: a Session lasts until its last activity.
+        for session in (snapshot or {}).get("sessions") or []:
+            started = session.get("started_at")
+            last = session.get("last_activity_at") or started
+            if started and last:
+                elapsed = datetime.fromisoformat(last) - datetime.fromisoformat(started)
+                session["duration_minutes"] = max(0, round(elapsed.total_seconds() / 60))
+        return snapshot
 
     @_observe_database_call
     async def create_pairing_token(self, token: str, auth_id: str, expires_at: datetime) -> dict:
