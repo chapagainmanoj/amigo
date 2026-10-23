@@ -23,9 +23,27 @@ def validate_preferred_name(value: str) -> str:
     return name
 
 
+# Legacy IANA names some browsers still report, stored under their current canonical name.
+LEGACY_TIMEZONES = {
+    "Asia/Katmandu": "Asia/Kathmandu",
+    "Asia/Calcutta": "Asia/Kolkata",
+    "Asia/Saigon": "Asia/Ho_Chi_Minh",
+    "Asia/Rangoon": "Asia/Yangon",
+    "Asia/Dacca": "Asia/Dhaka",
+    "Asia/Thimbu": "Asia/Thimphu",
+    "Asia/Ulan_Bator": "Asia/Ulaanbaatar",
+    "Europe/Kiev": "Europe/Kyiv",
+    "America/Buenos_Aires": "America/Argentina/Buenos_Aires",
+    "Atlantic/Faeroe": "Atlantic/Faroe",
+    "Pacific/Ponape": "Pacific/Pohnpei",
+    "Pacific/Truk": "Pacific/Chuuk",
+}
+
+
 def validate_timezone(value: str) -> str:
     """Require an explicit canonical-looking IANA timezone (or UTC)."""
     timezone = value.strip()
+    timezone = LEGACY_TIMEZONES.get(timezone, timezone)
     if timezone != "UTC" and "/" not in timezone:
         raise ValueError("Use an IANA timezone such as America/Toronto or Asia/Kathmandu")
     try:

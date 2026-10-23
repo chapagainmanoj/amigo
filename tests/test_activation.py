@@ -746,3 +746,15 @@ async def test_age_and_processor_acknowledgements_are_required(missing):
         assert (await client.get("/api/activation")).json()["step"] == "limits"
     assert refused.status_code == 422
     assert stale.status_code == 409
+
+
+@pytest.mark.parametrize(
+    ("given", "stored"),
+    [("Asia/Katmandu", "Asia/Kathmandu"), ("Asia/Calcutta", "Asia/Kolkata"), ("UTC", "UTC")],
+)
+def test_legacy_browser_timezones_are_stored_canonically(given, stored):
+    """Chrome reports Asia/Katmandu; slim Debian images lack legacy links, so store the current
+    name instead of failing onboarding."""
+    from src.activation import validate_timezone
+
+    assert validate_timezone(given) == stored

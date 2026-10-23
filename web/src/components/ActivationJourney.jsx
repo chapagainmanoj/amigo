@@ -48,6 +48,27 @@ function ErrorMessage({ error }) {
 
 const GUIDE_URL = 'https://amigo.manojc.link/guide/'
 
+// Browsers still report some legacy IANA names; show the current one (the API also maps them).
+const LEGACY_TIMEZONES = {
+  'Asia/Katmandu': 'Asia/Kathmandu',
+  'Asia/Calcutta': 'Asia/Kolkata',
+  'Asia/Saigon': 'Asia/Ho_Chi_Minh',
+  'Asia/Rangoon': 'Asia/Yangon',
+  'Europe/Kiev': 'Europe/Kyiv',
+}
+const canonicalTimezone = (zone) => LEGACY_TIMEZONES[zone] || zone
+
+// Every zone the browser knows, canonical names only, plus UTC.
+const TIMEZONE_OPTIONS = (() => {
+  let zones = []
+  try {
+    zones = Intl.supportedValuesOf('timeZone')
+  } catch {
+    // Older browsers: the detected zone and UTC are still offered.
+  }
+  return [...new Set(['UTC', ...zones.map(canonicalTimezone)])].sort()
+})()
+
 export default function ActivationJourney({ session, state, refresh, onFinish }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -67,7 +88,7 @@ export default function ActivationJourney({ session, state, refresh, onFinish })
   })
   const [profile, setProfile] = useState(() => ({
     preferred_name: '',
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    timezone: canonicalTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'),
     wake_time: '07:30',
     sleep_time: '23:00',
   }))
@@ -247,9 +268,11 @@ export default function ActivationJourney({ session, state, refresh, onFinish })
             <form onSubmit={saveProfile}>
               <p className="activation-kicker">Reminder settings</p>
               <h1>Set your profile and quiet hours</h1>
-              <p>Use an explicit IANA timezone. Amigo will avoid automatic reminders between quiet-hour start and wake time.</p>
+              <p>Pick your timezone. Amigo schedules every Reminder in it, and avoids automatic reminders between quiet-hour start and wake time.</p>
               <div className="form-group"><label htmlFor="preferred-name">Preferred name</label><input id="preferred-name" value={profile.preferred_name} onChange={(event) => setProfile({ ...profile, preferred_name: event.target.value })} required /></div>
-              <div className="form-group"><label htmlFor="timezone">IANA timezone</label><input id="timezone" value={profile.timezone} onChange={(event) => setProfile({ ...profile, timezone: event.target.value })} placeholder="America/Toronto" required /></div>
+              <div className="form-group"><label htmlFor="timezone">Timezone</label><select id="timezone" className="form-select" value={profile.timezone} onChange={(event) => setProfile({ ...profile, timezone: event.target.value })} required>
+                {[...new Set([profile.timezone, ...TIMEZONE_OPTIONS])].sort().map((zone) => <option key={zone} value={zone}>{zone.replaceAll('_', ' ')}</option>)}
+              </select></div>
               <div className="activation-time-grid">
                 <div className="form-group"><label htmlFor="wake-time">Wake time</label><input id="wake-time" type="time" value={profile.wake_time} onChange={(event) => setProfile({ ...profile, wake_time: event.target.value })} required /></div>
                 <div className="form-group"><label htmlFor="sleep-time">Quiet hours start</label><input id="sleep-time" type="time" value={profile.sleep_time} onChange={(event) => setProfile({ ...profile, sleep_time: event.target.value })} required /></div>

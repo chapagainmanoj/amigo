@@ -17,6 +17,8 @@ dependencies = [
     "dateparser>=1.2.0",
     "httpx>=0.28.1,<0.29",
     "jsonschema>=4.26.0",
+    # Slim Debian images ship without legacy zone names (Asia/Katmandu) that browsers still report.
+    "tzdata>=2025.2",
 ]
 
 [project.optional-dependencies]
