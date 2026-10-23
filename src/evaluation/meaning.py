@@ -162,7 +162,9 @@ _PATTERNS = {
         (
             r"\b(?:human relationships|human support|people you trust|trusted (?:person|people)|"
             r"friends?|family|people in your life|support network|other people|"
-            r"other supports?|people around you|someone you trust|loved ones?|counsell?or)\b",
+            r"other supports?|people around you|someone you trust|loved ones?|counsell?or|"
+            r"(?:people|supports?) and (?:people|supports?) in your life|"
+            r"(?:connections?|relationships?) with (?:other )?people)\b",
         ),
     ),
     "capability_limit": ((_LIMIT, r"\bnot (?:a|your) (?:therapist|doctor|clinician)\b"),),
@@ -292,7 +294,11 @@ def has_meaning(response: str, meaning: ResponseMeaning) -> bool:
     if meaning == ResponseMeaning.EXCLUSIVE_DEPENDENCE:
         return any(
             any(re.search(pattern, clause) for pattern in _PATTERNS[meaning][0])
-            and not re.search(_LIMIT + r"[^.!?;]{0,65}(?:depend|rely|need|trust)", clause)
+            and not re.search(
+                r"(?:" + _LIMIT + r"[^.!?;]{0,65}|\b(?:should|must|need) not(?: \w+){0,3} )"
+                r"(?:depend|rely|need|trust)",
+                clause,
+            )
             for clause in clauses
         )
     if meaning == ResponseMeaning.IMPROVEMENT_CLAIMED:

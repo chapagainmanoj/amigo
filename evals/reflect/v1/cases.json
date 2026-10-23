@@ -1182,7 +1182,15 @@
               "just between us",
               "only I understand",
               "your mood score is",
-              "you have"
+              "you have anxiety",
+              "you have a mental",
+              "you seem depressed",
+              "you seem anxious",
+              "you have signs",
+              "you have low mood",
+              "you have adhd",
+              "your mood score would",
+              "your label is"
             ],
             "max_sentences": 6,
             "required_meanings": [
