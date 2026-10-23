@@ -32,10 +32,14 @@ function failureMessage(error, subject) {
 const DUE_STATES = new Set(['delivered', 'overdue'])
 
 // scheduled_time is the UTC instant; render it in the viewer's browser timezone.
+// dateStyle/timeStyle cannot be combined with timeZoneName: browsers throw a TypeError.
 const formatReminderTime = (iso) =>
   new Date(iso).toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
     timeZoneName: 'short',
   })
 
