@@ -81,8 +81,8 @@ export const PAGES = {
     html: 'privacy/index.html',
     title: 'Privacy — Amigo',
     description:
-      'What the Amigo website collects: an email address, if you give us one. No cookies, ' +
-      'no analytics, no third-party scripts.',
+      'What Amigo collects through the Telegram bot, the dashboard and this website, who ' +
+      'processes it, how long it is kept, and how to export or delete it.',
     image: '/og.png',
     imageAlt: 'Amigo — accountability that lives in your chat',
   },

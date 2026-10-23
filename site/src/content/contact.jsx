@@ -90,17 +90,16 @@ export const CONTACT_PAGE = {
       ),
     },
     {
-      heading: 'Asking to be let in early',
+      heading: 'Getting full access',
       body: (
         <p>
-          It will not work, and we would rather say so than ignore the mail. The first cohort is by
-          invitation and small, and it is chosen against written criteria rather than by who asked
-          first. The{' '}
-          <a href="/#waitlist" className="legal-link">
-            waitlist
+          New accounts start with a free trial of 30 messages. When it ends, Amigo sends you a
+          reference number. Write to the address above with that reference and a line about how
+          you use Amigo. The{' '}
+          <a href="/guide/" className="legal-link">
+            guide
           </a>{' '}
-          is the only route, and joining it is not a place in that cohort — it means one email when
-          Amigo opens to everyone.
+          explains what the trial and full access include.
         </p>
       ),
     },
