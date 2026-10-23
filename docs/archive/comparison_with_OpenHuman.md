@@ -4,8 +4,8 @@
 2026-08-29 product decisions on 2026-08-30. OpenHuman details came from the original research
 snapshot and have not been revalidated here; they must not be used as current competitive claims.
 
-The [capability matrix](capability-matrix.md) is authoritative for shipped Amigo behavior. The
-[complete-product decision map](../.scratch/amigo-complete-product/MAP.md) is authoritative for
+The [capability matrix](../capability-matrix.md) is authoritative for shipped Amigo behavior. The
+[complete-product decision map](../../.scratch/amigo-complete-product/MAP.md) is authoritative for
 future scope.
 
 ## Current Amigo baseline

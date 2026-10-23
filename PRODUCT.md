@@ -76,7 +76,7 @@ Task/Reminder command paths; realtime dashboard refresh; `/feedback` capture; lo
 
 **Copy authority.** `docs/capability-matrix.md` is the source of truth for every product claim.
 Roadmap capability is never written in the present tense; no dates or "coming soon" without an
-approved release gate. Terminology is fixed by `UBIQUITOUS_LANGUAGE.md` — Task, Reminder,
+approved release gate. Terminology is fixed by `CONTEXT.md` — Task, Reminder,
 Session, Pairing, Activation, Later, Inbox, Planning Day, Task Outcome, Missed Reminder, Beta
 Participant, Roadmap Capability — and its listed aliases are to be avoided.
 
@@ -117,7 +117,7 @@ Which Modes ship, in what order, and under what entitlement is open.
   ratings, benchmarks, or willingness-to-pay data. Future work must not fabricate any of these,
   and must not imply a cohort exists.
 - **Real internal material:** `docs/capability-matrix.md`, `docs/what-is-amigo.md`,
-  `docs/architecture.md`, `UBIQUITOUS_LANGUAGE.md`, `docs/pre-launch-implementation-plan.md`,
+  `docs/architecture.md`, `CONTEXT.md`, `docs/pre-launch-implementation-plan.md`,
   `docs/pre-launch-gap-analysis.md`, and an unpublished blog post at
   `docs/blog_post-say-hi-to-amigo.mdx`. The public repository is real and inspectable.
 - **Third-party market research used in landing copy** (label as external, never as Amigo's own

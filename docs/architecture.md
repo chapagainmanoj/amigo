@@ -380,7 +380,7 @@ No Supabase writes. Safe for CI/CD.
 - [complete-product decision map](../.scratch/amigo-complete-product/MAP.md) — Authoritative closed
   and open product decisions.
 - [what-is-amigo.md](what-is-amigo.md) — Product vision and positioning.
-- [comparison_with_OpenHuman.md](comparison_with_OpenHuman.md) —
+- [archive/comparison_with_OpenHuman.md](archive/comparison_with_OpenHuman.md) —
   Competitive analysis.
 - [amigo_system_architecture.svg](amigo_system_architecture.svg) —
   Visual architecture diagram.

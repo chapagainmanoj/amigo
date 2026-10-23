@@ -16,7 +16,7 @@ anything shipped meets its demand, safety, cost, privacy, and reliability gate.
 - Source plan: [`docs/pre-launch-implementation-plan.md`](../../docs/pre-launch-implementation-plan.md)
 - Source assessment: [`docs/pre-launch-gap-analysis.md`](../../docs/pre-launch-gap-analysis.md)
 - Runtime vocabulary: [`CONTEXT.md`](../../CONTEXT.md)
-- Launch vocabulary: [`UBIQUITOUS_LANGUAGE.md`](../../UBIQUITOUS_LANGUAGE.md)
+- Launch vocabulary: [`CONTEXT.md` § Launch vocabulary](../../CONTEXT.md)
 - Read relevant ADRs before resolving architecture decisions.
 - Use `grill-me` plus domain modeling for `wayfinder:grilling` tickets.
 - Use `prototype` for `wayfinder:prototype` tickets.
