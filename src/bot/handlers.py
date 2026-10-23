@@ -2,6 +2,7 @@
 
 import logging
 
+from src.access import help_message
 from src.agent.runtime import ModeRuntime
 from src.bot.reminder_actions import ReminderActions
 from src.bot.turns import TurnProcessor
@@ -96,6 +97,10 @@ class BotHandlers:
         activation = await self.store.get_activation_state(auth_id)
         if not activation.get("completed"):
             await self._send_activation_required(chat_id, paired=True, conversation=conversation)
+            return
+
+        if text.strip() == "/help":
+            await self.channel.send_message(chat_id, help_message(), conversation=conversation)
             return
 
         if text.strip().split()[:1] == ["/memory"]:
@@ -200,7 +205,7 @@ class BotHandlers:
             return True
         if settings.access_mode == "closed":
             return False
-        if settings.access_mode == "invite":
+        if settings.access_mode in {"registered", "invite"}:
             if pairing_attempt:
                 return True
             user = await self.store.get_user_by_chat_id(chat_id)

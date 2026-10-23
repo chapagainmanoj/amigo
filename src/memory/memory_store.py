@@ -235,6 +235,11 @@ class InMemoryStore:
         self._messages.append(msg)
         return dict(msg)
 
+    async def count_participant_messages(self, user_id: str) -> int:
+        return sum(
+            1 for msg in self._messages if msg["user_id"] == user_id and msg["role"] == "user"
+        )
+
     # ── Session Modes, trial grants, and confirmed handoffs ──
 
     async def get_active_mode(self, user_id: str, session_id: str) -> str | None:

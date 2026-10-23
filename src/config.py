@@ -36,7 +36,14 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Access control — open is development-only; production must choose a closed posture
-    access_mode: Literal["open", "closed", "allowlist", "invite"] = "open"
+    # "registered" (alias "invite"): anyone with a paired dashboard account; the allowlist then
+    # marks full access and everyone else gets the trial.
+    access_mode: Literal["open", "closed", "allowlist", "registered", "invite"] = "open"
+    trial_message_limit: int = 30
+    trial_contact: str = "https://amigo.manojc.link/contact/"
+    guide_url: str = "https://amigo.manojc.link/guide/"
+    # Owner attestation that Coach's processing notice and export/delete/retention are approved.
+    coach_trial_enabled: bool = False
     allowed_telegram_chat_ids: str = ""  # e.g. "123456789,987654321"
 
     # LLM defaults

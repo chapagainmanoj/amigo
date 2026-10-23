@@ -60,6 +60,7 @@ GATE_A_ENTRY_MODULES = (
 )
 INVALIDATING_INPUT_PATHS = (
     "scripts/run_gate_a_eval.py",
+    "src/access.py",
     "src/activation.py",
     "src/agent/catalogue.py",
     "src/agent/claude_cli_model.py",

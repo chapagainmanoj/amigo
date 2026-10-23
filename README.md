@@ -319,7 +319,7 @@ python scripts/smoke_check.py --all
 | `TELEGRAM_WEBHOOK_SECRET` | `""` | Telegram mode |
 | `SUPABASE_URL` | `""` | Telegram mode |
 | `SUPABASE_SERVICE_KEY` | `""` | Telegram mode |
-| `ACCESS_MODE` | `open` | Production requires `closed`, `allowlist`, or `invite` |
+| `ACCESS_MODE` | `open` | Production requires `closed`, `allowlist`, or `registered` (alias `invite`). In `registered`, `ALLOWED_TELEGRAM_CHAT_IDS` marks full access; others get `TRIAL_MESSAGE_LIMIT` messages |
 | `ALLOWED_TELEGRAM_CHAT_IDS` | `""` | Required and non-empty in `allowlist` mode |
 | `APP_BASE_URL` | `http://localhost:8000` | Telegram mode |
 | `DASHBOARD_URL` | `http://localhost:5173` | Public HTTPS dashboard origin in production |

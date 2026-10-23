@@ -2,6 +2,7 @@
 
 import logging
 
+from src.access import trial_exhausted, trial_finished_message
 from src.agent.runtime import ModeRuntime, default_runtime
 from src.bot.modes import ModeController
 from src.channels.base import ConversationRef, MessageChannel
@@ -58,6 +59,11 @@ class TurnProcessor:
         if text.startswith("/feedback"):
             await self._handle_feedback(
                 chat_id, user, context.session_id, text, conversation=context.conversation
+            )
+            return
+        if await trial_exhausted(self.store, user):
+            await self.channel.send_message(
+                chat_id, trial_finished_message(chat_id), conversation=context.conversation
             )
             return
         response = await self.turn_orchestrator.handle_turn(

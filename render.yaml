@@ -24,7 +24,7 @@ services:
       - key: TELEGRAM_WEBHOOK_SECRET
         sync: false
       - key: ACCESS_MODE
-        sync: false  # Set explicitly to closed, allowlist, or invite
+        sync: false  # Set explicitly to closed, allowlist, or registered
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY

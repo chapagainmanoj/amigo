@@ -101,7 +101,12 @@ python scripts/smoke_check.py --scheduler
 | `TELEGRAM_WEBHOOK_SECRET` | `""` | Webhook auth secret |
 | `SUPABASE_URL` | `""` | Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | `""` | Supabase service role key |
-| `ACCESS_MODE` | `open` | `closed`, `allowlist`, or `invite` in production |
+| `ACCESS_MODE` | `open` | `closed`, `allowlist`, or `registered` (alias `invite`) in production |
+| `ALLOWED_TELEGRAM_CHAT_IDS` (registered) | `""` | Full-access chats: all live Modes, no trial cap |
+| `TRIAL_MESSAGE_LIMIT` | `30` | Participant messages for everyone else in registered mode |
+| `TRIAL_CONTACT` | contact page | Shown when the trial finishes |
+| `GUIDE_URL` | guide page | Sent by `/help` |
+| `COACH_TRIAL_ENABLED` | `false` | Owner attestation that Coach readiness checks are approved |
 | `ALLOWED_TELEGRAM_CHAT_IDS` | `""` | Comma-separated allowlist |
 | `APP_BASE_URL` | `http://localhost:8000` | Public URL for webhooks |
 | `DASHBOARD_URL` | `http://localhost:5173` | Allowed dashboard origin |

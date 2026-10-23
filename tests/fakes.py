@@ -753,6 +753,11 @@ class FakeStore:
             "mode_id": session.get("mode_id", "daily"),
         }
 
+    async def count_participant_messages(self, user_id: str) -> int:
+        return sum(
+            1 for row in self.messages if row["user_id"] == user_id and row["role"] == "user"
+        )
+
     async def get_session_messages(
         self, session_id: str, *, exclude_message_id: str | None = None,
     ) -> list[dict]:

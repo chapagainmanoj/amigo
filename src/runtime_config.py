@@ -104,8 +104,8 @@ def validate_runtime_configuration(config: object) -> None:
     access_mode = str(getattr(config, "access_mode", "")).strip().lower()
     if access_mode == "open":
         _invalid("ACCESS_MODE", "cannot be open in production")
-    if access_mode not in {"closed", "allowlist", "invite"}:
-        _invalid("ACCESS_MODE", "must be closed, allowlist, or invite in production")
+    if access_mode not in {"closed", "allowlist", "registered", "invite"}:
+        _invalid("ACCESS_MODE", "must be closed, allowlist, or registered in production")
     if access_mode == "allowlist" and not parse_allowed_chat_ids(
         str(getattr(config, "allowed_telegram_chat_ids", ""))
     ):

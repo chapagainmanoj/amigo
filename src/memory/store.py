@@ -1024,6 +1024,19 @@ class MemoryStore:
         return result.data
 
     @_observe_database_call
+    async def count_participant_messages(self, user_id: str) -> int:
+        """Participant-authored Messages across all Sessions; the trial allowance counter."""
+        result = await (
+            self.db.table("messages")
+            .select("message_id", count="exact")
+            .eq("user_id", user_id)
+            .eq("role", "user")
+            .limit(1)
+            .execute()
+        )
+        return int(result.count or 0)
+
+    @_observe_database_call
     async def has_session_on_local_day(
         self, user_id: str, timezone: str, mode_id: str = "daily"
     ) -> bool:
