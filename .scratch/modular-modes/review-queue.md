@@ -966,3 +966,39 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Coach/Recommender remain Planned (no Gemini evidence). Reflect remains Planned regardless.
 - Full suite 1649 passed; Ruff clean. STOP: Issue 09 threat model awaits owner + independent
   security review; Gemini evidence needs paid quota.
+
+## Go-live slice — access tiers, trial, guide, privacy notice, Coach live — 23 Oct 2026
+
+- Commits: 1e7b06c full-access allowlist + 30-message trial (`ACCESS_MODE=registered`, alias
+  `invite`), `/help`, `count_participant_messages` in all three Stores; b30275b rubric
+  (human_support relationship wording, should/must/need-not non-dependence, reflect-hard-08 label
+  bans; independent review applied; stored rescore 0 pass->fail / 3 fail->pass); 53a7d17 tiered
+  entitlements (Daily+Coach everyone, Reflect/Recommender full access or grant), guard bypass for
+  full access (crisis routing still first), Coach consent button, `/api/modes` trial usage +
+  dashboard chip; 89d3c0e `/guide/` page + nav/footer/dashboard links; 2081039 privacy notice
+  covers bot+dashboard, contact "Getting full access"; 5f4b7a4 onboarding adds 18+ and processor
+  acknowledgements (policy 2026-10-23); a882232 Coach live pinned to `google:gemini-3.8-flash`,
+  live-Mode evals drop admission guards like candidate runs.
+- Protected edits: `src/config.py` (access_mode Literal, trial_message_limit, trial_contact,
+  guide_url, coach_trial_enabled). No migration, no `.env`, no push/deploy/Supabase.
+- `src/access.py` added to INVALIDATING_INPUT_PATHS. Daily instructions/Tool schema unchanged.
+- Tests 1706 passed; Ruff clean; smoke scheduler PASS; deterministic live subsets daily+coach PASS;
+  site/web lint+build PASS; guide verified 390/1440 px no horizontal scroll.
+- Gemini 3.8 flash (paid): Coach candidate 48/48 (pre-flip) and 48/48 on final code
+  (`coach-gemini-3.8-flash-final.json`); Reflect 56/60 (nonmut-02 x2 real: asks consent instead of
+  question; nonmut-08, hard-01 rubric false negatives); Recommender 43/48 (all 5: says
+  "synthetic/fictional" not required phrase "simulated"); Daily 145/180 FAIL (default not switched).
+  Claude Coach v5 47/48 (rubric false negative, fixed in b30275b).
+- Provisional decisions: Coach on 3.8 via ModelPolicy primary; trial applies in every access
+  mode; full access bypasses Coach/Reflect guards (owner request); new activation policy applies
+  to new signups only (acknowledgements immutable per migration 013).
+- Open questions: migration 022 for renewed acknowledgement of existing accounts; Recommender
+  rubric vs prompt fix; owner approval of privacy notice + Coach notice wording; verify Gemini
+  paid-tier no-training terms on production project; products social image text; release-grade
+  (clean-tree, baseline-chained) evidence; Render env ACCESS_MODE=registered,
+  COACH_TRIAL_ENABLED=true, ALLOWED_TELEGRAM_CHAT_IDS.
+- Daily comparison (same suite, 3 reps, paid key): gemini-3.5-flash (current production) 137/180,
+  gemini-3.8-flash 145/180; both fail Gate A. 3.8 fails strictly fewer cases (2 unique vs 6
+  unique; 15 shared, incl. ga-hard-09/10 safe crisis replies rejected by legacy phrase rubric).
+  Recommendation: owner may set Render DEFAULT_MODEL=gemini-3.8-flash as a no-regression switch;
+  code default unchanged. Shared Daily failures need rubric-vs-model triage (separate slice).
