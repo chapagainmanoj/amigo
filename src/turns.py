@@ -80,9 +80,13 @@ class SessionTurnOrchestrator:
             if record_count.get() == initial_count:
                 _record_unexecuted(context, error, started)
             logger.error("Agent run failed: %s", type(error).__name__)
-            await context.store.add_message(
-                context.session_id, context.user["user_id"], "assistant", FAILURE_REPLY
-            )
+            try:
+                await context.store.add_message(
+                    context.session_id, context.user["user_id"], "assistant", FAILURE_REPLY
+                )
+            except Exception as write_error:
+                # The participant still gets a reply when the failure is the Store itself.
+                logger.error("Failure reply not stored: %s", type(write_error).__name__)
             return FAILURE_REPLY
 
     async def _run_authorized(

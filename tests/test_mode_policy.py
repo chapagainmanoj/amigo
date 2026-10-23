@@ -482,3 +482,25 @@ async def test_named_google_model_uses_configured_key_not_process_environment(mo
     assert await runtime.model_for("google:gemini-2.5-flash") is model
     scripted = FunctionModel(lambda messages, info: ModelResponse(parts=[TextPart("hi")]))
     assert await runtime.model_for(scripted) is scripted
+
+
+async def test_turn_still_replies_when_the_store_is_down():
+    from unittest.mock import AsyncMock
+
+    from src.tools.context import ToolContext
+    from tests.fakes import FakeChannel, FakeScheduler
+
+    store = FakeStore()
+    user = await _participant(store, 1003)
+    store.add_message = AsyncMock(side_effect=RuntimeError("database unavailable"))
+    context = ToolContext(
+        store=store, user=user, session_id="s", chat_id=1003, timezone="UTC",
+        turn_id="store-down", channel=FakeChannel(), scheduler=FakeScheduler(),
+    )
+
+    reply = await SessionTurnOrchestrator(ModeRuntime(build_registry())).handle_turn(
+        context, "hello"
+    )
+
+    assert reply == FAILURE_REPLY
+    assert store.add_message.await_count == 2
