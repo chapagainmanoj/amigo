@@ -46,8 +46,9 @@ amigo/
   it resolves and authorizes the Mode before anything is written, prepends the Safety Core to any
   Mode that does not state it, runs Pydantic AI's native tool-calling loop with only that Mode's
   Toolsets (see [ADR 0002](adr/0002-agentic-tool-calling-loop.md)). Routing and entitlement are
-  replaceable async policies. Daily is live; Coach, Reflect, and Recommender are registered as
-  planned and refused.
+  replaceable async policies. `admit()` in `policies.py` is the one admission check (live,
+  entitled, entry guard), shared by Turns, `GET /api/modes` and Coach buttons. Daily and Coach
+  are live; Reflect and Recommender are planned and refused.
 - `src/turns.py` — Application boundary around `ModeRuntime`. `SessionTurnOrchestrator` resolves
   the Mode before any write, loads and persists Session Messages, and maps model failures to the
   friendly participant reply. The model framework remains behind the runtime's owned result and
@@ -100,8 +101,9 @@ amigo/
   conversation primitives. `mode_conversations` binds an owned Mode to a channel's opaque JSON
   endpoint; linked endpoint IDs are not participant identity. Sessions and history are scoped by
   `(user_id, mode_id)`. Confirmed handoffs use leased execution claims with stable replay keys;
-  confirmation and execution are separate durable transitions. Only Daily is live. Application,
-  migration and owner test-bot evidence must be reviewed before deployment.
+  confirmation and execution are separate durable transitions. `HandoffController.recover` is
+  the one recovery path for the server and the CLI; it rechecks owner, endpoint and activation
+  inside the participant's Turn lock.
 - **Capability-based routing**: threaded channels map incoming conversations to Modes; unknown
   addresses map to Daily. Non-threaded channels use `/mode` and `/daily`, and Telegram retains
   these commands for older clients. Both paths use the same Mode/entitlement resolver. An expired
@@ -278,7 +280,14 @@ applicable model-evaluation gate before release.
 ### Mode access and dashboard
 
 `GET /api/modes` uses the activated participant's identity and owned grants/conversations to expose
-availability, grant expiry and channel-owned chat links. It cannot grant access or enable a Mode.
+availability, grant expiry, trial usage and channel-owned chat links. It cannot grant access or
+enable a Mode.
+
+Access tiers live in `src/access.py`. With `ACCESS_MODE=registered`, chats in
+`ALLOWED_TELEGRAM_CHAT_IDS` have full access: every live Mode, no message cap, entry guards
+bypassed. Everyone else gets Daily and Coach (Coach after its consent tap, and only while
+`COACH_TRIAL_ENABLED`) for `TRIAL_MESSAGE_LIMIT` participant messages, then a contact reply
+quoting their chat ID. Full-access Modes (Reflect, Recommender) otherwise need an operator grant.
 `scripts/grant_mode.py` is the operator grant/revoke entry point: a reason is mandatory, active
 trial grants are capped at five per Mode, default expiry is 14 days, and only live Modes can be
 granted. Successful grants ensure their conversation; scheduler maintenance closes unavailable
@@ -405,11 +414,11 @@ quiet hours, remaining proactive capacity, one check-in/day,
 one missed follow-up then silence. Weekly review replaces a chosen check-in. Returning to Coach resumes that gate; program approval and extension remain separate choices.
 
 Coach, Reflect and fictional laundry Recommender have authored instructions, isolated Toolsets
-and versioned fictional evaluation suites. They remain Planned pending the sole final Gemini
-batch after shared source changes stop. Candidate runner output cannot certify release/fallback.
+and versioned fictional evaluation suites. Coach is live on `google:gemini-3.8-flash` after its
+suite passed 48/48; Reflect and Recommender remain Planned. Candidate runner output cannot certify release/fallback.
 No provider fallback is declared without complete current evidence and human review.
 
-Coach and Reflect additionally deny real admission by default. Missing reviewed notices,
+Coach and Reflect entry guards deny trial admission by default. Missing reviewed notices,
 consent/retention/account-wide rights and qualified wellbeing evidence cannot be replaced with
 an operator grant or a passing model test. Program export/deletion covers Program records and
 entries only; retained conversation Messages/provider copies remain. Account-wide deletion and
