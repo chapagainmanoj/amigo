@@ -4,8 +4,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
-from src.access import entitled, is_full_access_user
+from src.access import is_full_access_user
 from src.agent.catalogue import build_registry
+from src.agent.modes import ModeUnavailableError
+from src.agent.policies import admit
 from src.api.dependencies import get_activated_user, get_store
 from src.channels.base import ConversationRef
 from src.mode_readiness import COACH_PROCESSING_NOTICE
@@ -24,21 +26,22 @@ async def list_modes(
     channel = getattr(request.app.state, "channel", None)
     channel_id = getattr(channel, "channel_id", None)
     conversations = await store.list_mode_conversations(user["user_id"])
+    context = ToolContext(
+        store=store, scheduler=None, channel=channel, user=user, session_id="",
+        # Admission reads only the participant and the store; no message is sent from here.
+        chat_id=0,
+        timezone=user.get("timezone") or "UTC", turn_id="mode-availability",
+    )
     result = []
     for mode in build_registry():
         grant = await store.get_active_mode_grant(user["user_id"], mode.id)
-        available = mode.status == "live" and await entitled(store, user, mode)
-        consent_required = False
-        if available and mode.entry_guard is not None:
-            context = ToolContext(
-                store=store, scheduler=None, channel=channel, user=user, session_id="",
-                chat_id=await channel.recipient_for(user) if channel else 0,
-                timezone=user.get("timezone") or "UTC", turn_id="mode-availability",
-            )
-            refusal = await mode.entry_guard(context)
+        available, consent_required = True, False
+        try:
+            await admit(context, mode)
+        except ModeUnavailableError as refusal:
             # Only the participant's own I agree tap is missing: the Mode is open to them.
-            consent_required = refusal == COACH_PROCESSING_NOTICE
-            available = not refusal or consent_required
+            consent_required = refusal.participant_message == COACH_PROCESSING_NOTICE
+            available = consent_required
         address = next((
             row for row in conversations
             if row["mode_id"] == mode.id and row["channel"] == channel_id

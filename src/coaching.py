@@ -149,17 +149,20 @@ class CoachingController:
                 return
             action, identifier = parts[1], str(uuid.UUID(parts[2]))
             if action not in {"pause", "stop"}:
-                from src.access import entitled
                 from src.agent.catalogue import build_registry
-                from src.mode_readiness import coach_entry_guard
+                from src.agent.modes import ModeUnavailableError
+                from src.agent.policies import admit
 
-                coach = build_registry()["coach"]
-                allowed = await entitled(self.store, user, coach)
-                refusal = await coach_entry_guard(SimpleNamespace(store=self.store, user=user))
-                if coach.status != "live" or not allowed or refusal:
-                    await self.channel.send_message(
-                        recipient, refusal or "Coach is unavailable.", conversation=conversation
+                try:
+                    await admit(
+                        SimpleNamespace(store=self.store, user=user), build_registry()["coach"]
                     )
+                except ModeUnavailableError as refusal:
+                    message = (
+                        refusal.participant_message
+                        if refusal.reason == "readiness" else "Coach is unavailable."
+                    )
+                    await self.channel.send_message(recipient, message, conversation=conversation)
                     return
             if action == "approve" and len(parts) == 3:
                 result = await self.store.confirm_coaching_approval(

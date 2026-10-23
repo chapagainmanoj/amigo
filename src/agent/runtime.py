@@ -28,7 +28,6 @@ from src.agent.catalogue import build_registry
 from src.agent.modes import (
     PLACEHOLDER_FACTS,
     ModeDefinition,
-    ModeUnavailableError,
     TurnFacts,
 )
 from src.agent.policies import (
@@ -36,6 +35,7 @@ from src.agent.policies import (
     ExplicitThenDefault,
     RoutingPolicy,
     TieredEntitlements,
+    admit,
 )
 from src.agent.registry import ModeRegistry
 from src.agent.safety import (
@@ -145,16 +145,7 @@ class ModeRuntime:
         """Pick and authorize the Mode for a Turn. Refuses before anything is written."""
         selected = await self.routing.select(context, requested_mode)
         mode = await self.registry.get(selected)
-        if mode.status != "live":
-            raise ModeUnavailableError(mode.id, mode.status, f"{mode.name} isn't available yet.")
-        if not await self.entitlements.allows(context, mode):
-            raise ModeUnavailableError(
-                mode.id, "not entitled", f"{mode.name} isn't available on your account."
-            )
-        if mode.entry_guard is not None:
-            refusal = await mode.entry_guard(context)
-            if refusal:
-                raise ModeUnavailableError(mode.id, "readiness", refusal)
+        await admit(context, mode, self.entitlements)
         return mode
 
     async def instructions_for(self, mode: ModeDefinition, context: ToolContext) -> str:

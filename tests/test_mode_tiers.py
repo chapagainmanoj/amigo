@@ -194,3 +194,27 @@ async def test_modes_api_shows_coach_open_pending_consent_for_trial_users(monkey
     assert before["coach"]["available"] and before["coach"]["consent_required"]
     assert after["coach"]["available"] and not after["coach"]["consent_required"]
     assert not before["reflect"]["available"]
+
+
+async def test_a_telegram_turn_admits_its_mode_once(monkeypatch):
+    monkeypatch.setattr(settings, "access_mode", "registered")
+    store, channel = FakeStore(), FakeChannel()
+    runtime = _live_runtime()
+    handlers = BotHandlers(channel, store, SessionManager(store), FakeScheduler(), runtime)
+    await _activated(store, FULL)
+    resolved = []
+    original = runtime.resolve
+
+    async def counting(context, requested_mode):
+        resolved.append(requested_mode)
+        return await original(context, requested_mode)
+
+    monkeypatch.setattr(runtime, "resolve", counting)
+
+    async def reply(messages, info):
+        return ModelResponse(parts=[TextPart("Fictional reply")])
+
+    async with runtime.override(model=FunctionModel(reply)):
+        await _send(handlers, store, FULL, "plan my morning")
+    assert channel.last_text == "Fictional reply"
+    assert len(resolved) == 1

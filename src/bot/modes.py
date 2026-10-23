@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 
 from src.access import grant_required
-from src.agent.modes import ModeUnavailableError
+from src.agent.modes import ModeDefinition, ModeUnavailableError
 from src.conversations import ModeConversationService
 from src.mode_readiness import COACH_CONSENT_BUTTONS, COACH_PROCESSING_NOTICE
 from src.tools.context import ToolContext
@@ -19,6 +19,8 @@ class PreparedModeTurn:
     mode_id: str
     response: str | None = None
     buttons: list | None = None
+    # The Mode prepare() already admitted, so the Turn does not resolve it again.
+    mode: ModeDefinition | None = None
 
 
 class ModeController:
@@ -111,4 +113,4 @@ class ModeController:
             )
         if context.conversation is None:
             context.conversation = await self.conversations.ensure(user, selected, chat_id=chat_id)
-        return PreparedModeTurn(context, selected)
+        return PreparedModeTurn(context, selected, mode=mode)

@@ -68,7 +68,7 @@ class TurnProcessor:
             )
             return
         response = await self.turn_orchestrator.handle_turn(
-            context, text, requested_mode=prepared.mode_id
+            context, text, requested_mode=prepared.mode_id, mode=prepared.mode
         )
         await self.channel.send_message(chat_id, response, conversation=context.conversation)
         await self.suggestions.offer(context, text, response)

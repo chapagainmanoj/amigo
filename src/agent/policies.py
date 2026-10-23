@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from src.agent.modes import ModeDefinition
+from src.agent.modes import ModeDefinition, ModeUnavailableError
 from src.tools.context import ToolContext
 
 
@@ -26,13 +26,6 @@ class ExplicitThenDefault:
         return self.default if requested_mode is None else requested_mode
 
 
-class ActivatedParticipants:
-    """Every activated participant holds the "activated" entitlement and nothing more."""
-
-    async def allows(self, context: ToolContext, mode: ModeDefinition) -> bool:
-        return mode.entitlement == "activated"
-
-
 class TieredEntitlements:
     """Activated Modes for everyone; full-access Modes for allowlisted chats or grant holders."""
 
@@ -42,12 +35,20 @@ class TieredEntitlements:
         return await entitled(context.store, context.user, mode)
 
 
-class GrantedParticipants:
-    """Activated Modes retain their policy; grant Modes require an active operator grant."""
+async def admit(
+    context: ToolContext, mode: ModeDefinition, entitlements: EntitlementPolicy | None = None
+) -> None:
+    """Raise ModeUnavailableError unless this participant may run a Turn in this Mode now.
 
-    async def allows(self, context: ToolContext, mode: ModeDefinition) -> bool:
-        if mode.entitlement == "activated":
-            return True
-        return mode.entitlement == "grant" and bool(
-            await context.store.get_active_mode_grant(context.user["user_id"], mode.id)
+    The one admission check: Turns, the dashboard, Coach buttons and the CLI all use it.
+    """
+    if mode.status != "live":
+        raise ModeUnavailableError(mode.id, mode.status, f"{mode.name} isn't available yet.")
+    if not await (entitlements or TieredEntitlements()).allows(context, mode):
+        raise ModeUnavailableError(
+            mode.id, "not entitled", f"{mode.name} isn't available on your account."
         )
+    if mode.entry_guard is not None:
+        refusal = await mode.entry_guard(context)
+        if refusal:
+            raise ModeUnavailableError(mode.id, "readiness", refusal)

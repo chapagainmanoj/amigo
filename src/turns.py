@@ -55,16 +55,25 @@ class SessionTurnOrchestrator:
             raise
 
     async def handle_turn(
-        self, context: ToolContext, text: str, *, requested_mode: str | None = None
+        self,
+        context: ToolContext,
+        text: str,
+        *,
+        requested_mode: str | None = None,
+        mode: ModeDefinition | None = None,
     ) -> str:
-        """Run one Turn and always return something the participant can read."""
+        """Run one Turn and always return something the participant can read.
+
+        A caller that already admitted the Mode passes it as ``mode`` to skip resolving again.
+        """
         started = time.perf_counter()
         safety_reply = await reflect_safety_response(requested_mode, text)
         if safety_reply is not None:
             return safety_reply
         initial_count = record_count.get()
         try:
-            mode = await self.runtime.resolve(context, requested_mode)
+            if mode is None:
+                mode = await self.runtime.resolve(context, requested_mode)
         except ModeUnavailableError as refusal:
             _record_unexecuted(context, refusal, started)
             return refusal.participant_message
