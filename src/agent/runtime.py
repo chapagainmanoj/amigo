@@ -91,6 +91,18 @@ def _provider_for(name: str) -> Provider[Any]:
         from src.config import settings
 
         return AnthropicProvider(api_key=settings.anthropic_api_key)
+    if name == "openai":
+        from pydantic_ai.providers.openai import OpenAIProvider
+
+        from src.config import settings
+
+        return OpenAIProvider(api_key=settings.openai_api_key or None)
+    if name == "deepseek":
+        from pydantic_ai.providers.deepseek import DeepSeekProvider
+
+        from src.config import settings
+
+        return DeepSeekProvider(api_key=settings.deepseek_api_key or None)
     if name == "ollama":
         from pydantic_ai.providers.ollama import OllamaProvider
 
@@ -245,6 +257,12 @@ class ModeRuntime:
                         "timeout": 60,
                     },
                 )
+            elif reference.partition(":")[0] in {"openai", "deepseek"}:
+                from pydantic_ai.models.openai import OpenAIChatModel
+
+                # Chat Completions explicitly; a bare "openai:" changes API in Pydantic AI 2.
+                provider, _, model_name = reference.partition(":")
+                model = OpenAIChatModel(model_name, provider=_provider_for(provider))
             else:
                 model = infer_model(reference, _provider_for)
             self._models[cache_key] = model

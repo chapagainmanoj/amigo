@@ -84,7 +84,11 @@ def test_production_never_allows_subscription_cli(kwargs):
 
 def test_production_override_requires_per_mode_model_evidence():
     with pytest.raises(UnsafeProductionConfigurationError, match="evaluation evidence"):
-        validate_runtime_configuration(_production_config(mode_models="daily=anthropic:claude-x"))
+        validate_runtime_configuration(
+            _production_config(
+                mode_models="daily=anthropic:claude-x", approved_model_providers="google,anthropic"
+            )
+        )
 
 
 async def test_anthropic_provider_uses_platform_key(monkeypatch):
@@ -263,3 +267,83 @@ def test_model_review_naive_utc_clock_is_not_interpreted_in_host_timezone(tmp_pa
                 require_evaluated_model(DAILY, "anthropic:claude-x", tmp_path)
     finally:
         time.tzset()
+
+
+
+@pytest.mark.parametrize(
+    ("reference", "setting", "key"),
+    [
+        ("openai:gpt-small", "openai_api_key", "openai-platform-secret"),
+        ("deepseek:deepseek-chat", "deepseek_api_key", "deepseek-platform-secret"),
+    ],
+)
+async def test_openai_compatible_providers_use_their_platform_keys(reference, setting, key):
+    with patch("src.config.settings", Settings(_env_file=None, **{setting: key})):
+        model = await ModeRuntime(build_registry()).model_for(reference)
+    assert type(model).__name__ == "OpenAIChatModel"
+    assert model.model_name == reference.partition(":")[2]
+    assert model.client.api_key == key
+
+
+def test_flash_lite_is_an_ordinary_google_route():
+    config = Settings(_env_file=None, default_model="gemini-3.5-flash-lite")
+    assert resolve_model(config, mode_id="daily") == "google:gemini-3.5-flash-lite"
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "missing"),
+    [
+        ({"default_model": "openai:gpt-small"}, "OPENAI_API_KEY"),
+        ({"default_model": "deepseek:deepseek-chat"}, "DEEPSEEK_API_KEY"),
+        ({"mode_models": "coach=openai:gpt-small"}, "OPENAI_API_KEY"),
+        ({"dev_model": "deepseek:deepseek-chat"}, "DEEPSEEK_API_KEY"),
+    ],
+)
+def test_each_routed_provider_requires_its_own_key(kwargs, missing):
+    from src.runtime_config import require_agent_credentials
+
+    with pytest.raises(UnsafeProductionConfigurationError, match=missing):
+        require_agent_credentials(Settings(_env_file=None, google_api_key="g" * 30, **kwargs))
+
+
+def test_non_google_default_needs_no_google_key():
+    from src.runtime_config import require_agent_credentials
+
+    require_agent_credentials(
+        Settings(_env_file=None, default_model="openai:gpt-small", openai_api_key="o" * 30)
+    )
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"default_model": "openai:gpt-small", "openai_api_key": "o" * 30},
+        {"default_model": "deepseek:deepseek-chat", "deepseek_api_key": "d" * 30},
+        {"mode_models": "daily=openai:gpt-small", "openai_api_key": "o" * 30},
+    ],
+)
+def test_production_refuses_unapproved_processor(kwargs):
+    with pytest.raises(UnsafeProductionConfigurationError, match="APPROVED_MODEL_PROVIDERS"):
+        validate_runtime_configuration(_production_config(**kwargs))
+
+
+def test_production_approved_non_gemini_default_still_needs_live_mode_evidence():
+    with pytest.raises(UnsafeProductionConfigurationError, match="every live Mode"):
+        validate_runtime_configuration(
+            _production_config(
+                default_model="openai:gpt-small",
+                openai_api_key="o" * 30,
+                approved_model_providers="google,openai",
+            )
+        )
+
+
+def test_production_flash_lite_default_is_allowed():
+    validate_runtime_configuration(_production_config(default_model="gemini-3.5-flash-lite"))
+
+
+def test_owner_pin_to_unapproved_provider_is_exempt_but_needs_key():
+    config = _production_config(
+        participant_model_pins={"internal": "openai:gpt-small"}, openai_api_key="o" * 30
+    )
+    validate_runtime_configuration(config)

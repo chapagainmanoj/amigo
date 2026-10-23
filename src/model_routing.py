@@ -5,7 +5,15 @@ import re
 from collections.abc import Mapping
 
 logger = logging.getLogger(__name__)
-_PROVIDERS = {"google", "google-gla", "anthropic", "ollama", "claude-cli"}
+_PROVIDERS = {"google", "google-gla", "anthropic", "openai", "deepseek", "ollama", "claude-cli"}
+# Platform key Setting per hosted provider; local/CLI providers need none.
+PROVIDER_KEYS = {
+    "google": "google_api_key",
+    "google-gla": "google_api_key",
+    "anthropic": "anthropic_api_key",
+    "openai": "openai_api_key",
+    "deepseek": "deepseek_api_key",
+}
 _MODE_ID = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 
 
@@ -61,6 +69,11 @@ def configured_routes(config: object) -> tuple[str, str, dict[str, str], dict[st
     modes = parse_model_map(modes, setting="MODE_MODELS")
     pins = parse_model_map(pins, setting="PARTICIPANT_MODEL_PINS")
     return default, dev, modes, pins
+
+
+def provider_of(reference: str) -> str:
+    provider = normalize_model(reference).partition(":")[0]
+    return "google" if provider == "google-gla" else provider
 
 
 def resolve_model(config: object, *, mode_id: str, user_id: str | None = None) -> str:

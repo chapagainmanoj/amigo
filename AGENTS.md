@@ -108,6 +108,9 @@ python scripts/smoke_check.py --scheduler
 | `APP_ENV` | `development` | Environment name |
 | `LOG_LEVEL` | `INFO` | Python logging level |
 | `DEFAULT_MODEL` | `gemini-3.5-flash` | LLM model identifier |
+| `MODE_MODELS` / `PARTICIPANT_MODEL_PINS` | `""` | Per-Mode overrides / owner-only pins |
+| `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` / `ANTHROPIC_API_KEY` | `""` | Keys, required only when routed |
+| `APPROVED_MODEL_PROVIDERS` | `google` | Production processor allowlist (decision 04) |
 | `SMOKE_TEST_CHAT_ID` | `""` | Chat ID for `--channel` smoke check |
 
 ## Secrets

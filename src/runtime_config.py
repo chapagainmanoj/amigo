@@ -49,10 +49,33 @@ def require_agent_credentials(config: object) -> None:
         if not dev_model.partition(":")[2].strip():
             raise UnsafeProductionConfigurationError("DEV_MODEL requires a model name")
         return
-    if not str(getattr(config, "google_api_key", "")).strip():
-        raise UnsafeProductionConfigurationError(
-            "GOOGLE_API_KEY is required to run the agent. Set it in .env or the environment."
-        )
+    for setting in _required_key_settings(config):
+        if not str(getattr(config, setting, "")).strip():
+            raise UnsafeProductionConfigurationError(
+                f"{setting.upper()} is required to run the agent. "
+                "Set it in .env or the environment."
+            )
+
+
+def _routed_providers(config: object, *, include_pins: bool = True) -> set[str]:
+    from src.model_routing import configured_routes, provider_of
+
+    try:
+        default, dev, modes, pins = configured_routes(config)
+    except ValueError as error:
+        raise UnsafeProductionConfigurationError(str(error)) from None
+    if dev:
+        return {provider_of(dev)}
+    routes = [default, *modes.values(), *(pins.values() if include_pins else ())]
+    return {provider_of(route) for route in routes}
+
+
+def _required_key_settings(config: object) -> list[str]:
+    from src.model_routing import PROVIDER_KEYS
+
+    return sorted(
+        {PROVIDER_KEYS[p] for p in _routed_providers(config) if p in PROVIDER_KEYS}
+    )
 
 
 def validate_runtime_configuration(config: object) -> None:
@@ -74,11 +97,8 @@ def validate_runtime_configuration(config: object) -> None:
         getattr(config, "supabase_service_key", ""),
         minimum_length=32,
     )
-    _require_secret(
-        "GOOGLE_API_KEY",
-        getattr(config, "google_api_key", ""),
-        minimum_length=20,
-    )
+    for setting in _required_key_settings(config):
+        _require_secret(setting.upper(), getattr(config, setting, ""), minimum_length=20)
     _require_non_placeholder("DEFAULT_MODEL", getattr(config, "default_model", ""))
 
     access_mode = str(getattr(config, "access_mode", "")).strip().lower()
@@ -161,6 +181,17 @@ def _validate_model_routing(config: object) -> None:
     if is_production(config):
         if dev:
             _invalid("DEV_MODEL", "is development-only")
+        approved = {
+            entry.strip().lower()
+            for entry in str(getattr(config, "approved_model_providers", "google")).split(",")
+            if entry.strip()
+        }
+        # Owner pins are exempt: they route only owner/internal dogfooding accounts.
+        if _routed_providers(config, include_pins=False) - approved:
+            _invalid(
+                "APPROVED_MODEL_PROVIDERS",
+                "must list every DEFAULT_MODEL/MODE_MODELS provider (privacy decision 04)",
+            )
         if any(
             model.startswith("claude-cli:") for model in [default, *modes.values(), *pins.values()]
         ):
@@ -181,6 +212,22 @@ def _validate_model_routing(config: object) -> None:
                 except ValueError:
                     raise UnsafeProductionConfigurationError(
                         "MODE_MODELS requires current passing per-Mode/model evaluation evidence"
+                    ) from None
+    if is_production(config) and not default.startswith("google:"):
+        # Gate A certifies the Gemini path; another default needs evidence per live Mode.
+        from src.agent.catalogue import build_registry
+        from src.evaluation.model_policy import require_evaluated_model
+
+        root = Path(__file__).resolve().parents[1]
+        registry = build_registry()
+        for mode in registry:
+            if mode.status == "live" and mode.id not in modes:
+                try:
+                    require_evaluated_model(mode, default, root)
+                except ValueError:
+                    raise UnsafeProductionConfigurationError(
+                        "A non-Gemini DEFAULT_MODEL requires passing evaluation evidence "
+                        "for every live Mode"
                     ) from None
     if pins:
         import logging

@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     mode_models: dict[str, str] | str = {}
     participant_model_pins: dict[str, str] | str = {}
     anthropic_api_key: str = ""
+    openai_api_key: str = ""
+    deepseek_api_key: str = ""
+    # Providers the owner has approved as participant-data processors in production. Adding one
+    # is a privacy decision (decision 04): update the notice and consent before listing it.
+    approved_model_providers: str = "google"
 
     @field_validator("mode_models", "participant_model_pins", mode="before")
     @classmethod
