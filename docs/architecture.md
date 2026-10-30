@@ -253,7 +253,15 @@ graph TD
    conversation addressing/lifecycle, participant recipient resolution, and deep-link behavior.
 2. Declare the explicit in-chat command fallback when threads are unsupported. Provider-specific
    update parsing and endpoint identifiers remain inside the channel adapter.
-3. Wire it in a new entrypoint. Decision 16's demand and cross-channel release gates still apply;
+3. Identity (ADR 0004): decode inbound events into `IncomingUpdate`, then find the sender with
+   `store.get_user_by_channel_identity(channel_id, external_id)`. Unknown senders pair through the
+   dashboard token with `store.complete_channel_pairing(token, channel_id, external_id)`.
+   `recipient_for(user)` reads the adapter's own row from `store.list_channel_identities`.
+4. Run inbound events through `ChannelUpdateCoordinator(store, channel_id=...)`. It deduplicates and
+   serializes Turns per participant across all channels. Proactive messages follow
+   `src/channels/delivery.py`: they go only to the participant's `primary_channel`.
+5. Wire it in a new entrypoint, one channel per process. Add a channel registry only when two channels
+   share a process. Decision 16's demand and cross-channel release gates still apply;
    implementing the protocol does not authorize another production channel.
 
 ### Adding a new LLM provider
