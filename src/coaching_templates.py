@@ -10,6 +10,7 @@ class CoachTemplate:
     goal: str
     success_measure: str
     check_in_days: str
+    example_reply: str = "Mon, Wed, Fri at 7am"
 
     def note(self) -> str:
         """Sent in Coach after the participant picks this template; Coach drafts from the reply."""
@@ -19,7 +20,7 @@ class CoachTemplate:
             f"Success measure: {self.success_measure}\n"
             f"Suggested check-in days: {self.check_in_days}\n\n"
             "Reply with your check-in days and time, or change anything above. "
-            "e.g. “Mon, Wed, Fri at 7am”"
+            f"e.g. “{self.example_reply}”"
         )
 
 
@@ -33,8 +34,10 @@ COACH_TEMPLATES = (
         "Every day",
     ),
     CoachTemplate(
-        "sleep", "Sleep on time", "Go to bed on time", "In bed by 11pm on each check-in day",
-        "Sun to Thu",
+        # Checked the next morning: a bedtime check-in would land in quiet hours.
+        "sleep", "Sleep on time", "Go to bed on time",
+        "In bed by 11pm the night before each check-in", "Mon to Fri",
+        example_reply="Mon to Fri at 8am",
     ),
     CoachTemplate(
         "read", "Read daily", "Read more", "Read 10 pages on each check-in day", "Weekdays",

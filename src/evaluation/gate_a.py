@@ -115,6 +115,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/model_routing.py",
     "src/model_usage.py",
     "src/runtime_config.py",
+    "src/scheduler/coaching.py",
     "src/scheduler/reminders.py",
     "src/schema.py",
     "src/telemetry.py",

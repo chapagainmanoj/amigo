@@ -4,7 +4,12 @@ from uuid import UUID
 
 from pydantic_ai import FunctionToolset, RunContext
 
-from src.coaching import CoachingCommands, CoachingController, command_hash
+from src.coaching import (
+    CoachingCommands,
+    CoachingController,
+    command_hash,
+    quiet_hours_conflict,
+)
 from src.commands.base import CommandContext, InvalidTransitionError, StaleVersionError
 from src.tools.context import ToolContext
 
@@ -50,6 +55,8 @@ async def draft_program(
     is local HH:MM. Do not invent a goal, measure, or cadence from emotional conversation.
     """
     deps = ctx.deps
+    if conflict := quiet_hours_conflict(deps.user, check_in_time):
+        return conflict
     config = dict(
         goal=goal,
         success_measure=success_measure,
@@ -163,6 +170,8 @@ async def revise_program(
 ) -> str:
     """Revise an explicitly requested draft; approval of the exact revised summary is required."""
     deps = ctx.deps
+    if conflict := quiet_hours_conflict(deps.user, check_in_time):
+        return conflict
     program_id = str(program_id)
     config = dict(
         goal=goal,

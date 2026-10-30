@@ -3,6 +3,7 @@
 import hashlib
 import json
 import uuid
+from datetime import time
 from types import SimpleNamespace
 
 from src.commands.base import CommandContext
@@ -17,6 +18,44 @@ def command_hash(action, values):
 def coaching_callback(action, identifier, version=None):
     token = uuid.UUID(identifier).hex
     return f"coach:{action}:{token}" + (f":{version}" if version is not None else "")
+
+
+_DAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+def schedule_text(check_in_days, check_in_time: str) -> str:
+    """Readable check-in schedule, e.g. "Mon to Fri at 11:00 pm"."""
+    days = sorted(set(check_in_days))
+    if days == list(range(1, 8)):
+        label = "Every day"
+    elif len(days) > 2 and days == list(range(days[0], days[-1] + 1)):
+        label = f"{_DAY_NAMES[days[0] - 1]} to {_DAY_NAMES[days[-1] - 1]}"
+    else:
+        label = ", ".join(_DAY_NAMES[day - 1] for day in days)
+    hour, minute = (int(part) for part in check_in_time.split(":")[:2])
+    clock = f"{(hour % 12) or 12}:{minute:02d} {'am' if hour < 12 else 'pm'}"
+    return f"{label} at {clock}"
+
+
+def quiet_hours_conflict(user: dict, check_in_time: str) -> str | None:
+    """Why a check-in at this local time could never be sent, or None if it can."""
+    from datetime import datetime
+
+    from src.scheduler.coaching import _quiet
+
+    wake, sleep = user.get("wake_time") or "07:30", user.get("sleep_time") or "23:00"
+    try:
+        local = datetime.combine(datetime(2000, 1, 3).date(), time.fromisoformat(check_in_time))
+    except ValueError:
+        return None
+    if _quiet(local, wake, sleep):
+        return (
+            f"Draft not saved: {check_in_time} is inside the participant's quiet hours "
+            f"({sleep} to {wake}), so no check-in could ever be sent. Ask for a time between "
+            f"{wake} and {sleep}, with an example (for a bedtime goal, a morning check-in about "
+            "last night works)."
+        )
+    return None
 
 
 class CoachingCommands:
@@ -97,7 +136,6 @@ class CoachingController:
         if row is None or row["state"] != "draft":
             return "There is no draft ready for approval."
         token = await self.store.issue_coaching_approval(user_id, program_id, row["version"])
-        days = ", ".join(str(day) for day in row["check_in_days"])
         term = (
             f"Existing term ends {row['ends_at']}; approval does not restart it. "
             if row.get("ends_at")
@@ -107,7 +145,8 @@ class CoachingController:
             recipient,
             f"Review your Coaching Program:\nGoal: {row['goal']}\n"
             f"Your success measure: {row['success_measure']}\n"
-            f"Check-in weekdays (Mon=1): {days}; {row['check_in_time']} {row['timezone']}.\n"
+            f"Check-ins: {schedule_text(row['check_in_days'], row['check_in_time'])} "
+            f"({row['timezone']}).\n"
             f"{term}At most one coaching message/day, within your shared budget "
             "and quiet hours. One missed follow-up, then silence. Pause or Stop any time.\n"
             "Approve this exact draft to start; leaving it unapproved starts nothing.",
@@ -191,7 +230,11 @@ class CoachingController:
         row = await self.store.get_coaching_program(user["user_id"], row["program_id"]) or row
         await self.channel.send_message(
             recipient,
-            f"Coaching Program: {row['state']}.",
+            f"Coaching Program: {row['state']}."
+            + (
+                f" Check-ins: {schedule_text(row['check_in_days'], row['check_in_time'])}."
+                if row["state"] == "active" and row.get("check_in_days") else ""
+            ),
             conversation=conversation,
             buttons=[
                 [
