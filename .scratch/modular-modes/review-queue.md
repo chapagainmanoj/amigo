@@ -1142,3 +1142,19 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Gate A: added `src/channels/delivery.py`.
 - Evidence: pytest 1793 passed; ruff clean. New tests cover primary-only delivery with proof, primary-only
   reconciliation, and the Telegram key snapshot. No billed runs.
+
+## Channel identities, Phase F (dashboard primary-channel choice) + smoke fix
+
+- Fix commit: `scripts/smoke_check.py` (protected). The `SmokeStore.finish_reminder_delivery` stub now accepts `channel` /
+  `channel_message_ref`. Phase D (59b17d6) had broken `--scheduler`, because I committed without re-running the smoke check.
+  Verified: it fails on 59b17d6 and passes with the fix.
+- New `src/api/channels.py`: `GET /api/channels` returns `{primary_channel, linked}` (channel names only; provider ids are never
+  returned). `POST /api/channels/primary {channel}` returns 409 when the channel is not linked and 422 on bad input or extra fields. Router added in `src/main.py`.
+- Web: `PrimaryChannel.jsx/.css`, mounted under Mode suggestions in `DashboardView`. It renders nothing unless 2+ apps are linked,
+  which is everyone today, so production shows no change.
+- Provisional: the endpoint follows the `mode_suggestions` preference pattern, with no command receipt and no Turn lock. Delivery reads
+  `primary_channel` fresh at fire time, so a switch takes effect on the next proactive message. There is no
+  "registered channel" 422, because only an existing adapter can create an identity.
+- Not built: the "Connect another app" button. It is shown only when more than one channel is registered, and none is yet.
+- Evidence: pytest 1795 passed (API test on both local stores); ruff clean; `smoke_check.py --scheduler` passes;
+  `npm run lint` clean; `npm run build` ok. The component was not visually checked (no web test runner; the dashboard needs Supabase auth).

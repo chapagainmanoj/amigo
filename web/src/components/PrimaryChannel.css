@@ -1,0 +1,8 @@
+.primary-channel { margin: -12px 0 32px; max-width: 70ch; }
+.primary-channel > h2 { font-size: 1rem; margin-bottom: 4px; }
+.primary-channel > p { color: var(--ink-2); font-size: .85rem; margin-bottom: 6px; max-width: 65ch; }
+.primary-channel [role="radiogroup"] { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+.primary-channel label { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: .9rem; cursor: pointer; }
+.primary-channel input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--ink); }
+.primary-channel input:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.primary-channel input:disabled { opacity: .6; cursor: not-allowed; }

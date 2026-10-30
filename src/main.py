@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api.activation import router as activation_router
+from src.api.channels import router as channels_router
 from src.api.coaching import router as coaching_router
 from src.api.dashboard import router as dashboard_router
 from src.api.dependencies import get_activated_user
@@ -166,6 +167,7 @@ app.include_router(tasks_router)
 app.include_router(reminders_router)
 app.include_router(modes_router)
 app.include_router(mode_suggestions_router)
+app.include_router(channels_router)
 app.include_router(coaching_router)
 app.include_router(memory_router)
 

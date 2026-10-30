@@ -5,6 +5,7 @@ import { timeOfDayGreeting } from '../mockData'
 import Toast from './Toast'
 import ModeChips from './ModeChips'
 import ModeSuggestionPreference from './ModeSuggestionPreference'
+import PrimaryChannel from './PrimaryChannel'
 
 // apiRequest attaches `status` from the response and `retryable` from the X-Retryable header.
 // A rejection carrying neither never reached the API at all, so reporting it as a conflict
@@ -201,6 +202,7 @@ export default function DashboardView() {
 
       <ModeChips />
       <ModeSuggestionPreference />
+      <PrimaryChannel />
 
       <div className="dashboard-grid">
         {/* Main Column: Tasks */}
