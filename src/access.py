@@ -7,6 +7,7 @@ is an owner decision, like a model pin: it never comes from participant input.
 
 import logging
 
+from src.channels.base import Recipient
 from src.runtime_config import UnsafeProductionConfigurationError, parse_allowed_chat_ids
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,7 @@ async def entitled(store, user: dict, mode) -> bool:
     return bool(await store.get_active_mode_grant(user["user_id"], mode.id))
 
 
-def trial_finished_message(chat_id: int) -> str:
+def trial_finished_message(chat_id: Recipient) -> str:
     from src.config import settings
 
     return (

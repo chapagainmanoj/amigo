@@ -6,7 +6,7 @@ import uuid
 from src.access import trial_exhausted, trial_finished_message
 from src.agent.runtime import ModeRuntime, default_runtime
 from src.bot.modes import ModeController
-from src.channels.base import ConversationRef, MessageChannel
+from src.channels.base import ConversationRef, MessageChannel, Recipient
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
 from src.mode_suggestions import ModeSuggestionController
@@ -37,7 +37,7 @@ class TurnProcessor:
         self.suggestions = ModeSuggestionController(self.modes)
 
     async def handle(
-        self, chat_id: int, user: dict, text: str, *, update_id: int,
+        self, chat_id: Recipient, user: dict, text: str, *, update_id: int,
         conversation: ConversationRef | None = None,
     ) -> None:
         prepared = await self.modes.prepare(chat_id, user, text, update_id, conversation)
@@ -75,7 +75,7 @@ class TurnProcessor:
         await self.suggestions.offer(context, text, response)
 
     async def open_mode(
-        self, chat_id: int, user: dict, mode_id: str, *, note: str | None = None
+        self, chat_id: Recipient, user: dict, mode_id: str, *, note: str | None = None
     ) -> tuple[bool, str]:
         """Do exactly what typing /mode <id> does, for a dashboard click.
 
@@ -97,7 +97,7 @@ class TurnProcessor:
         return opened, prepared.response
 
     async def _handle_feedback(
-        self, chat_id: int, user: dict, session_id: str, text: str, *, conversation=None
+        self, chat_id: Recipient, user: dict, session_id: str, text: str, *, conversation=None
     ) -> None:
         feedback_text = text.replace("/feedback", "").strip()
         if feedback_text:

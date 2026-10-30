@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from src.bot.keyboards import reminder_keyboard
-from src.channels.base import MessageChannel
+from src.channels.base import MessageChannel, Recipient
 from src.memory.proactive import instant
 from src.memory.store import MemoryStore
 from src.utils import Clock, default_clock
@@ -234,7 +234,7 @@ class ReminderScheduler:
     def _schedule_recovery_summary(
         self,
         user_id: str,
-        chat_id: int,
+        chat_id: Recipient,
         reminders: list[dict],
         now: datetime,
         job_id: str,
@@ -251,7 +251,7 @@ class ReminderScheduler:
         )
 
     async def _send_recovery_summary(
-        self, user_id: str, chat_id: int, reminders: list[dict]
+        self, user_id: str, chat_id: Recipient, reminders: list[dict]
     ) -> None:
         user = await self.store.get_user_by_id(user_id)
         if not user:
@@ -322,7 +322,7 @@ class ReminderScheduler:
         user_id: str,
         reminder_id: str,
         send_time: datetime,
-        chat_id: int,
+        chat_id: Recipient,
         task_title: str,
     ) -> None:
         """Schedule a reminder notification.
@@ -362,7 +362,7 @@ class ReminderScheduler:
             logger.debug("Reminder %s not found in scheduler (may have already fired)", job_id)
 
     async def _send_reminder(
-        self, user_id: str, chat_id: int, reminder_id: str, task_title: str
+        self, user_id: str, chat_id: Recipient, reminder_id: str, task_title: str
     ) -> None:
         """Fire a reminder — send Telegram message with Done/Skip/Later buttons.
 

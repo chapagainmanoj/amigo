@@ -2,13 +2,17 @@
 
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, replace
-from typing import Literal
+from dataclasses import replace
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 
-from src.channels.base import ChannelCapabilities, ConversationRef, ConversationUnavailableError
+from src.channels.base import (
+    ChannelCapabilities,
+    ConversationRef,
+    ConversationUnavailableError,
+    IncomingUpdate,
+)
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -19,18 +23,6 @@ _CAPABILITIES = ChannelCapabilities(
     deep_links=True,
     notifications=True,
 )
-
-
-@dataclass(frozen=True)
-class IncomingUpdate:
-    update_id: int
-    kind: Literal["message", "callback_query"]
-    chat_id: int
-    conversation: ConversationRef | None
-    text: str | None = None
-    message_id: int | None = None
-    data: str | None = None
-    callback_id: str | None = None
 
 
 class TelegramChannel:

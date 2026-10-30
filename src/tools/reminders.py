@@ -3,6 +3,7 @@
 import logging
 from datetime import UTC, datetime
 
+from src.channels.base import Recipient
 from src.commands.base import CommandContext
 from src.commands.reminders import ReminderScheduleInput, ScheduleReminderCommand
 from src.memory.store import MemoryStore
@@ -74,7 +75,7 @@ class ScheduleReminderTool:
         reminder_id: str,
         task_title: str,
         send_time: datetime,
-        chat_id: int,
+        chat_id: Recipient,
     ) -> dict:
         """Schedule an existing reminder row, used by snooze callbacks."""
         self.scheduler.schedule_reminder(

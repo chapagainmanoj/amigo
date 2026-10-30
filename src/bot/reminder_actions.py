@@ -2,7 +2,7 @@
 
 import logging
 
-from src.channels.base import MessageChannel
+from src.channels.base import MessageChannel, Recipient
 from src.commands.base import CommandContext, InvalidTransitionError, ProactiveBudgetExceeded
 from src.commands.later import ApplyLaterCommand
 from src.memory.store import MemoryStore
@@ -32,7 +32,7 @@ class ReminderActions:
         self.apply_later_command = ApplyLaterCommand(store)
 
     async def schedule_for_task(
-        self, user: dict, task: dict, time_expr: str, chat_id: int
+        self, user: dict, task: dict, time_expr: str, chat_id: Recipient
     ) -> None:
         """Resolve a time expression and schedule a reminder in UTC.
 
@@ -65,7 +65,7 @@ class ReminderActions:
         """Acknowledge all pending reminders for a task and cancel scheduler jobs."""
         await self.cancel_reminders_tool.run(task_id=task_id, user_id=user_id)
 
-    async def handle_callback(self, chat_id: int, message_id: int, data: str) -> None:
+    async def handle_callback(self, chat_id: Recipient, message_id: int, data: str) -> None:
         """Handle Done/Skip/Later reminder button callbacks."""
         parts = data.split(":", 1)
         if len(parts) != 2:
@@ -127,7 +127,7 @@ class ReminderActions:
             return False
         return True
 
-    async def _handle_later(self, chat_id: int, reminder_id: str, reminder: dict) -> None:
+    async def _handle_later(self, chat_id: Recipient, reminder_id: str, reminder: dict) -> None:
         """Apply the canonical Later policy without rewinding the current Reminder."""
         try:
             result = await self.apply_later_command.run(

@@ -81,6 +81,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/bot/pairing.py",
     "src/bot/reminder_actions.py",
     "src/bot/turns.py",
+    "src/bot/update_claims.py",
     "src/channels/base.py",
     "src/coaching.py",
     "src/commands/base.py",

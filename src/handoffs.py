@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from src.access import grant_required
 from src.agent.modes import ModeUnavailableError
 from src.agent.runtime import FAILURE_REPLY
+from src.bot.update_claims import participant_key
 from src.conversations import ModeConversationService
 from src.maintenance import run_isolated_steps
 from src.tools.context import ToolContext
@@ -33,8 +34,8 @@ class HandoffClock(Clock):
         return self.instant.astimezone(ZoneInfo(timezone))
 
 
-def _hold(serializer, recipient):
-    return nullcontext() if serializer is None else serializer.hold(recipient)
+def _hold(serializer, user):
+    return nullcontext() if serializer is None else serializer.hold(participant_key(user))
 
 
 class HandoffController:
@@ -220,7 +221,7 @@ class HandoffController:
         if recipient is None:
             await self.retire_unavailable(pending, "endpoint_unavailable")
             return
-        async with _hold(serializer, recipient):
+        async with _hold(serializer, user):
             current = await self.store.get_user_by_id(pending["user_id"])
             if current is None or await self.channel.recipient_for(current) != recipient:
                 return
@@ -247,7 +248,7 @@ class HandoffController:
                 user_id, handoff_id, "endpoint_unavailable"
             )
             return
-        async with _hold(serializer, recipient):
+        async with _hold(serializer, user):
             current = await self.store.get_user_by_id(user_id)
             if not current:
                 await self.store.claim_handoff_failure_notice(

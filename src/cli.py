@@ -18,7 +18,7 @@ from datetime import UTC, timedelta
 from src.access import grant_required
 from src.activation import ACTIVATION_POLICY_VERSION
 from src.bot.handlers import BotHandlers
-from src.bot.update_claims import ParticipantTurnSerializer
+from src.bot.update_claims import ParticipantTurnSerializer, inbound_participant_key
 from src.channels.cli import CLIChannel
 from src.commands.activation import CreateActivationTestCommand
 from src.commands.base import CommandContext
@@ -257,7 +257,9 @@ async def run_cli(onboard: bool = False, preview_modes: bool = False):
             if channel.pending_buttons and text.isdigit():
                 callback_data = channel.resolve_button(text)
                 if callback_data:
-                    async with serializer.hold(DEV_CHAT_ID):
+                    async with serializer.hold(
+                        await inbound_participant_key(store, channel.channel_id, DEV_CHAT_ID)
+                    ):
                         await handlers.handle_callback(
                             chat_id=DEV_CHAT_ID,
                             message_id=0,
@@ -270,7 +272,9 @@ async def run_cli(onboard: bool = False, preview_modes: bool = False):
                     continue
 
             # Regular message
-            async with serializer.hold(DEV_CHAT_ID):
+            async with serializer.hold(
+                await inbound_participant_key(store, channel.channel_id, DEV_CHAT_ID)
+            ):
                 await handlers.handle_message(chat_id=DEV_CHAT_ID, text=text)
 
     except KeyboardInterrupt:

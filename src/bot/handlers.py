@@ -6,7 +6,7 @@ from src.access import help_message
 from src.agent.runtime import ModeRuntime
 from src.bot.reminder_actions import ReminderActions
 from src.bot.turns import TurnProcessor
-from src.channels.base import ConversationRef, MessageChannel
+from src.channels.base import ConversationRef, MessageChannel, Recipient
 from src.coaching import CoachingController
 from src.commands.base import StaleVersionError
 from src.handoffs import HandoffController
@@ -58,7 +58,7 @@ class BotHandlers:
 
     async def handle_message(
         self,
-        chat_id: int,
+        chat_id: Recipient,
         text: str,
         *,
         update_id: int = 0,
@@ -135,7 +135,7 @@ class BotHandlers:
 
     async def handle_callback(
         self,
-        chat_id: int,
+        chat_id: Recipient,
         message_id: int,
         data: str,
         *,
@@ -195,7 +195,7 @@ class BotHandlers:
         await self.reminder_actions.handle_callback(chat_id, message_id, data)
 
     async def _send_activation_required(
-        self, chat_id: int, *, paired: bool = False, conversation=None
+        self, chat_id: Recipient, *, paired: bool = False, conversation=None
     ) -> None:
         """Direct Telegram-only and incomplete accounts to the verified Dashboard journey."""
         from src.config import settings

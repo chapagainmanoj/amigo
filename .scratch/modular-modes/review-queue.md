@@ -1102,3 +1102,22 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Known/kept: local `validate_identity` rejects any surrounding whitespace, which is stricter than SQL `btrim`.
   Supabase `get_user_by_channel_identity` makes 2 round trips.
 - Gate A evidence is still stale (owner approval needed to re-run).
+
+## Channel identities, Phase C (protocol typing, participant lock)
+
+- `ParticipantTurnSerializer` is now keyed by participant: `user:<user_id>`, or `<channel>:<recipient>` while unpaired.
+  The update coordinator (`ChannelUpdateCoordinator`, renamed from `TelegramUpdateCoordinator`) resolves the key from
+  channel identities. The dashboard Mode switch (`main._open_mode`), handoff recovery and the CLI lock the same key.
+  As a result, one participant's Turns serialize across channels. A mutation probe confirmed the new test fails
+  when the lock is keyed by chat id.
+- The coordinator claims and finishes through `claim_channel_update` / `finish_channel_update`, which delegate to 009 for Telegram, so
+  dedup is unchanged.
+- `IncomingUpdate` moved to `src/channels/base.py`; added a `Recipient = str | int` alias. Channel-neutral `chat_id`
+  annotations are widened (tools, scheduler, turns, handlers, reminder actions, access message).
+- Provisional: Telegram values stay int; only annotations widened. Values are compared only within the channel that produced them.
+  `recipient_for` stays per adapter; a future adapter can hold the Store and read `list_channel_identities`.
+  `decode_update` is not in the `MessageChannel` protocol, because only each channel's own webhook ingress decodes.
+- Gate A: added `src/bot/update_claims.py`, which `src/handoffs.py` now reaches.
+- Evidence: pytest 1789 passed; ruff clean; `smoke_check.py --scheduler` passes. No billed runs.
+- Perf note: each inbound update now does a participant lookup (2 Supabase round trips). An embed or a user-id-only lookup
+  is a possible follow-up.

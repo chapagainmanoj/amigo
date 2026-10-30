@@ -4,7 +4,11 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
+
+# A channel's own address for one participant: Telegram uses integer chat ids, other channels
+# opaque strings. Values are only ever compared within the channel that produced them.
+type Recipient = str | int
 
 
 def _freeze(value):
@@ -67,6 +71,20 @@ class ChannelCapabilities:
     notifications: bool = False
     accessibility: bool = True
     fallback: str = "in_chat_mode_commands"
+
+
+@dataclass(frozen=True)
+class IncomingUpdate:
+    """One decoded inbound event; ids stay in the channel's native form."""
+
+    update_id: str | int
+    kind: Literal["message", "callback_query"]
+    chat_id: Recipient
+    conversation: ConversationRef | None
+    text: str | None = None
+    message_id: int | None = None
+    data: str | None = None
+    callback_id: str | None = None
 
 
 class ConversationUnavailableError(RuntimeError):

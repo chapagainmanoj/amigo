@@ -20,7 +20,7 @@ from src.api.pairing import router as pairing_router
 from src.api.reminders import router as reminders_router
 from src.api.tasks import router as tasks_router
 from src.bot.handlers import BotHandlers
-from src.bot.update_claims import TelegramUpdateCoordinator
+from src.bot.update_claims import ChannelUpdateCoordinator, participant_key
 from src.channels.telegram import TelegramChannel
 from src.config import settings
 from src.maintenance import run_isolated_steps
@@ -65,7 +65,7 @@ handlers = BotHandlers(
     session_mgr=session_mgr,
     reminder_scheduler=reminder_scheduler,
 )
-update_coordinator = TelegramUpdateCoordinator(store)
+update_coordinator = ChannelUpdateCoordinator(store)
 coaching_worker = CoachingDeliveryWorker(
     store, channel, admission_check=coach_readiness.complete
 )
@@ -154,7 +154,7 @@ async def _open_mode(user, mode_id, *, note=None):
     recipient = await channel.recipient_for(user)
     if recipient is None:
         return None
-    async with update_coordinator.serializer.hold(recipient):
+    async with update_coordinator.serializer.hold(participant_key(user)):
         return await handlers.turn_processor.open_mode(recipient, user, mode_id, note=note)
 
 

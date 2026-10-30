@@ -576,9 +576,9 @@ async def test_scheduler_recovery_shares_webhook_turn_lock_and_rechecks_current_
     change_while_waiting,
 ):
     from src import main
-    from src.bot.update_claims import TelegramUpdateCoordinator
+    from src.bot.update_claims import ChannelUpdateCoordinator
 
-    coordinator = TelegramUpdateCoordinator(env.store)
+    coordinator = ChannelUpdateCoordinator(env.store)
     execute = AsyncMock()
     monkeypatch.setattr(main, "store", env.store)
     monkeypatch.setattr(main, "channel", env.channel)

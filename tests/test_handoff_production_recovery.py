@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.agent.runtime import FAILURE_REPLY
-from src.bot.update_claims import TelegramUpdateCoordinator
+from src.bot.update_claims import ChannelUpdateCoordinator
 from tests.test_mode_conversation_store import confirmed
 from tests.test_mode_routing import env as env  # noqa: F401 - both channel capabilities
 
@@ -16,7 +16,7 @@ async def wire_main(env, monkeypatch):
     monkeypatch.setattr(main, "store", env.store)
     monkeypatch.setattr(main, "channel", env.channel)
     monkeypatch.setattr(main, "handlers", env.handlers)
-    monkeypatch.setattr(main, "update_coordinator", TelegramUpdateCoordinator(env.store))
+    monkeypatch.setattr(main, "update_coordinator", ChannelUpdateCoordinator(env.store))
     return main
 
 

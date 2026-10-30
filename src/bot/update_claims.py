@@ -1,4 +1,4 @@
-"""Telegram update claiming and participant-scoped Turn serialization."""
+"""Inbound update claiming and participant-scoped Turn serialization."""
 
 import asyncio
 import logging
@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Literal
 
+from src.channels.base import Recipient
+
 logger = logging.getLogger(__name__)
 
 UpdateOutcome = Literal["completed", "duplicate", "failed"]
@@ -14,67 +16,94 @@ UpdateOutcome = Literal["completed", "duplicate", "failed"]
 
 @dataclass(frozen=True)
 class UpdateResult:
-    """Safe webhook outcome for one Telegram delivery."""
+    """Safe webhook outcome for one inbound delivery."""
 
     outcome: UpdateOutcome
-    update_id: int
+    update_id: str | int
+
+
+def participant_key(user: dict) -> str:
+    """One lock per participant, whichever channel their Turn arrives on (ADR 0004)."""
+    return f"user:{user['user_id']}"
+
+
+async def inbound_participant_key(store, channel_id: str, recipient: Recipient) -> str:
+    """Lock key for an inbound update; unpaired senders lock on their channel address."""
+    user = await store.get_user_by_channel_identity(channel_id, str(recipient))
+    return participant_key(user) if user else f"{channel_id}:{recipient}"
 
 
 class ParticipantTurnSerializer:
-    """Serialize Turns per Telegram participant within the beta web process."""
+    """Serialize Turns per participant across channels within the beta web process."""
 
     def __init__(self) -> None:
-        self._locks: dict[int, asyncio.Lock] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
         self._registry_lock = asyncio.Lock()
 
     @asynccontextmanager
-    async def hold(self, chat_id: int) -> AsyncIterator[None]:
-        """Hold the stable lock for one participant while a Turn executes."""
+    async def hold(self, key: str) -> AsyncIterator[None]:
+        """Hold the stable lock for one participant key while a Turn executes."""
         async with self._registry_lock:
-            lock = self._locks.setdefault(chat_id, asyncio.Lock())
+            lock = self._locks.setdefault(key, asyncio.Lock())
         async with lock:
             yield
 
 
-class TelegramUpdateCoordinator:
+class ChannelUpdateCoordinator:
     """Claim once, acknowledge safely, serialize, and retain processing outcome."""
 
-    def __init__(self, store, serializer: ParticipantTurnSerializer | None = None) -> None:
+    def __init__(
+        self,
+        store,
+        serializer: ParticipantTurnSerializer | None = None,
+        *,
+        channel_id: str = "telegram",
+    ) -> None:
         self.store = store
         self.serializer = serializer or ParticipantTurnSerializer()
+        self.channel_id = channel_id
 
     async def run(
         self,
         *,
-        update_id: int,
-        chat_id: int,
+        update_id: str | int,
+        chat_id: Recipient,
         update_kind: str,
         process: Callable[[], Awaitable[None]],
         acknowledge: Callable[[], Awaitable[None]] | None = None,
     ) -> UpdateResult:
         """Process only the first delivery and make any internal failure inspectable."""
-        claim = await self.store.claim_telegram_update(update_id, chat_id, update_kind)
+        claim = await self.store.claim_channel_update(
+            self.channel_id, str(update_id), str(chat_id), update_kind
+        )
         if acknowledge is not None:
             await acknowledge()
         if not claim["claimed"]:
             logger.info(
-                "Acknowledged duplicate Telegram update update_id=%s status=%s",
+                "Acknowledged duplicate update channel=%s update_id=%s status=%s",
+                self.channel_id,
                 update_id,
                 claim["status"],
             )
             return UpdateResult("duplicate", update_id)
 
-        async with self.serializer.hold(chat_id):
+        key = await inbound_participant_key(self.store, self.channel_id, chat_id)
+        async with self.serializer.hold(key):
             try:
                 await process()
             except Exception as exc:
-                await self.store.finish_telegram_update(
-                    update_id,
+                await self.store.finish_channel_update(
+                    self.channel_id,
+                    str(update_id),
                     status="failed",
                     failure_code=type(exc).__name__,
                 )
-                logger.exception("Telegram update failed update_id=%s", update_id)
+                logger.exception(
+                    "Update failed channel=%s update_id=%s", self.channel_id, update_id
+                )
                 return UpdateResult("failed", update_id)
 
-            await self.store.finish_telegram_update(update_id, status="completed")
+            await self.store.finish_channel_update(
+                self.channel_id, str(update_id), status="completed"
+            )
             return UpdateResult("completed", update_id)
