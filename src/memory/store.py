@@ -13,7 +13,12 @@ from src.commands.base import (
     ProactiveBudgetExceeded,
     StaleVersionError,
 )
-from src.memory.identities import ChannelNotLinkedError, delivery_message_ref, validate_identity
+from src.memory.identities import (
+    TELEGRAM_ID_PATTERN,
+    ChannelNotLinkedError,
+    delivery_message_ref,
+    validate_identity,
+)
 from src.memory.modes import ModeGrant, ModeGrantResult, ModeResult
 from src.memory.pairing import ActivationTermsRequiredError, PairingTokenRateLimitError
 from src.memory.reminders import validate_reminder_timing, validate_reminder_updates
@@ -161,6 +166,13 @@ class MemoryStore:
     @_observe_database_call
     async def get_user_by_channel_identity(self, channel: str, external_id: str) -> dict | None:
         """Find the participant a messaging-app identity is linked to (migration 022)."""
+        if channel == "telegram":
+            # One round trip on the hot inbound path: the 022 trigger keeps telegram_chat_id
+            # and the Telegram identity row identical.
+            return (
+                await self.get_user_by_chat_id(int(external_id))
+                if TELEGRAM_ID_PATTERN.fullmatch(external_id) else None
+            )
         result = await (
             self.db.table("channel_identities").select("user_id")
             .eq("channel", channel).eq("external_id", external_id)

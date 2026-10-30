@@ -306,3 +306,16 @@ async def test_supabase_primary_channel_maps_unlinked_error():
     api.db = SimpleNamespace(rpc=Mock(return_value=query))
     with pytest.raises(ChannelNotLinkedError):
         await api.set_primary_channel("u", "slack")
+
+
+async def test_supabase_telegram_identity_lookup_is_one_query():
+    query = Mock()
+    for name in ("select", "eq", "maybe_single"):
+        getattr(query, name).return_value = query
+    query.execute = AsyncMock(return_value=SimpleNamespace(data={"user_id": "u"}))
+    api = MemoryStore()
+    api.db = SimpleNamespace(table=Mock(return_value=query))
+    assert (await api.get_user_by_channel_identity("telegram", "41001")) == {"user_id": "u"}
+    api.db.table.assert_called_once_with("user_profiles")
+    query.eq.assert_called_once_with("telegram_chat_id", 41001)
+    assert await api.get_user_by_channel_identity("telegram", "007") is None
