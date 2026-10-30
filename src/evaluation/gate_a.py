@@ -100,6 +100,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/memory/coaching.py",
     "src/memory/context.py",
     "src/memory/durable.py",
+    "src/memory/identities.py",
     "src/memory/later.py",
     "src/memory/memory_store.py",
     "src/memory/modes.py",

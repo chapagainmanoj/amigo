@@ -1044,3 +1044,61 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Not in Mode suggestions, Memory scopes, or migration 021 targets (intentional).
 - Open: qualified practitioner review of wording; privacy notice does not mention CBT research;
   site copy unchanged.
+
+## Owner request 30 Oct 2026: channel identities, Phase A (ADR 0004 + migration 022) — STOPPED for owner review
+
+- Plan: ~/.claude/plans/draft-the-refactor-plan-mossy-spark.md (phases A-F; dashboard primary-channel picker
+  and dashboard-token second-app Pairing approved by owner).
+- Protected files: `migrations/022_channel_identities.sql` (new), `src/schema.py` (21→22). Also
+  `.github/workflows/ci.yml` (022 + assert_022 in the SQL chain), `tests/sql/app_schema_version.sql` (expects 22),
+  new `tests/sql/assert_022_channel_identities.sql`, `docs/adr/0004-channel-identities.md`, `docs/architecture.md` link.
+- 022 adds: `channel_identities` (service_role SELECT only), Telegram mirror trigger, `user_profiles.primary_channel`
+  (deferred FK to a linked identity), nullable `telegram_chat_id`, `reminders.delivery_channel/channel_message_ref`
+  (+ backfill), `complete_pairing` redefinition, `complete_pairing_v2`, `set_primary_channel`,
+  `finish_reminder_delivery_v2` (v1 now routes through it), `channel_update_claims` + claim/finish (Telegram delegates
+  to `telegram_update_claims`).
+- Two `complete_pairing` decisions change, both only for a profile whose `telegram_chat_id` is NULL: it now links
+  Telegram instead of conflicting, and two distinct profiles now conflict explicitly. Behaviour for Telegram-only users is unchanged.
+- Evidence (local throwaway PG15, not Supabase): full CI SQL chain of 47 files exits 0 at version 22. assert_022 passes.
+  022 re-apply is refused. Backfill is 2/2 for legacy users. pytest 1744 passed; ruff clean. No billed model runs.
+- Independent migration review (subagent): 1 blocker (CI chain not updated), now fixed. Should-fixes also fixed:
+  - v1 delivery dual-write.
+  - Stale Telegram proof is cleared on non-Telegram delivery.
+  - Added tests: Telegram v2 accept, retry, v1 path, legacy profile second app, conflict keeps the token, mirror delete, cascade delete.
+  - Canonical Telegram ids, a STABLE JSON helper, `search_path=''`, the `updated_at` bump, NULL channel validation.
+  - Reviewer's concurrency probes: no deadlocks; same-auth and same-identity races resolve to paired/conflict.
+- Provisional: outbox payloads still carry `telegram_chat_id`; the drain will ignore it (Phase D), and 023 drops it.
+  The 017 handoff listing still returns `telegram_chat_id`; 023 drops it.
+- Open:
+  - Gate A evidence is stale, because the hashed inputs include `migrations/*.sql`. A re-run needs owner approval (billed lock).
+  - Apply 022 and deploy in one back-to-back step, because the exact-match version gate fails closed.
+  - Profiles without Telegram are not production-ready until Phases B-E move the remaining `telegram_chat_id` reads.
+
+## Channel identities, Phase B (Store, three implementations)
+
+- New `src/memory/identities.py` (`LocalIdentityState` + shared 009/022 rules) used by InMemoryStore and FakeStore.
+  All three Stores gain: `get_user_by_channel_identity`, `list_channel_identities`, `set_primary_channel`,
+  `complete_channel_pairing`, `claim_channel_update` and `finish_channel_update`. `finish_reminder_delivery` also takes
+  `channel` / `channel_message_ref`; Supabase now calls `finish_reminder_delivery_v2`.
+- Local stores now mirror the SQL:
+  - `telegram_chat_id` mirror trigger.
+  - Deferred primary-channel key, with rollback on failure.
+  - The `complete_pairing` changes from 022.
+  - 009 identity-conflict and replay rules (previously they diverged from the SQL).
+  - v2 delivery validation runs before any write.
+  - Token expiry boundary (`expires_at <= now` is invalid).
+- `FakeStore.users` is now keyed by `user_id`, not chat id. The 3 `test_allowlist` assertions became `get_user_by_chat_id(...) is None`, which is not weaker.
+- `src/cli.py`: the dev fixture links a `cli` identity through dashboard-token Pairing and `set_primary_channel`. Before this,
+  it wrote an unlinked primary, which the new key now rejects.
+- `src/evaluation/gate_a.py`: added `src/memory/identities.py`, which is newly reachable.
+- Supabase `update_user` maps the deferred-key violation to `ChannelNotLinkedError`.
+- Evidence: pytest 1787 passed (43 new in `tests/test_channel_identity_store.py`); ruff clean. No billed runs.
+- Independent Store review (subagent): no blockers. Fixed:
+  - Should-fixes 1-4 and 6: local Telegram claim/finish parity, finish validation, delivery validation before writes, Supabase FK error mapping.
+  - Nits: mirror runs only on change, expiry boundary, dead `forget_user` removed.
+  - Requested tests added.
+- Deferred to Phase D: scheduler call sites (`src/scheduler/reminders.py:119,306,393,424`) still default to
+  `channel="telegram"`, so CLI deliveries record `delivery_channel=telegram`.
+- Known/kept: local `validate_identity` rejects any surrounding whitespace, which is stricter than SQL `btrim`.
+  Supabase `get_user_by_channel_identity` makes 2 round trips.
+- Gate A evidence is still stale (owner approval needed to re-run).

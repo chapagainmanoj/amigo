@@ -36,7 +36,7 @@ class TestAllowlist:
         assert len(channel.sent) == 1
         assert "isn't open" in channel.last_text
         # Store should never be touched
-        assert 99999 not in store.users
+        assert await store.get_user_by_chat_id(99999) is None
 
     @pytest.mark.asyncio
     async def test_allowed_chat_proceeds(self, setup):
@@ -46,7 +46,7 @@ class TestAllowlist:
             await handlers.handle_message(12345, "hello")
 
         # Dashboard-first Activation never creates a Telegram-only account.
-        assert 12345 not in store.users
+        assert await store.get_user_by_chat_id(12345) is None
         assert "dashboard" in channel.last_text.lower()
 
     @pytest.mark.asyncio
@@ -78,7 +78,7 @@ class TestAllowlist:
             await handlers.handle_callback(111, 1, "done:guessed-task")
 
         assert len(channel.sent) == 2
-        assert 111 not in store.users
+        assert await store.get_user_by_chat_id(111) is None
         assert store.tasks == []
 
     @pytest.mark.asyncio

@@ -26,6 +26,14 @@ from src.memory.activation import (
 )
 from src.memory.coaching import LocalCoachingState
 from src.memory.durable import LocalMemoryState
+from src.memory.identities import (
+    LocalIdentityState,
+    claim_telegram,
+    delivery_columns,
+    finish_claim,
+    telegram_claim_ids,
+    telegram_update_as_channel,
+)
 from src.memory.later import apply_later_transition
 from src.memory.modes import LocalModeState, ModeGrant, ModeGrantResult, ModeResult
 from src.memory.pairing import (
@@ -127,7 +135,7 @@ class FakeStore:
     """In-memory store. Mimics MemoryStore's async interface with dicts."""
 
     def __init__(self):
-        self.users: dict[int, dict] = {}  # chat_id -> user
+        self.users: dict[str, dict] = {}  # user_id -> user
         self.sessions: list[dict] = []
         self.messages: list[dict] = []
         self.tasks: list[dict] = []
@@ -147,6 +155,7 @@ class FakeStore:
         self._coaching_state = LocalCoachingState()
         self._proactive_state = LocalProactiveState()
         self._memory_state = LocalMemoryState()
+        self._identity_state = LocalIdentityState()
         # Fake Supabase client for direct queries (used by SessionManager)
         self.db = FakeDB(self)
 
@@ -166,12 +175,20 @@ class FakeStore:
         return copy.deepcopy(user) if user else None
 
     async def get_user_by_chat_id(self, chat_id: int) -> dict | None:
-        return self.users.get(chat_id)
+        return next(
+            (user for user in self.users.values() if user.get("telegram_chat_id") == chat_id),
+            None,
+        )
 
     async def create_user(self, chat_id: int) -> dict:
+        return self._insert_user({"telegram_chat_id": chat_id})
+
+    def _insert_user(self, fields: dict, *, identity: tuple[str, str] | None = None) -> dict:
+        user_id = str(uuid.uuid4())
         user = {
-            "user_id": str(uuid.uuid4()),
-            "telegram_chat_id": chat_id,
+            "user_id": user_id,
+            "telegram_chat_id": None,
+            "primary_channel": "telegram",
             "name": None,
             "timezone": None,
             "onboarding_step": 0,
@@ -181,46 +198,57 @@ class FakeStore:
             "session_timeout_minutes": 120,
             "updated_at": utc_now().isoformat(),
         }
-        self.users[chat_id] = user
+        self._identity_state.write_profile(
+            user, {**fields, "user_id": user_id}, identity=identity
+        )
+        self.users[user_id] = user
         return user
 
     async def update_user(self, user_id: str, updates: dict) -> dict:
-        for _chat_id, user in self.users.items():
-            if user["user_id"] == user_id:
-                user.update(updates)
-                return user
-        raise ValueError(f"User {user_id} not found")
+        user = self.users.get(user_id)
+        if user is None:
+            raise ValueError(f"User {user_id} not found")
+        return self._identity_state.write_profile(user, updates)
+
+    async def get_user_by_channel_identity(self, channel: str, external_id: str) -> dict | None:
+        user_id = self._identity_state.owner(channel, external_id)
+        return await self.get_user_by_id(user_id) if user_id else None
+
+    async def list_channel_identities(self, user_id: str) -> dict[str, str]:
+        return self._identity_state.for_user(user_id)
+
+    async def set_primary_channel(self, user_id: str, channel: str) -> str:
+        if user_id not in self.users:
+            raise ValueError("user_not_found")
+        await self.update_user(user_id, {"primary_channel": channel})
+        return channel
+
+    async def claim_channel_update(self, channel, update_id, external_id, update_kind):
+        if channel == "telegram":
+            return telegram_update_as_channel(await self.claim_telegram_update(
+                *telegram_claim_ids(update_id, external_id), update_kind
+            ))
+        return self._identity_state.claim_update(channel, update_id, external_id, update_kind)
+
+    async def finish_channel_update(self, channel, update_id, *, status, failure_code=None):
+        if channel == "telegram":
+            return telegram_update_as_channel(await self.finish_telegram_update(
+                telegram_claim_ids(update_id)[0], status=status, failure_code=failure_code
+            ))
+        return self._identity_state.finish_update(
+            channel, update_id, status=status, failure_code=failure_code
+        )
 
     async def claim_telegram_update(self, update_id, chat_id, update_kind):
-        existing = self.telegram_updates.get(update_id)
-        if existing:
-            return {"claimed": False, **copy.deepcopy(existing)}
-        row = {
-            "update_id": update_id,
-            "telegram_chat_id": chat_id,
-            "update_kind": update_kind,
-            "status": "processing",
-            "failure_code": None,
-            "claimed_at": utc_now().isoformat(),
-            "finished_at": None,
-        }
-        self.telegram_updates[update_id] = row
-        return {"claimed": True, **copy.deepcopy(row)}
+        return claim_telegram(self.telegram_updates, update_id, chat_id, update_kind)
 
     async def finish_telegram_update(
         self, update_id, *, status, failure_code=None
     ):
-        if status not in {"completed", "failed"}:
-            raise ValueError("Invalid Telegram update status")
-        row = self.telegram_updates[update_id]
-        if row["status"] != "processing":
-            raise ValueError("Telegram update is already terminal")
-        row.update(
-            status=status,
-            failure_code=failure_code,
-            finished_at=utc_now().isoformat(),
+        return finish_claim(
+            self.telegram_updates.get(update_id), status=status, failure_code=failure_code,
+            label="telegram",
         )
-        return copy.deepcopy(row)
 
     async def get_active_session(self, user_id: str, mode_id: str = "daily") -> dict | None:
         for s in reversed(self.sessions):
@@ -1597,7 +1625,13 @@ class FakeStore:
         normalized_cause: str | None,
         retry_decision: str,
         telegram_message_id: int | None,
+        channel: str = "telegram",
+        channel_message_ref: str | None = None,
     ) -> dict:
+        columns = delivery_columns(
+            accepted=result == "accepted", channel=channel,
+            telegram_message_id=telegram_message_id, channel_message_ref=channel_message_ref,
+        )
         attempt = self.reminder_delivery_attempts[attempt_id]
         reminder = next(item for item in self.reminders if item["reminder_id"] == reminder_id)
         if attempt["user_id"] != user_id or reminder["status"] != "sending":
@@ -1616,8 +1650,8 @@ class FakeStore:
         reminder["status"] = "sent" if accepted else (
             "pending" if retry_decision == "retry" else "failed"
         )
-        if accepted:
-            reminder["telegram_message_id"] = telegram_message_id
+        if columns:
+            reminder.update(columns)
         occurrence = self.reminder_occurrences[reminder_id]
         if accepted:
             occurrence["provider_accepted_at"] = (
@@ -1873,31 +1907,14 @@ class FakeStore:
 
     async def complete_pairing(self, token: str, chat_id: int) -> dict:
         """Atomically consume a token and link identities without reassignment."""
-        row = self.pairing_tokens.get(token)
-        if not row or row["consumed"] or row.get("invalidated_at"):
-            return {"status": "invalid_token"}
+        return await self.complete_channel_pairing(token, "telegram", str(chat_id))
 
-        expires_at = datetime.fromisoformat(row["expires_at"])
-        if expires_at.tzinfo is not None:
-            expires_at = expires_at.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-        if expires_at < utc_now():
-            return {"status": "invalid_token"}
-
-        auth_id = row["supabase_auth_id"]
-        chat_user = await self.get_user_by_chat_id(chat_id)
-        auth_user = await self.get_user_by_auth_id(auth_id)
-        if chat_user and auth_user and chat_user["user_id"] == auth_user["user_id"]:
-            row["consumed"] = True
-            return {"status": "already_paired"}
-        if (chat_user and chat_user.get("supabase_auth_id") not in (None, auth_id)) or (
-            auth_user and auth_user.get("telegram_chat_id") != chat_id
-        ):
-            return {"status": "conflict"}
-
-        user = chat_user or await self.create_user(chat_id)
-        await self.update_user(user["user_id"], {"supabase_auth_id": auth_id})
-        row["consumed"] = True
-        return {"status": "paired"}
+    async def complete_channel_pairing(self, token: str, channel: str, external_id: str) -> dict:
+        """Link a messaging app to the token's account; mirrors `complete_pairing_v2`."""
+        return self._identity_state.complete_pairing(
+            users=self.users.values(), tokens=self.pairing_tokens, token=token,
+            channel=channel, external_id=external_id, insert_user=self._insert_user,
+        )
 
     # ── Dashboard-first Activation Journey ──
 

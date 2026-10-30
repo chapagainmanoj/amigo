@@ -9,6 +9,7 @@ Usage:
 import argparse
 import asyncio
 import logging
+import secrets
 import signal
 import sys
 from dataclasses import replace
@@ -25,6 +26,7 @@ from src.commands.tasks import ResolveTaskCommand
 from src.config import settings
 from src.maintenance import run_isolated_steps
 from src.memory.memory_store import InMemoryStore
+from src.memory.pairing import PAIRING_TOKEN_HEX_LENGTH
 from src.memory.sessions import SessionManager
 from src.observability import quiet_routine_logs
 from src.runtime_config import require_agent_credentials, validate_runtime_configuration
@@ -64,7 +66,12 @@ async def _seed_dev_user(store: InMemoryStore) -> dict:
     await store.acknowledge_activation_terms(auth_id, ACTIVATION_POLICY_VERSION)
     user = await store.create_user(DEV_CHAT_ID)
     user_id = user["user_id"]
-    await store.update_user(user_id, {"supabase_auth_id": auth_id, "primary_channel": "cli"})
+    await store.update_user(user_id, {"supabase_auth_id": auth_id})
+    # The CLI links as its own channel through dashboard-token Pairing, like any second app.
+    token = secrets.token_hex(PAIRING_TOKEN_HEX_LENGTH // 2)
+    await store.create_pairing_token(token, auth_id, utc_now() + timedelta(minutes=5))
+    await store.complete_channel_pairing(token, "cli", str(DEV_CHAT_ID))
+    await store.set_primary_channel(user_id, "cli")
     await store.update_activation_profile(
         auth_id, name="Dev", timezone=DEV_TIMEZONE, wake_time="07:30", sleep_time="23:00"
     )

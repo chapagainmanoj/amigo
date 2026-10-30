@@ -13,6 +13,7 @@ from src.commands.base import (
     ProactiveBudgetExceeded,
     StaleVersionError,
 )
+from src.memory.identities import ChannelNotLinkedError, delivery_message_ref, validate_identity
 from src.memory.modes import ModeGrant, ModeGrantResult, ModeResult
 from src.memory.pairing import ActivationTermsRequiredError, PairingTokenRateLimitError
 from src.memory.reminders import validate_reminder_timing, validate_reminder_updates
@@ -141,13 +142,92 @@ class MemoryStore:
     async def update_user(self, user_id: str, updates: dict) -> dict:
         """Update user profile fields."""
         updates["updated_at"] = utc_now().isoformat()
-        result = await (
-            self.db.table("user_profiles")
-            .update(updates)
-            .eq("user_id", user_id)
-            .execute()
-        )
+        try:
+            result = await (
+                self.db.table("user_profiles")
+                .update(updates)
+                .eq("user_id", user_id)
+                .execute()
+            )
+        except Exception as error:
+            # The deferred 022 key fails at commit when the primary channel is not linked.
+            if "user_profiles_primary_channel_linked" in str(error):
+                raise ChannelNotLinkedError("channel_not_linked") from None
+            raise
         return result.data[0]
+
+    # ── Channel Identities ──
+
+    @_observe_database_call
+    async def get_user_by_channel_identity(self, channel: str, external_id: str) -> dict | None:
+        """Find the participant a messaging-app identity is linked to (migration 022)."""
+        result = await (
+            self.db.table("channel_identities").select("user_id")
+            .eq("channel", channel).eq("external_id", external_id)
+            .maybe_single().execute()
+        )
+        return await self.get_user_by_id(result.data["user_id"]) if result and result.data else None
+
+    @_observe_database_call
+    async def list_channel_identities(self, user_id: str) -> dict[str, str]:
+        """Linked channel → external id; never exposed to participants."""
+        result = await (
+            self.db.table("channel_identities").select("channel, external_id")
+            .eq("user_id", user_id).order("channel").execute()
+        )
+        return {row["channel"]: row["external_id"] for row in result.data or []}
+
+    @_observe_database_call
+    async def set_primary_channel(self, user_id: str, channel: str) -> str:
+        """Choose where proactive messages go; the channel must already be linked."""
+        try:
+            result = await self.db.rpc(
+                "set_primary_channel", {"p_user_id": user_id, "p_channel": channel}
+            ).execute()
+        except Exception as error:
+            if "channel_not_linked" in str(error):
+                raise ChannelNotLinkedError("channel_not_linked") from None
+            if "user_not_found" in str(error):
+                raise ValueError("user_not_found") from None
+            raise
+        return result.data
+
+    @_observe_database_call
+    async def claim_channel_update(
+        self, channel: str, update_id: str, external_id: str, update_kind: str
+    ) -> dict:
+        """Reserve one inbound update per channel; Telegram keeps its 009 claim table."""
+        result = await self.db.rpc(
+            "claim_channel_update",
+            {
+                "p_channel": channel,
+                "p_update_id": update_id,
+                "p_external_id": external_id,
+                "p_update_kind": update_kind,
+            },
+        ).execute()
+        return result.data
+
+    @_observe_database_call
+    async def finish_channel_update(
+        self,
+        channel: str,
+        update_id: str,
+        *,
+        status: str,
+        failure_code: str | None = None,
+    ) -> dict:
+        """Record a claimed update's terminal status without retaining message content."""
+        result = await self.db.rpc(
+            "finish_channel_update",
+            {
+                "p_channel": channel,
+                "p_update_id": update_id,
+                "p_status": status,
+                "p_failure_code": failure_code,
+            },
+        ).execute()
+        return result.data
 
     # ── Telegram Update Claims ──
 
@@ -1547,10 +1627,12 @@ class MemoryStore:
         normalized_cause: str | None,
         retry_decision: str,
         telegram_message_id: int | None,
+        channel: str = "telegram",
+        channel_message_ref: str | None = None,
     ) -> dict:
         """Finish one delivery attempt and transition its Reminder atomically."""
         response = await self.db.rpc(
-            "finish_reminder_delivery",
+            "finish_reminder_delivery_v2",
             {
                 "p_attempt_id": attempt_id,
                 "p_reminder_id": reminder_id,
@@ -1558,7 +1640,10 @@ class MemoryStore:
                 "p_result": result,
                 "p_normalized_cause": normalized_cause,
                 "p_retry_decision": retry_decision,
-                "p_telegram_message_id": telegram_message_id,
+                "p_channel": channel,
+                "p_channel_message_ref": delivery_message_ref(
+                    channel, telegram_message_id, channel_message_ref
+                ),
             },
         ).execute()
         return response.data
@@ -1744,6 +1829,16 @@ class MemoryStore:
         result = await self.db.rpc(
             "complete_pairing",
             {"p_token": token, "p_telegram_chat_id": chat_id},
+        ).execute()
+        return result.data
+
+    @_observe_database_call
+    async def complete_channel_pairing(self, token: str, channel: str, external_id: str) -> dict:
+        """Link a messaging app to the token's account (`complete_pairing_v2`)."""
+        validate_identity(channel, external_id)
+        result = await self.db.rpc(
+            "complete_pairing_v2",
+            {"p_token": token, "p_channel": channel, "p_external_id": external_id},
         ).execute()
         return result.data
 
