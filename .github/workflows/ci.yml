@@ -85,6 +85,8 @@ jobs:
             -f tests/sql/assert_020_durable_memory.sql \
             -f migrations/021_confirmed_mode_suggestions.sql \
             -f tests/sql/assert_021_confirmed_mode_suggestions.sql \
+            -f migrations/022_channel_identities.sql \
+            -f tests/sql/assert_022_channel_identities.sql \
             -f tests/sql/app_schema_version.sql
 
       - name: Prove the Activation functions cannot deadlock

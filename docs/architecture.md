@@ -382,6 +382,8 @@ No Supabase writes. Safe for CI/CD.
   loop replacing the classify→extract→resolve pipeline.
 - [ADR 0003](adr/0003-mode-topics.md) — Accepted: Telegram topics behind channel-neutral Mode
   conversations; owner spike passed on Desktop and iOS, Android untested.
+- [ADR 0004](adr/0004-channel-identities.md) — Proposed: participant identity is `user_id` with
+  linked channel identities and a dashboard-chosen primary channel (migration 022).
 - [pre-launch implementation plan](pre-launch-implementation-plan.md) — Current release roadmap
   and implementation sequence.
 - [staging performance evidence](staging-performance-evidence.md) — Controlled before/after

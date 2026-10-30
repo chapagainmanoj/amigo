@@ -8,8 +8,8 @@ DECLARE
 BEGIN
   reported := public.get_app_schema_version();
 
-  IF reported <> 21 THEN
-    RAISE EXCEPTION 'Applied migration chain reported schema version %, expected 21', reported;
+  IF reported <> 22 THEN
+    RAISE EXCEPTION 'Applied migration chain reported schema version %, expected 22', reported;
   END IF;
 
   -- The application's require_schema_version refuses anything that is not an exact
@@ -18,14 +18,14 @@ BEGIN
     RAISE EXCEPTION 'Schema version is not an exact integer';
   END IF;
 
-  IF (SELECT count(*) FROM public.schema_migrations) <> 21
-    OR (SELECT count(*) FROM public.schema_migrations WHERE version BETWEEN 1 AND 21) <> 21
+  IF (SELECT count(*) FROM public.schema_migrations) <> 22
+    OR (SELECT count(*) FROM public.schema_migrations WHERE version BETWEEN 1 AND 22) <> 22
   THEN
     RAISE EXCEPTION 'Schema ledger does not record every migration in the chain exactly once';
   END IF;
 
   IF EXISTS (
-    SELECT 1 FROM generate_series(1, 21) AS expected(version)
+    SELECT 1 FROM generate_series(1, 22) AS expected(version)
     WHERE NOT EXISTS (
       SELECT 1 FROM public.schema_migrations AS applied
       WHERE applied.version = expected.version
@@ -67,21 +67,21 @@ DO $$
 BEGIN
   -- A later migration must move the reported revision, so a database ahead of the
   -- application also fails the exact-version startup gate.
-  INSERT INTO public.schema_migrations (version) VALUES (22);
-  IF public.get_app_schema_version() <> 22 THEN
-    RAISE EXCEPTION 'Schema version did not follow the applied chain forward';
-  END IF;
-  DELETE FROM public.schema_migrations WHERE version = 22;
-
-  -- The revision is the highest applied migration, not a count of rows: a database
-  -- carrying a non-contiguous later migration must report that migration's number.
   INSERT INTO public.schema_migrations (version) VALUES (23);
   IF public.get_app_schema_version() <> 23 THEN
-    RAISE EXCEPTION 'Schema version is derived from a row count rather than the chain head';
+    RAISE EXCEPTION 'Schema version did not follow the applied chain forward';
   END IF;
   DELETE FROM public.schema_migrations WHERE version = 23;
 
-  IF public.get_app_schema_version() <> 21 THEN
+  -- The revision is the highest applied migration, not a count of rows: a database
+  -- carrying a non-contiguous later migration must report that migration's number.
+  INSERT INTO public.schema_migrations (version) VALUES (24);
+  IF public.get_app_schema_version() <> 24 THEN
+    RAISE EXCEPTION 'Schema version is derived from a row count rather than the chain head';
+  END IF;
+  DELETE FROM public.schema_migrations WHERE version = 24;
+
+  IF public.get_app_schema_version() <> 22 THEN
     RAISE EXCEPTION 'Schema version did not return to the real chain revision';
   END IF;
 END;
