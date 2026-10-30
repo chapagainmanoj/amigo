@@ -89,10 +89,10 @@ python scripts/smoke_check.py --scheduler
   and plans; side effects go through `src/tools/` (see ADR 0001).
 - **Store sync**: any change to `MemoryStore` methods must be mirrored
   in `InMemoryStore` and `FakeStore` (three implementations).
-- **Protocol changes**: any change to `MessageChannel` or
-  `ModelProvider` requires verifying all implementations. `MessageChannel` changes cover
+- **Protocol changes**: any change to `MessageChannel` requires verifying all implementations:
   `TelegramChannel`, `CLIChannel`, `FakeChannel`, and both `FailingChannel` classes in
-  `tests/test_reminders.py` and `tests/test_scheduler.py`.
+  `tests/test_reminders.py` and `tests/test_scheduler.py`. Model backends go through Pydantic AI
+  (ADR 0002), routed in `src/model_routing.py`; there is no provider Protocol.
 - **Rate limits**: Gemini retries once then returns an error message.
   Do not add aggressive retry loops.
 
@@ -144,6 +144,10 @@ Issues use workflow-state labels plus severity labels. See
 ### Domain docs
 
 Amigo uses a single-context domain layout. See `docs/agents/domain.md`.
+
+### Codebase design
+
+Use `.claude/skills/codebase-design` (tuned from mattpocock/skills) for design reviews and ADRs.
 
 ## Agent response style
 
