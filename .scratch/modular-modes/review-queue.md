@@ -1027,3 +1027,20 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Provisional: Reflect 56/60 and Recommender 43/48 are not passing evidence; live on owner's explicit call. Coach prompt changed, so Coach 48/48 evidence is stale. No billed runs.
 - Not changed: CBT personal input stays off (no such feature switched); site copy still says Reflect/Recommender planned.
 - claude -p (sonnet, candidate, no API keys) on current code: Recommender 48/48, Reflect 58/60 (1 CLI request failure, 1 human_support rubric miss), Coach 39/48 -> length overflow from example rule -> prompt tightened -> Coach 48/48. Artifacts: .scratch/modular-modes/evals/*-claude-live*.json. Not Gemini evidence.
+
+## Owner request 30 Oct 2026: CBT research Mode, personal input, full access
+
+- Uncommitted. New `src/agent/cbt.py` (id `cbt`, name "CBT (research)"): one situation, one
+  question per reply (facts, missing fact, thought, unknowns, possible alternative, optional
+  takeaway; at most six), stop/skip/new, no Tools/context/Memory, Daily handoff only on request.
+  Question order from `.scratch/mode-expansion-planning/cbt-research-mvp/`; wording provisional.
+- Live in catalogue for full-access accounts (`FULL_ACCESS`), `google:gemini-3.8-flash`,
+  `reflect_entry_guard`. `reflect_safety_response` now also routes crisis language in `cbt`.
+- Owner overrode "CBT personal input stays off" (AGENTS.md updated) and decision 03 (research-only)
+  for full-access chats. Decision 15 naming rule ("not CBT until qualified review") overridden too.
+- Eval suite `evals/cbt/v1/` (13 cases, mostly Reflect safety/boundary cases adapted, 2 new step
+  cases) + deterministic subset. No model run: no evaluated evidence; live on owner's call.
+- `src/agent/cbt.py` added to INVALIDATING_INPUT_PATHS; `src/wellbeing.py` changed (Gate A input).
+- Not in Mode suggestions, Memory scopes, or migration 021 targets (intentional).
+- Open: qualified practitioner review of wording; privacy notice does not mention CBT research;
+  site copy unchanged.

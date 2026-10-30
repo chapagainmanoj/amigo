@@ -3,6 +3,7 @@
 from dataclasses import replace
 
 from src.access import FULL_ACCESS
+from src.agent.cbt import CBT as CBT_CANDIDATE
 from src.agent.coach import coach_instructions, coaching_context
 from src.agent.context import (
     active_reminder_ids,
@@ -114,5 +115,16 @@ RECOMMENDER = ModeDefinition(
 )
 
 
+# CBT research takes the participant's own thoughts: live for full-access accounts only, on the
+# owner's call (30 Oct 2026). No evaluated evidence yet; Reflect's guard and crisis routing apply.
+CBT = replace(
+    CBT_CANDIDATE,
+    status="live",
+    model=ModelPolicy(primary="google:gemini-3.8-flash"),
+    entry_guard=reflect_entry_guard,
+    entitlement=FULL_ACCESS,
+)
+
+
 def build_registry() -> ModeRegistry:
-    return ModeRegistry((DAILY, COACH, REFLECT, RECOMMENDER))
+    return ModeRegistry((DAILY, COACH, REFLECT, RECOMMENDER, CBT))

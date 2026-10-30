@@ -63,6 +63,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/access.py",
     "src/activation.py",
     "src/agent/catalogue.py",
+    "src/agent/cbt.py",
     "src/agent/claude_cli_model.py",
     "src/agent/coach.py",
     "src/agent/context.py",

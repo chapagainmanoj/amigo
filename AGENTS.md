@@ -50,7 +50,8 @@ python scripts/smoke_check.py --scheduler
 - Migrations 017+, schema bumps, and setting evaluated Modes live are authorized.
 - Protected files are editable: `src/config.py`, `migrations/*.sql`, `src/db/supabase.py`,
   `scripts/smoke_check.py`. List each edit in the phase review queue.
-- Never push, deploy, apply migrations to Supabase, or edit `.env`. CBT personal input stays off.
+- Never push, deploy, apply migrations to Supabase, or edit `.env`. CBT personal input is on only
+  in the CBT research Mode, for full-access accounts (owner, 30 Oct 2026); nowhere else.
 - Stop for the owner's Phase 3 test-bot spike and after the Issue 09 threat model. Stop for
   uncovered changes to production data, secrets, or privacy promises.
 - Append commits, touched/protected files, test/Ruff/Gate A evidence, provisional decisions,

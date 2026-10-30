@@ -63,7 +63,7 @@ async def safety_tier(text: str) -> SafetyTier:
 
 async def reflect_safety_response(mode_id: str | None, text: str) -> str | None:
     """Deterministic safety response, available even while Reflect processing is disabled."""
-    if mode_id != "reflect":
+    if mode_id not in {"reflect", "cbt"}:
         return None
     from src.mode_readiness import wellbeing_policy
 

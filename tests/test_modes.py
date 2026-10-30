@@ -378,6 +378,7 @@ def test_the_catalogue_registers_every_mode_live():
         "coach": "live",
         "reflect": "live",
         "recommender": "live",
+        "cbt": "live",
     }
 
 

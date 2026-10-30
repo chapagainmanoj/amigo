@@ -44,7 +44,7 @@ async def _activated(store, chat_id):
 @pytest.mark.parametrize(
     ("chat_id", "expected"),
     [
-        (FULL, {"daily", "coach", "reflect", "recommender"}),
+        (FULL, {"daily", "coach", "reflect", "recommender", "cbt"}),
         (TRIAL, {"daily", "coach"}),
     ],
 )
@@ -310,6 +310,51 @@ async def test_coach_template_seeds_the_coach_session_and_allows_one_program(mon
         )).status_code == 404
 
 
+async def test_dashboard_stops_the_current_program_so_a_template_can_be_picked(monkeypatch):
+    monkeypatch.setattr(settings, "access_mode", "registered")
+    store, channel = FakeStore(), FakeChannel()
+    handlers = BotHandlers(channel, store, SessionManager(store), FakeScheduler(), _live_runtime())
+    user = await _activated(store, FULL)
+    other = await _activated(store, TRIAL)
+    await store.draft_coaching_program(
+        user["user_id"], "draft-1", "hash-1", goal="Go to bed on time", success_measure="11pm",
+        check_in_days=[1, 2, 3, 4, 5], check_in_time="08:00", timezone="UTC",
+    )
+    async with _dashboard(store, user, handlers) as client:
+        current = (await client.get("/api/coaching/templates")).json()["current_program"]
+        assert current["goal"] == "Go to bed on time"
+        body = {"program_id": current["program_id"], "expected_version": current["version"]}
+        key = {"Idempotency-Key": "stop-1"}
+
+        stale = await client.post(
+            "/api/coaching/program/stop", json={**body, "expected_version": 99},
+            headers={"Idempotency-Key": "stop-0"},
+        )
+        assert stale.status_code == 409
+        response = await client.post("/api/coaching/program/stop", json=body, headers=key)
+        assert response.json() == {"state": "stopped"}
+        # A retried click replays rather than failing.
+        again = await client.post("/api/coaching/program/stop", json=body, headers=key)
+        assert again.json() == {"state": "stopped"}
+        assert (await client.get("/api/coaching/templates")).json()["current_program"] is None
+        picked = await client.post("/api/modes/coach/open", json={"template_id": "read"})
+        assert picked.json()["status"] == "opened"
+
+    await store.draft_coaching_program(
+        other["user_id"], "draft-2", "hash-2", goal="Theirs", success_measure="x",
+        check_in_days=[1], check_in_time="08:00", timezone="UTC",
+    )
+    theirs = await store.get_coaching_program(other["user_id"])
+    async with _dashboard(store, user, handlers) as client:
+        refused = await client.post(
+            "/api/coaching/program/stop",
+            json={"program_id": theirs["program_id"], "expected_version": theirs["version"]},
+            headers={"Idempotency-Key": "stop-x"},
+        )
+    assert refused.status_code in {404, 409}
+    assert (await store.get_coaching_program(other["user_id"]))["state"] == "draft"
+
+
 async def test_mode_list_names_the_current_mode_and_switches_on_tap(monkeypatch):
     monkeypatch.setattr(settings, "access_mode", "registered")
     store, channel = FakeStore(), FakeChannel()
@@ -318,7 +363,7 @@ async def test_mode_list_names_the_current_mode_and_switches_on_tap(monkeypatch)
     await _send(handlers, store, FULL, "/mode")
     assert channel.last_text.startswith("You're in Daily.")
     taps = [b["callback_data"] for b in channel.sent[-1]["buttons"][0]]
-    assert taps == ["mode:coach", "mode:reflect", "mode:recommender"]
+    assert taps == ["mode:coach", "mode:reflect", "mode:recommender", "mode:cbt"]
 
     with patch.object(store, "get_activation_state", return_value={"completed": True}):
         await handlers.handle_callback(FULL, 7, "mode:reflect")
