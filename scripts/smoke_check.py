@@ -120,6 +120,8 @@ class SmokeStore:
         normalized_cause: str | None,
         retry_decision: str,
         telegram_message_id: int | None,
+        channel: str = "telegram",
+        channel_message_ref: str | None = None,
     ) -> dict:
         reminder = self.reminders[reminder_id]
         if reminder["user_id"] != user_id or attempt_id is None:
@@ -129,6 +131,8 @@ class SmokeStore:
                 "pending" if retry_decision == "retry" else "failed"
             ),
             telegram_message_id=telegram_message_id,
+            delivery_channel=channel,
+            channel_message_ref=channel_message_ref,
         )
         reminder["updates"].append(
             {
