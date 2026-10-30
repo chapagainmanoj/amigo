@@ -83,6 +83,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/bot/turns.py",
     "src/bot/update_claims.py",
     "src/channels/base.py",
+    "src/channels/delivery.py",
     "src/coaching.py",
     "src/commands/base.py",
     "src/commands/later.py",

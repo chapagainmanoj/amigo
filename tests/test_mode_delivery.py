@@ -93,3 +93,58 @@ async def test_relinked_participant_gets_fresh_daily_conversation_before_deliver
     current = await store.get_mode_conversation(user["user_id"], "daily", channel.channel_id)
     assert current["endpoint"]["chat_id"] == 456
     assert current["endpoint"] != {"chat_id": 123, "thread_id": 19}
+
+
+async def _second_app_primary(store):
+    """A Telegram participant who linked fake2 and made it their primary channel."""
+    user, reminder = await _reminder(store, 124)
+    store._identity_state.link(user["user_id"], "fake2", "ext-124")
+    await store.set_primary_channel(user["user_id"], "fake2")
+    return user, reminder
+
+
+def _fake2_channel(store):
+    """A second adapter resolves its own address from the Store's channel identities."""
+    channel = FakeChannel(channel_id="fake2")
+
+    async def recipient_for(user):
+        return (await store.list_channel_identities(user["user_id"])).get("fake2")
+
+    channel.recipient_for = recipient_for
+    return channel
+
+
+async def test_reminder_goes_only_to_the_primary_channel_and_records_its_proof():
+    store = FakeStore()
+    user, reminder = await _second_app_primary(store)
+    telegram = ReminderScheduler(FakeChannel(), store)
+    await telegram._send_reminder(user["user_id"], None, reminder["reminder_id"], "Test task")
+    assert not telegram.channel.sent
+
+    store.reminders[0]["status"] = "pending"
+    fake2 = ReminderScheduler(_fake2_channel(store), store)
+    fake2._mode_conversations = type("ConversationService", (), {})()
+    fake2._mode_conversations.ensure = AsyncMock(return_value=None)
+    await fake2._send_reminder(user["user_id"], None, reminder["reminder_id"], "Test task")
+    assert fake2.channel.sent[0]["chat_id"] == "ext-124"
+    row = store.reminders[0]
+    assert (row["status"], row["delivery_channel"], row["telegram_message_id"]) == (
+        "sent", "fake2", None,
+    )
+    assert row["channel_message_ref"] == str(fake2.channel.sent[0]["message_id"])
+
+
+async def test_reconciliation_schedules_on_the_primary_channel_only():
+    store = FakeStore()
+    user, reminder = await _second_app_primary(store)
+    telegram = ReminderScheduler(FakeChannel(), store)
+    fake2 = ReminderScheduler(_fake2_channel(store), store)
+    await telegram.reconcile()
+    await fake2.reconcile()
+
+    def scheduled(scheduler):
+        jobs = scheduler.scheduler.get_jobs()
+        return any(job.id.endswith(reminder["reminder_id"]) for job in jobs)
+
+    assert not scheduled(telegram)
+    assert scheduled(fake2)

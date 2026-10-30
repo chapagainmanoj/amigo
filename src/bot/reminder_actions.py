@@ -51,8 +51,8 @@ class ReminderActions:
             await self.schedule_reminder_tool.run_exact(
                 context=CommandContext(
                     actor_user_id=user["user_id"],
-                    surface="telegram",
-                    idempotency_key=f"telegram:legacy-schedule:{task['task_id']}:{time_expr}",
+                    surface=self.channel.channel_id,
+                    idempotency_key=f"{self.channel.channel_id}:legacy-schedule:{task['task_id']}:{time_expr}",
                 ),
                 task=task,
                 scheduled_at=resolved.utc_instant,
@@ -116,8 +116,8 @@ class ReminderActions:
             await self.update_task_status_tool.run(
                 context=CommandContext(
                     actor_user_id=reminder["user_id"],
-                    surface="telegram",
-                    idempotency_key=f"telegram:reminder:{reminder_id}:{action}",
+                    surface=self.channel.channel_id,
+                    idempotency_key=f"{self.channel.channel_id}:reminder:{reminder_id}:{action}",
                 ),
                 task_id=reminder["task_id"],
                 status=outcome,
@@ -133,8 +133,8 @@ class ReminderActions:
             result = await self.apply_later_command.run(
                 CommandContext(
                     actor_user_id=reminder["user_id"],
-                    surface="telegram",
-                    idempotency_key=f"telegram:reminder:{reminder_id}:later",
+                    surface=self.channel.channel_id,
+                    idempotency_key=f"{self.channel.channel_id}:reminder:{reminder_id}:later",
                 ),
                 reminder_id=reminder_id,
             )

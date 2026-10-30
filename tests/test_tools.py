@@ -172,3 +172,25 @@ async def test_schedule_reminder_tool_skips_past_times_by_injected_clock():
 
     assert result["reminder"] is None
     assert store.reminders == []
+
+
+@pytest.mark.parametrize(("channel_id", "prefix"), [("telegram", "telegram:"), ("fake2", "fake2:")])
+async def test_tool_receipts_name_the_channel_and_keep_telegram_keys(channel_id, prefix):
+    from types import SimpleNamespace
+
+    from src.tools.toolsets import create_task
+    from tests.fakes import FakeChannel
+
+    store = FakeStore()
+    user = await store.create_user(124)
+    session = await store.create_session(user["user_id"])
+    deps = SimpleNamespace(
+        store=store, user=user, session_id=session["session_id"], turn_id="turn-1",
+        channel=FakeChannel(channel_id=channel_id),
+    )
+    await create_task(SimpleNamespace(deps=deps), "drink water", "health")
+
+    (actor, key), _ = next(iter(store.command_receipts.items()))
+    assert actor == user["user_id"]
+    # Telegram's key bytes are unchanged from the hardcoded "telegram:" form.
+    assert key.startswith(f"{prefix}turn-1:create-task:")

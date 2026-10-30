@@ -1760,7 +1760,8 @@ class FakeStore:
                 **reminder,
                 "tasks": {"title": task["title"] if task else "your task"},
                 "user_profiles": {
-                    "telegram_chat_id": user["telegram_chat_id"] if user else None
+                    "telegram_chat_id": user["telegram_chat_id"] if user else None,
+                    "primary_channel": user.get("primary_channel", "telegram") if user else None,
                 },
                 "reminder_occurrences": (
                     {
@@ -1804,7 +1805,8 @@ class FakeStore:
                     else None
                 ),
                 "user_profiles": {
-                    "telegram_chat_id": user["telegram_chat_id"] if user else None
+                    "telegram_chat_id": user["telegram_chat_id"] if user else None,
+                    "primary_channel": user.get("primary_channel", "telegram") if user else None,
                 },
                 "reminder_occurrences": (
                     {

@@ -72,8 +72,8 @@ async def create_task(
     result = await tool.run(
         context=CommandContext(
             actor_user_id=deps.user["user_id"],
-            surface="telegram",
-            idempotency_key=f"telegram:{deps.turn_id}:create-task:{input_fingerprint}",
+            surface=deps.channel.channel_id,
+            idempotency_key=f"{deps.channel.channel_id}:{deps.turn_id}:create-task:{input_fingerprint}",
         ),
         title=title,
         category=category,
@@ -106,8 +106,8 @@ async def update_task_status(
     result = await tool.run(
         context=CommandContext(
             actor_user_id=deps.user["user_id"],
-            surface="telegram",
-            idempotency_key=f"telegram:{deps.turn_id}:resolve-task:{task_id}:{status}",
+            surface=deps.channel.channel_id,
+            idempotency_key=f"{deps.channel.channel_id}:{deps.turn_id}:resolve-task:{task_id}:{status}",
         ),
         task_id=task_id,
         status=status,
@@ -174,8 +174,8 @@ async def apply_later(
     ).run(
         CommandContext(
             actor_user_id=deps.user["user_id"],
-            surface="telegram",
-            idempotency_key=f"telegram:{deps.turn_id}:later:{reminder_id}",
+            surface=deps.channel.channel_id,
+            idempotency_key=f"{deps.channel.channel_id}:{deps.turn_id}:later:{reminder_id}",
         ),
         reminder_id=reminder_id,
     )
@@ -208,8 +208,8 @@ async def move_task_planning_day(
         result = await MoveTaskPlanningDayCommand(deps.store).run(
             CommandContext(
                 actor_user_id=deps.user["user_id"],
-                surface="telegram",
-                idempotency_key=f"telegram:{deps.turn_id}:move-task:{task_id}:{planning_day}",
+                surface=deps.channel.channel_id,
+                idempotency_key=f"{deps.channel.channel_id}:{deps.turn_id}:move-task:{task_id}:{planning_day}",
             ),
             task_id=task_id,
             planning_day=planning_day,
@@ -237,8 +237,8 @@ async def cancel_reminders(
         for reminder_id in targets:
             await CancelReminderCommand(deps.store).run(
                 CommandContext(
-                    actor_user_id=deps.user["user_id"], surface="telegram",
-                    idempotency_key=f"telegram:{deps.turn_id}:cancel-reminder:{reminder_id}",
+                    actor_user_id=deps.user["user_id"], surface=deps.channel.channel_id,
+                    idempotency_key=f"{deps.channel.channel_id}:{deps.turn_id}:cancel-reminder:{reminder_id}",
                 ),
                 reminder_id=reminder_id,
             )
@@ -302,8 +302,8 @@ async def _schedule_resolved_reminder(
     ).hexdigest()[:16]
     context = CommandContext(
         actor_user_id=deps.user["user_id"],
-        surface="telegram",
-        idempotency_key=f"telegram:{deps.turn_id}:schedule-reminder:{input_fingerprint}",
+        surface=deps.channel.channel_id,
+        idempotency_key=f"{deps.channel.channel_id}:{deps.turn_id}:schedule-reminder:{input_fingerprint}",
     )
     if deps.handoff_id:
         receipt = await deps.store.get_command_receipt(

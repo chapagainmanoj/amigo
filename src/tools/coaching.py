@@ -36,7 +36,7 @@ def _draft_error(error: ValueError) -> str:
 def _context(deps, action, values):
     return CommandContext(
         deps.user["user_id"],
-        "telegram",
+        deps.channel.channel_id,
         f"coach:{deps.turn_id}:{action}:{command_hash(action, values)[:24]}",
     )
 

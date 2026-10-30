@@ -1121,3 +1121,24 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Evidence: pytest 1789 passed; ruff clean; `smoke_check.py --scheduler` passes. No billed runs.
 - Perf note: each inbound update now does a participant lookup (2 Supabase round trips). An embed or a user-id-only lookup
   is a possible follow-up.
+
+## Channel identities, Phases D+E (channel-neutral delivery; registry not built)
+
+- New `src/channels/delivery.py`: `reachable_here` / `proactive_recipient` hold the one rule that
+  proactive messages go only to `primary_channel`. It replaces the copies in `scheduler/reminders.py` and `scheduler/coaching.py`.
+- Reminder reconciliation gates on the primary channel (the join now carries `primary_channel` in all 3 Stores), not on
+  `telegram_chat_id` being present. Before this, a non-Telegram participant's Reminders were never scheduled.
+  Job and outbox `chat_id` is only a hint (`payload.get`), because delivery re-resolves at fire time.
+- Delivery proof is recorded against the sending channel (`_delivery_proof`). CLI deliveries now record `delivery_channel=cli`.
+- `CommandContext.surface` is now `str`. Tools, Reminder buttons and Coaching commands use `channel.channel_id` for the surface and
+  key prefix. A snapshot test confirms Telegram keys are byte-identical (`telegram:<turn>:...`). The `coach:` keys are unchanged.
+- **Provisional decision (codebase-design skill, now in AGENTS.md): no `ChannelRegistry`.** Each process runs exactly one channel
+  (Telegram in production, CLI locally), so a registry would be a one-adapter, hypothetical seam that fails the
+  deletion test. A process whose channel is not the primary never sends; the primary's process delivers. Add the
+  registry only when two channels run in one process.
+- Kept Telegram-only on purpose: `access.is_full_access_user` (reads the mirrored `telegram_chat_id`), `bot/pairing.py`
+  `/start` (Telegram adapter; other adapters call `store.complete_channel_pairing`), `smoke_check.py --channel`,
+  and the Activation step "telegram".
+- Gate A: added `src/channels/delivery.py`.
+- Evidence: pytest 1793 passed; ruff clean. New tests cover primary-only delivery with proof, primary-only
+  reconciliation, and the Telegram key snapshot. No billed runs.

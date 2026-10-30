@@ -45,7 +45,8 @@ class SchedulerOutboxWorker:
                 user_id=effect["user_id"],
                 reminder_id=effect["reminder_id"],
                 send_time=datetime.fromisoformat(payload["scheduled_time"]),
-                chat_id=payload["telegram_chat_id"],
+                # Legacy hint only: delivery resolves the primary channel's address at fire time.
+                chat_id=payload.get("telegram_chat_id"),
                 task_title=payload["task_title"],
             )
             return

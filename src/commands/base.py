@@ -1,7 +1,6 @@
 """Shared command context and errors."""
 
 from dataclasses import dataclass
-from typing import Literal
 
 
 class ProactiveBudgetExceeded(ValueError):  # noqa: N818 - public command API name
@@ -33,5 +32,5 @@ class CommandContext:
     """Identity and replay metadata injected by a trusted adapter."""
 
     actor_user_id: str
-    surface: Literal["telegram", "dashboard"]
+    surface: str  # "dashboard" or the channel_id of the messaging app that carried the request
     idempotency_key: str

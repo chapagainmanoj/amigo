@@ -1681,7 +1681,10 @@ class MemoryStore:
         """Get pending reminders due after cutoff with task title and chat id."""
         result = await (
             self.db.table("reminders")
-            .select("*, tasks(title), user_profiles!reminders_user_id_fkey(telegram_chat_id)")
+            .select(
+                "*, tasks(title), "
+                "user_profiles!reminders_user_id_fkey(telegram_chat_id, primary_channel)"
+            )
             .eq("status", "pending")
             .gte("scheduled_time", cutoff.isoformat())
             .execute()
@@ -1695,7 +1698,7 @@ class MemoryStore:
             self.db.table("reminders")
             .select(
                 "*, tasks(title, status, user_id), "
-                "user_profiles!reminders_user_id_fkey(telegram_chat_id), "
+                "user_profiles!reminders_user_id_fkey(telegram_chat_id, primary_channel), "
                 "reminder_occurrences(occurrence_id, "
                 "reminder_delivery_attempts(attempt_id, attempt_number, started_at, finished_at))"
             )

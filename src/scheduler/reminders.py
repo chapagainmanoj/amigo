@@ -11,6 +11,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from src.bot.keyboards import reminder_keyboard
 from src.channels.base import MessageChannel, Recipient
+from src.channels.delivery import proactive_recipient, reachable_here
 from src.memory.proactive import instant
 from src.memory.store import MemoryStore
 from src.utils import Clock, default_clock
@@ -86,10 +87,12 @@ class ReminderScheduler:
         for reminder in reminders:
             user_id = reminder["user_id"]
             reminder_id = reminder["reminder_id"]
-            chat_id = reminder.get("user_profiles", {}).get("telegram_chat_id")
+            profile = reminder.get("user_profiles") or {}
+            # A scheduling hint only; delivery re-resolves the address when the job fires.
+            chat_id = profile.get("telegram_chat_id")
             task = reminder.get("tasks") or {}
             if (
-                not chat_id
+                not reachable_here(self.channel, {"user_id": user_id, **profile})
                 or task.get("user_id") != user_id
                 or task.get("status") != "pending"
                 or reminder["status"] == "sent"
@@ -123,7 +126,7 @@ class ReminderScheduler:
                         result="error",
                         normalized_cause="interrupted_delivery_unknown",
                         retry_decision="do_not_retry",
-                        telegram_message_id=None,
+                        **self._delivery_proof(None),
                     )
                     report["failed"] += 1
                     continue
@@ -220,10 +223,9 @@ class ReminderScheduler:
         user = await self.store.get_user_by_id(user_id)
         if not user or user["user_id"] != user_id:
             raise ValueError("Reminder endpoint no longer belongs to its participant")
-        current_channel = getattr(self.channel, "channel_id", "telegram")
-        if user.get("primary_channel", "telegram") != current_channel:
+        if not reachable_here(self.channel, user):
             raise ValueError("Reminder channel is not the participant's primary channel")
-        chat_id = await self.channel.recipient_for(user)
+        chat_id = await proactive_recipient(self.channel, user)
         if chat_id is None:
             raise ValueError("Participant has no linked messaging endpoint")
         if self._mode_conversations is None:
@@ -308,7 +310,7 @@ class ReminderScheduler:
                     reminder_id=reminder["reminder_id"], user_id=user_id,
                     result="timeout" if isinstance(error, TimeoutError) else "error",
                     normalized_cause=type(error).__name__, retry_decision="do_not_retry",
-                    telegram_message_id=None,
+                    **self._delivery_proof(None),
                 )
             raise
         for reminder, attempt_id in claimed:
@@ -322,7 +324,7 @@ class ReminderScheduler:
         user_id: str,
         reminder_id: str,
         send_time: datetime,
-        chat_id: Recipient,
+        chat_id: Recipient | None,
         task_title: str,
     ) -> None:
         """Schedule a reminder notification.
@@ -397,7 +399,7 @@ class ReminderScheduler:
                     result="timeout" if isinstance(error, TimeoutError) else "error",
                     normalized_cause=type(error).__name__,
                     retry_decision="do_not_retry",
-                    telegram_message_id=None,
+                    **self._delivery_proof(None),
                 )
                 raise
 
@@ -428,5 +430,14 @@ class ReminderScheduler:
             result="accepted" if accepted else "rejected",
             normalized_cause=None if accepted else "missing_provider_message_id",
             retry_decision="do_not_retry",
-            telegram_message_id=message_id,
+            **self._delivery_proof(message_id),
         )
+
+    def _delivery_proof(self, message_id: int | str | None) -> dict:
+        """Provider acceptance recorded against the channel that actually sent it."""
+        channel = getattr(self.channel, "channel_id", "telegram")
+        return {
+            "telegram_message_id": message_id if channel == "telegram" else None,
+            "channel": channel,
+            "channel_message_ref": None if message_id is None else str(message_id),
+        }

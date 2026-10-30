@@ -211,7 +211,7 @@ class CoachingController:
                 values = {"weekly_choice": action} if action in {"continue", "adjust"} else {}
                 command = "record_weekly_choice" if values else action
                 result = await CoachingCommands(self.store).change(
-                    CommandContext(user["user_id"], "telegram", data),
+                    CommandContext(user["user_id"], self.channel.channel_id, data),
                     identifier,
                     int(parts[3]),
                     command,
