@@ -1174,3 +1174,15 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   Kept: long key f-strings (ruff accepts them; splitting would risk key bytes).
 - Evidence: pytest 1797 passed. The 2 new coordinator tests fail on the previous code (checked). ruff clean; `smoke_check.py --scheduler`
   passes; web lint and build clean. No billed runs.
+
+## Gate A after channel identities: owner decision 30 Oct 2026, no billed run
+
+- The owner approved Gate A, then chose "minimize the runs" and, when shown the facts, "no billed run". No Gemini call was made,
+  so nothing was added to `.scratch/gemini-usage.jsonl`.
+- Facts behind the decision: no passing Daily baseline exists. All archived runs failed
+  (`.scratch/modular-modes/evals/daily-gemini-{3.5-flash,3.5-flash-lite,3.8-flash}-baseline.json`), so a declared
+  candidate run is impossible. One new baseline (180 executions) could not pass Gate A by itself.
+- The evidence is stale only because hashed source files changed (migrations, Stores, scheduler, coordinator, delivery,
+  `INVALIDATING_INPUT_PATHS` additions). Daily instructions, Tool docstrings and signatures, and the Tool schema are unchanged; this was verified
+  by the independent review.
+- Open: run baseline + candidate together with the next Daily release candidate.
