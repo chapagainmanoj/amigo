@@ -25,6 +25,8 @@ class PrimaryChannelRequest(BaseModel):
 
 async def _channels(store, user_id: str) -> JSONResponse:
     user = await store.get_user_by_id(user_id)
+    if user is None:
+        raise HTTPException(404, "User profile not found.")
     return JSONResponse(
         {
             "primary_channel": user.get("primary_channel", "telegram"),

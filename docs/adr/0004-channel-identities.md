@@ -18,12 +18,13 @@ messaging app cannot hold a participant, and one participant cannot use two apps
   has at most one identity per channel. External ids are opaque provider identifiers. They never become
   participant identity, and the dashboard API never returns them.
 - **One primary channel.** `user_profiles.primary_channel` selects where proactive messages
-  (Reminders, coaching nudges, handoff notices) go. It must name a channel the participant has linked
-  (deferred foreign key). The participant chooses it on the dashboard; the choice is shown only when more
-  than one channel is linked.
+  (Reminders, recovery summaries, Coaching nudges) go; `src/channels/delivery.py` holds the rule.
+  It must name a channel the participant has linked (deferred foreign key). The participant chooses it
+  on the dashboard; the choice is shown only when more than one channel is linked. Handoff replies and
+  notices stay with the conversation's own channel.
 - **The recipient is resolved at delivery time** from the primary channel's identity. Outbox payloads stop
-  being the source of the recipient. The drain ignores the legacy `telegram_chat_id` key, and migration 023
-  removes it from the producers.
+  being the source of the recipient. The drain passes the legacy `telegram_chat_id` key only as a
+  scheduling hint, which delivery overrides, and migration 023 removes it from the producers.
 - **Second-app Pairing reuses the dashboard token.** The signed-in dashboard issues the existing single-use
   token. The new app's adapter calls `complete_pairing_v2(token, channel, external_id)`, which links to the
   token's existing user, or creates the user if this is their first app. Identity is proven only through the

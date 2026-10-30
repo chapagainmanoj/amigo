@@ -1158,3 +1158,19 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Not built: the "Connect another app" button. It is shown only when more than one channel is registered, and none is yet.
 - Evidence: pytest 1795 passed (API test on both local stores); ruff clean; `smoke_check.py --scheduler` passes;
   `npm run lint` clean; `npm run build` ok. The component was not visually checked (no web test runner; the dashboard needs Supabase auth).
+
+## Channel identities: independent final review (72a0406..HEAD) and fixes
+
+- Reviewer (subagent): no blockers. 4 should-fix findings, all verified and fixed:
+  1. A participant lookup failure after the claim left the update `processing`, so the redelivery was acked as a duplicate and lost.
+     The lookup now runs inside the failure path and finishes the claim as `failed`.
+  2. A first-contact Pairing Turn (locked on the address) could run alongside the sender's next message (locked on the user).
+     The coordinator now always takes the address lock, then the participant lock. Other holders take only participant locks, so there is no deadlock.
+  3. `PrimaryChannel.jsx` showed itself (with an error) to single-app participants when loading failed. It is now hidden without loaded state,
+     and one live status region stays mounted.
+  4. After a primary switch, the old channel claimed and failed the Reminder. It now leaves the Reminder pending for the primary process
+     (in `_send_reminder` and the recovery summary). The test pinning the old `error` outcome now asserts pending and unclaimed.
+- Nits fixed: `/api/channels` returns 404 for a missing profile; single `channel.channel_id` read; ADR wording on handoffs and the outbox hint.
+  Kept: long key f-strings (ruff accepts them; splitting would risk key bytes).
+- Evidence: pytest 1797 passed. The 2 new coordinator tests fail on the previous code (checked). ruff clean; `smoke_check.py --scheduler`
+  passes; web lint and build clean. No billed runs.

@@ -66,8 +66,9 @@ async def test_different_primary_channel_is_not_sent_through_old_channel(monkeyp
     scheduler = ReminderScheduler(channel, store)
     await scheduler._send_reminder(user["user_id"], 123, reminder["reminder_id"], "Test task")
     assert not channel.sent
-    attempt = next(iter(store.reminder_delivery_attempts.values()))
-    assert attempt["result"] == "error"
+    # Left for the primary channel's process: never claimed, so never marked failed.
+    assert not store.reminder_delivery_attempts
+    assert store.reminders[0]["status"] == "pending"
 
 
 async def test_reconciliation_preserves_mode_maintenance_job():
@@ -120,8 +121,8 @@ async def test_reminder_goes_only_to_the_primary_channel_and_records_its_proof()
     telegram = ReminderScheduler(FakeChannel(), store)
     await telegram._send_reminder(user["user_id"], None, reminder["reminder_id"], "Test task")
     assert not telegram.channel.sent
+    assert store.reminders[0]["status"] == "pending"
 
-    store.reminders[0]["status"] = "pending"
     fake2 = ReminderScheduler(_fake2_channel(store), store)
     fake2._mode_conversations = type("ConversationService", (), {})()
     fake2._mode_conversations.ensure = AsyncMock(return_value=None)

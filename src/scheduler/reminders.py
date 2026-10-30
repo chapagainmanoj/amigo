@@ -256,7 +256,7 @@ class ReminderScheduler:
         self, user_id: str, chat_id: Recipient, reminders: list[dict]
     ) -> None:
         user = await self.store.get_user_by_id(user_id)
-        if not user:
+        if not reachable_here(self.channel, user):
             return
         local = instant(self.clock.utc_now()).astimezone(ZoneInfo(user.get("timezone") or "UTC"))
         scheduled_at = local.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
@@ -372,6 +372,10 @@ class ReminderScheduler:
         before sending. Skips silently if task was already completed.
         """
         try:
+            # After a primary-channel switch the old channel must not claim (and fail) the
+            # Reminder: leave it pending so the primary channel's process delivers it.
+            if not reachable_here(self.channel, await self.store.get_user_by_id(user_id)):
+                return
             # Guard: atomically claim the reminder before sending so deploy overlap
             # or accidental scale-out cannot send the same reminder twice.
             reminder = await self.store.claim_reminder_for_send(
@@ -435,7 +439,7 @@ class ReminderScheduler:
 
     def _delivery_proof(self, message_id: int | str | None) -> dict:
         """Provider acceptance recorded against the channel that actually sent it."""
-        channel = getattr(self.channel, "channel_id", "telegram")
+        channel = self.channel.channel_id
         return {
             "telegram_message_id": message_id if channel == "telegram" else None,
             "channel": channel,

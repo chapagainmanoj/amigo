@@ -182,3 +182,52 @@ async def test_different_participants_on_different_channels_do_not_block():
         store, telegram, fake2,
         {"update_id": 302, "chat_id": 7201}, {"update_id": "f-2", "chat_id": "unpaired"},
     )
+
+
+async def test_failed_participant_lookup_finishes_the_claim_as_failed(monkeypatch):
+    store = FakeStore()
+    coordinator = ChannelUpdateCoordinator(store)
+
+    async def unavailable(*_args):
+        raise ConnectionError("database unavailable")
+
+    monkeypatch.setattr(store, "get_user_by_channel_identity", unavailable)
+    processed = []
+
+    async def process() -> None:
+        processed.append(True)
+
+    result = await coordinator.run(
+        update_id=401, chat_id=7401, update_kind="message", process=process
+    )
+    assert result.outcome == "failed" and not processed
+    assert store.telegram_updates[401]["status"] == "failed"
+    assert store.telegram_updates[401]["failure_code"] == "ConnectionError"
+
+
+async def test_first_contact_pairing_keeps_the_next_message_behind_it():
+    """The /start Turn links the sender mid-Turn; the next message still waits for it."""
+    store = FakeStore()
+    coordinator = ChannelUpdateCoordinator(store)
+    linked, release, overlapped = asyncio.Event(), asyncio.Event(), False
+
+    async def pairing() -> None:
+        await store.create_user(7501)  # Pairing creates and links the participant.
+        linked.set()
+        await release.wait()
+
+    async def next_message() -> None:
+        nonlocal overlapped
+        overlapped = not release.is_set()
+
+    first = asyncio.create_task(coordinator.run(
+        update_id=501, chat_id=7501, update_kind="message", process=pairing
+    ))
+    await linked.wait()
+    second = asyncio.create_task(coordinator.run(
+        update_id=502, chat_id=7501, update_kind="message", process=next_message
+    ))
+    await asyncio.sleep(0.01)
+    release.set()
+    await asyncio.gather(first, second)
+    assert not overlapped

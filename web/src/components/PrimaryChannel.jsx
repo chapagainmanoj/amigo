@@ -45,7 +45,8 @@ export default function PrimaryChannel({ request = apiRequest }) {
     } finally { setBusy(false) }
   }
 
-  if (!error && (!state || state.linked.length < 2)) return null
+  // A failed first load must not surface the control to single-app participants.
+  if (!state || state.linked.length < 2) return null
 
   return <section className="primary-channel" aria-labelledby="primary-channel-setting">
     <h2 id="primary-channel-setting">Where Amigo reaches you</h2>
@@ -58,8 +59,7 @@ export default function PrimaryChannel({ request = apiRequest }) {
         <span>{label(channel)}</span>
       </label>)}
     </div>}
-    {busy && <p role="status">Updating messaging app settings…</p>}
-    {notice && <p role="status">{notice}</p>}
+    <p role="status">{busy ? 'Updating messaging app settings…' : notice}</p>
     {error && <div className="coaching-error" role="alert"><p>{error}</p><button className="coaching-button" type="button" disabled={busy} onClick={load}>Refresh settings</button></div>}
   </section>
 }

@@ -87,23 +87,38 @@ class ChannelUpdateCoordinator:
             )
             return UpdateResult("duplicate", update_id)
 
-        key = await inbound_participant_key(self.store, self.channel_id, chat_id)
-        async with self.serializer.hold(key):
-            try:
+        try:
+            async with self._hold_inbound(chat_id):
                 await process()
-            except Exception as exc:
-                await self.store.finish_channel_update(
-                    self.channel_id,
-                    str(update_id),
-                    status="failed",
-                    failure_code=type(exc).__name__,
-                )
-                logger.exception(
-                    "Update failed channel=%s update_id=%s", self.channel_id, update_id
-                )
-                return UpdateResult("failed", update_id)
-
+        except Exception as exc:
+            # Includes a failed participant lookup: the claim must never stay "processing",
+            # or the provider's redelivery would be acknowledged as a duplicate and lost.
             await self.store.finish_channel_update(
-                self.channel_id, str(update_id), status="completed"
+                self.channel_id,
+                str(update_id),
+                status="failed",
+                failure_code=type(exc).__name__,
             )
-            return UpdateResult("completed", update_id)
+            logger.exception("Update failed channel=%s update_id=%s", self.channel_id, update_id)
+            return UpdateResult("failed", update_id)
+
+        await self.store.finish_channel_update(
+            self.channel_id, str(update_id), status="completed"
+        )
+        return UpdateResult("completed", update_id)
+
+    @asynccontextmanager
+    async def _hold_inbound(self, chat_id: Recipient) -> AsyncIterator[None]:
+        """Address lock first, then the participant lock, always in that order.
+
+        A first-contact Pairing Turn runs before its sender is linked; the address lock keeps the
+        sender's next message behind it even though that message resolves to the participant.
+        Other holders take only participant locks, so the fixed order cannot deadlock.
+        """
+        async with self.serializer.hold(f"{self.channel_id}:{chat_id}"):
+            user = await self.store.get_user_by_channel_identity(self.channel_id, str(chat_id))
+            if user is None:
+                yield
+                return
+            async with self.serializer.hold(participant_key(user)):
+                yield
