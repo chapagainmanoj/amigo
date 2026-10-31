@@ -97,7 +97,7 @@ async def second_app_pairing_token(channel_id: str, request: Request, user: Acto
         {
             "channel": channel_id,
             "command": f"/pair {token}",
-            "app_link": getattr(channel, "connect_link", None),
+            "app_link": channel.connect_link,
             "expires_at": expires_at.replace(tzinfo=UTC).isoformat(),
         },
         headers={"Cache-Control": "no-store"},

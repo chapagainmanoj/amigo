@@ -31,6 +31,15 @@ class CLIChannel:
     display_name = "The CLI"
     capabilities = ChannelCapabilities(actions=True, message_editing=True)
 
+    ready = True
+    connect_link = None
+
+    async def start(self) -> None:
+        """The terminal needs no connection."""
+
+    async def close(self) -> None:
+        """Nothing to disconnect."""
+
     def __init__(self, store=None):
         # Resolves this adapter's own address from channel identities (ADR 0004).
         self._store = store

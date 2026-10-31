@@ -35,9 +35,22 @@ class TelegramChannel:
         Callable[[str | int], Awaitable[ConversationRef | None]] | None
     ) = None
 
+    # Bot API sends need no connection, so Telegram can always deliver (ADR 0005).
+    ready = True
+    # Telegram is paired through Activation's deep link, not the second-app flow.
+    connect_link = None
+
     def __init__(self, *, token: str | None = None):
         self._token = token
         self._bot: Bot | None = None
+
+    async def start(self) -> None:
+        from src.runtime_config import is_production
+
+        await self.initialize(production=is_production(settings))
+
+    async def close(self) -> None:
+        """The webhook is deliberately left registered so a rolling deploy stays reachable."""
 
     @property
     def bot(self) -> Bot:

@@ -101,6 +101,22 @@ class MessageChannel(Protocol):
     display_name: str
     capabilities: ChannelCapabilities
 
+    # Lifecycle (ADR 0005). `ready`: can deliver now; while False, proactive messages wait
+    # pending. `connect_link`: where the dashboard sends a participant before Pairing, or None.
+    @property
+    def ready(self) -> bool: ...
+
+    @property
+    def connect_link(self) -> str | None: ...
+
+    async def start(self) -> None:
+        """Connect or initialize; may raise, and the caller bounds and judges it."""
+        ...
+
+    async def close(self) -> None:
+        """Stop taking events, let in-flight work finish (bounded), then disconnect."""
+        ...
+
     async def send_message(
         self,
         chat_id: str | int,

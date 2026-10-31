@@ -75,6 +75,9 @@ class FakeChannel:
     def __init__(self, *, threads=False, channel_id="telegram"):
         self.channel_id = channel_id
         self.display_name = "Telegram" if channel_id == "telegram" else channel_id
+        self.ready = True
+        self.connect_link = None
+        self.started = self.closed = False
         self.capabilities = ChannelCapabilities(threads=threads, actions=True, message_editing=True)
         self.conversations: list[ConversationRef] = []
         self.closed_conversations: list[ConversationRef] = []
@@ -112,6 +115,12 @@ class FakeChannel:
 
     async def close_conversation(self, chat_id, conversation):
         self.closed_conversations.append(conversation)
+
+    async def start(self):
+        self.started = True
+
+    async def close(self):
+        self.closed = True
 
     async def conversation_link(self, conversation):
         return None

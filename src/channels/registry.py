@@ -42,7 +42,7 @@ class ChannelRegistry:
         if not user:
             return None
         channel = self._channels.get(user.get("primary_channel", "telegram"))
-        if channel is None or not getattr(channel, "ready", True):
+        if channel is None or not channel.ready:
             return None
         return channel if may_use_channel(user, channel.channel_id) else None
 

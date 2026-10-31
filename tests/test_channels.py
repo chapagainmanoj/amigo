@@ -115,3 +115,23 @@ async def test_cli_recipient_comes_from_its_own_channel_identity():
     store._identity_state.link(user["user_id"], "cli", "dev-1")
     assert await CLIChannel(store).recipient_for(user) == "dev-1"
     assert await CLIChannel().recipient_for(user) == "cli"
+
+
+def test_every_adapter_declares_the_channel_lifecycle():
+    """ADR 0005: ready, connect_link, start and close are part of MessageChannel."""
+    import inspect
+
+    from src.channels.discord import DiscordChannel
+    from src.channels.telegram import TelegramChannel
+    from tests.fakes import FakeChannel, FakeStore
+
+    adapters = [
+        TelegramChannel(token="unused"), CLIChannel(),
+        DiscordChannel(FakeStore(), token="unused"), FakeChannel(),
+    ]
+    for adapter in adapters:
+        assert isinstance(adapter.ready, bool), adapter
+        assert adapter.connect_link is None or isinstance(adapter.connect_link, str)
+        assert inspect.iscoroutinefunction(adapter.start), adapter
+        assert inspect.iscoroutinefunction(adapter.close), adapter
+    assert [adapter.ready for adapter in adapters] == [True, True, False, True]
