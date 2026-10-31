@@ -90,8 +90,9 @@ python scripts/smoke_check.py --scheduler
 - **Store sync**: any change to `MemoryStore` methods must be mirrored
   in `InMemoryStore` and `FakeStore` (three implementations).
 - **Protocol changes**: any change to `MessageChannel` requires verifying all implementations:
-  `TelegramChannel`, `DiscordChannel`, `CLIChannel`, `FakeChannel`, and both `FailingChannel` classes in
-  `tests/test_reminders.py` and `tests/test_scheduler.py`. Model backends go through Pydantic AI
+  `TelegramChannel`, `DiscordChannel`, `CLIChannel`, `FakeChannel`, `SmokeChannel` in
+  `scripts/smoke_check.py`, and both `FailingChannel` classes in `tests/test_reminders.py` and
+  `tests/test_scheduler.py`. Model backends go through Pydantic AI
   (ADR 0002), routed in `src/model_routing.py`; there is no provider Protocol.
 - **Rate limits**: Gemini retries once then returns an error message.
   Do not add aggressive retry loops.

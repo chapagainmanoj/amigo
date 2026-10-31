@@ -35,7 +35,16 @@ class SmokeChannel:
 
     # Local and in-process like the CLI, so it is an app every participant may use.
     channel_id = "cli"
+    display_name = "Smoke"
     capabilities = ChannelCapabilities()
+    ready = True  # ADR 0005 lifecycle
+    connect_link = None
+
+    async def start(self):
+        return None
+
+    async def close(self):
+        return None
 
     async def recipient_for(self, user):
         return user["chat_id"]
