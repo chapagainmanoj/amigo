@@ -1237,3 +1237,24 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   the CLI-only fixture. No billed runs.
 - Protected files: none touched in Phases 0 and 1.
 - Next: Phase 2 (Discord adapter) after owner review.
+
+## Discord Phases 0 and 1: fixes from the independent review (`d20ee81`)
+
+- Review: `proposals/discord-phase0-1-independent-review.md`. It found no merge blockers. Five should-fix items would go live once a second adapter registers, and all are fixed:
+  - **S1:** in every posture except open, non-Telegram apps admit only linked full-access accounts. `registered` used to admit any account.
+  - **S2:** Pairing on a non-Telegram app checks the token owner before consuming the token (`get_pairing_token_owner`, added to all 3 Stores; the Supabase version
+    reads `pairing_tokens` as service_role). It refuses unless there is an existing, activated, full-access profile. It never creates a profile, so a
+    Telegram link token can no longer create a Discord-first account.
+  - **S3:** handoff recovery skips when the primary channel runs elsewhere, leaving the row pending as a Reminder does. `main` runs recovery and
+    `close_expired` on every channel's handlers. ADR 0004 now notes that crash recovery follows the primary channel. Provisional: handoffs don't record their
+    channel.
+  - **S4:** the dashboard Mode switch (`_open_mode`) opens on the participant's primary channel. API copy is neutral ("Connect a messaging app first").
+  - **S5:** no code change. Full access stays an owner-listed set of Telegram chats, and other apps require it (ADR 0004).
+- Nit fixed: near-miss pairing forms (`/PAIR x`, `/pair_x`) are treated as Pairing, so tokens no longer reach the model.
+- Not fixed (nits): a Reminder can be lost if the primary switches mid-send; database log lines are duplicated by nested store calls.
+- Tests: new ones cover S1 (all postures), S2 (no profile created, token not consumed, non-full-access refused), S3 and S4 (main `_open_mode` routing).
+  With the four logic files reverted, 7 of them fail. The main-patching tests now also patch `handlers_by_channel`; without that, a test hung waiting on
+  the real wiring.
+- Evidence: pytest 1828 passed; ruff clean; `smoke_check.py --scheduler` passes; Gate A `--validate-only` passes. No billed runs. No protected files touched.
+- Plan updated (`discord-adapter-plan.md`): Render free-plan sleep (an owner hosting decision), acknowledge before claiming, button re-chunking, intents and mentions,
+  channel-scoped second-app tokens, the down-primary signal, and the spike checks.
