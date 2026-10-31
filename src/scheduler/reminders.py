@@ -73,7 +73,7 @@ class ReminderScheduler:
         cutoff = now - MISSED_FIRE_WINDOW
         reminders = await self.store.get_reminders_for_reconciliation()
         desired_jobs: set[str] = set()
-        delayed: dict[tuple[str, int], list[dict]] = {}
+        delayed: dict[str, list[dict]] = {}
         report = {
             "scheduled": 0,
             "recovered": 0,
@@ -88,8 +88,6 @@ class ReminderScheduler:
             user_id = reminder["user_id"]
             reminder_id = reminder["reminder_id"]
             profile = reminder.get("user_profiles") or {}
-            # A scheduling hint only; delivery re-resolves the address when the job fires.
-            chat_id = profile.get("telegram_chat_id")
             task = reminder.get("tasks") or {}
             if (
                 not reachable_here(self.channel, {"user_id": user_id, **profile})
@@ -143,7 +141,7 @@ class ReminderScheduler:
                 report["missed"] += 1
                 continue
             if scheduled <= now:
-                delayed.setdefault((user_id, chat_id), []).append(reminder)
+                delayed.setdefault(user_id, []).append(reminder)
                 continue
 
             job_id = f"{user_id}:{reminder_id}"
@@ -152,13 +150,14 @@ class ReminderScheduler:
                 report["missing_jobs"] += 1
             elif existing_job.trigger.run_date.replace(tzinfo=None) != scheduled:
                 report["wrong_time_jobs"] += 1
-            self.schedule_reminder(user_id, reminder_id, scheduled, chat_id, task["title"])
+            # No address: delivery resolves the primary channel's recipient when the job fires.
+            self.schedule_reminder(user_id, reminder_id, scheduled, None, task["title"])
             desired_jobs.add(job_id)
             report["scheduled"] += 1
 
-        for (user_id, chat_id), late_reminders in delayed.items():
+        for user_id, late_reminders in delayed.items():
             job_id = f"recovery:{user_id}"
-            self._schedule_recovery_summary(user_id, chat_id, late_reminders, now, job_id)
+            self._schedule_recovery_summary(user_id, None, late_reminders, now, job_id)
             desired_jobs.add(job_id)
 
         for job in list(self.scheduler.get_jobs()):
@@ -236,7 +235,7 @@ class ReminderScheduler:
     def _schedule_recovery_summary(
         self,
         user_id: str,
-        chat_id: Recipient,
+        chat_id: Recipient | None,
         reminders: list[dict],
         now: datetime,
         job_id: str,
@@ -253,7 +252,7 @@ class ReminderScheduler:
         )
 
     async def _send_recovery_summary(
-        self, user_id: str, chat_id: Recipient, reminders: list[dict]
+        self, user_id: str, chat_id: Recipient | None, reminders: list[dict]
     ) -> None:
         user = await self.store.get_user_by_id(user_id)
         if not reachable_here(self.channel, user):
@@ -364,7 +363,7 @@ class ReminderScheduler:
             logger.debug("Reminder %s not found in scheduler (may have already fired)", job_id)
 
     async def _send_reminder(
-        self, user_id: str, chat_id: Recipient, reminder_id: str, task_title: str
+        self, user_id: str, chat_id: Recipient | None, reminder_id: str, task_title: str
     ) -> None:
         """Fire a reminder — send Telegram message with Done/Skip/Later buttons.
 

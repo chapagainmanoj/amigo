@@ -149,3 +149,29 @@ async def test_reconciliation_schedules_on_the_primary_channel_only():
 
     assert not scheduled(telegram)
     assert scheduled(fake2)
+
+
+async def test_profile_without_telegram_is_scheduled_and_delivered_on_its_own_channel():
+    """A participant whose only app is fake2 (no telegram_chat_id) still gets Reminders."""
+    store = FakeStore()
+    auth = "auth-no-telegram"
+    store.activation_journeys.setdefault(auth, {"acknowledged_at": utc_now().isoformat()})
+    await store.create_pairing_token("tok", auth, utc_now() + timedelta(minutes=10))
+    assert await store.complete_channel_pairing("tok", "fake2", "ext-1") == {"status": "paired"}
+    user = await store.get_user_by_channel_identity("fake2", "ext-1")
+    assert user["telegram_chat_id"] is None
+    task = await store.create_task(user["user_id"], "Test task")
+    reminder = await store.create_reminder(
+        task["task_id"], user["user_id"], (utc_now() + timedelta(minutes=5)).isoformat(),
+    )
+
+    fake2 = ReminderScheduler(_fake2_channel(store), store)
+    fake2._mode_conversations = type("ConversationService", (), {})()
+    fake2._mode_conversations.ensure = AsyncMock(return_value=None)
+    await fake2.reconcile()
+    job = fake2.scheduler.get_job(f"{user['user_id']}:{reminder['reminder_id']}")
+    assert job is not None and job.kwargs["chat_id"] is None
+
+    await job.func(**job.kwargs)
+    assert fake2.channel.sent[0]["chat_id"] == "ext-1"
+    assert store.reminders[0]["status"] == "sent"

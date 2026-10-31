@@ -1690,12 +1690,12 @@ class MemoryStore:
 
     @_observe_database_call
     async def get_pending_reminders_for_reload(self, cutoff: datetime) -> list[dict]:
-        """Get pending reminders due after cutoff with task title and chat id."""
+        """Get pending reminders due after cutoff with task title and primary channel."""
         result = await (
             self.db.table("reminders")
             .select(
                 "*, tasks(title), "
-                "user_profiles!reminders_user_id_fkey(telegram_chat_id, primary_channel)"
+                "user_profiles!reminders_user_id_fkey(primary_channel)"
             )
             .eq("status", "pending")
             .gte("scheduled_time", cutoff.isoformat())
@@ -1710,7 +1710,7 @@ class MemoryStore:
             self.db.table("reminders")
             .select(
                 "*, tasks(title, status, user_id), "
-                "user_profiles!reminders_user_id_fkey(telegram_chat_id, primary_channel), "
+                "user_profiles!reminders_user_id_fkey(primary_channel), "
                 "reminder_occurrences(occurrence_id, "
                 "reminder_delivery_attempts(attempt_id, attempt_number, started_at, finished_at))"
             )

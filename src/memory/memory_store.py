@@ -1633,7 +1633,6 @@ class InMemoryStore:
                 entry = dict(r)
                 entry["tasks"] = {"title": task.get("title", "")}
                 entry["user_profiles"] = {
-                    "telegram_chat_id": user.get("telegram_chat_id"),
                     "primary_channel": user.get("primary_channel", "telegram"),
                 }
                 results.append(entry)
@@ -1657,7 +1656,6 @@ class InMemoryStore:
                 else None
             )
             entry["user_profiles"] = {
-                "telegram_chat_id": user.get("telegram_chat_id") if user else None,
                 "primary_channel": user.get("primary_channel", "telegram") if user else None,
             }
             occurrence = self._reminder_occurrences.get(reminder["reminder_id"])
