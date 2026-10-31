@@ -247,6 +247,14 @@ class DiscordChannel:
     async def conversation_link(self, conversation: ConversationRef | None) -> str | None:
         return None
 
+    @property
+    def connect_link(self) -> str | None:
+        """Where the dashboard sends a participant to add the bot before typing `/pair`."""
+        from src.config import settings
+
+        app_id = str(settings.discord_application_id).strip()
+        return f"https://discord.com/oauth2/authorize?client_id={app_id}" if app_id else None
+
     async def recipient_for(self, user: dict) -> str | int | None:
         if not user.get("user_id"):
             return None

@@ -187,6 +187,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Amigo", lifespan=lifespan)
 app.state.store = store
 app.state.channel = channel
+app.state.channels = channels
 app.state.bot_username = bot_username
 app.state.memory_service = handlers.memory.service
 

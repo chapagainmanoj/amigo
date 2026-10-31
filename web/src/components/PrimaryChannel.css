@@ -6,3 +6,7 @@
 .primary-channel input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--ink); }
 .primary-channel input:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 .primary-channel input:disabled { opacity: .6; cursor: not-allowed; }
+.primary-channel-connect { margin-top: 12px; }
+.primary-channel-connect > h3 { font-size: .9rem; margin-bottom: 6px; }
+.primary-channel-connect ol { margin: 10px 0 0 1.2em; font-size: .85rem; display: grid; gap: 6px; }
+.primary-channel-connect code { user-select: all; overflow-wrap: anywhere; }
