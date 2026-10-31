@@ -1298,3 +1298,27 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   - No network calls to Discord. No billed runs.
 - **STOP, Phase 6 (owner):** follow `docs/runbooks/discord-dogfood.md`: create the bot, set the env, pair, and run the checklist. Decide on hosting, because the free Render plan sleeps.
   Before anyone who is not owner or internal uses it: the privacy promise and decision 04.
+
+## Session review (31 Oct 2026, all commits 3d5808d..20dd82e): fixes `ecdb561`, `d496c3d`
+
+- Review: `proposals/session-31oct-independent-review.md`. No blockers; 6 should-fix items and 9 nits. It confirmed discord.py 2.7.1 usage against real objects, that the Telegram path is
+  unchanged, Store parity, no XSS or id leaks, and that S1–S5 are correct.
+- Fixed:
+  - **SF1:** the gateway task has a done-callback that logs "Discord gateway stopped".
+  - **SF2:** `ChannelRegistry.for_user` skips adapters that are not `ready`. Discord counts as ready only when connected. Until then, Discord-primary Reminders,
+    recovery and handoffs wait pending instead of failing with `do_not_retry`. Discord now logs in before `initialize_runtime`.
+  - **SF3:** shutdown stops the scheduler first. It then drains in-flight Discord Turns (10 s) and refuses new events before disconnecting.
+  - **SF4:** an `interaction.response.defer()` HTTP error is logged and the press is still claimed and processed.
+  - **SF5:** the Discord login is bounded by `asyncio.wait_for` (15 s), and a failure leaves Telegram running.
+  - **SF6:** docs (runbook, AGENTS.md) now match the owner decision: every full-access account is offered Discord, so keep that list owner/internal until
+    decision 04 covers Discord. **Owner to confirm** the list is owner/internal only before enabling.
+  - **N1:** open mode gates other apps too (CLI exempt). **N4:** fence-aware splitting keeps indentation, prefers paragraph breaks, and never sends
+    empty text. **N5:** expired codes get "invalid or has expired", and the dashboard shows the exact expiry. **N6:** the install link needs a numeric
+    application id. **N7:** `discord.http` is at INFO. **N8:** runbook corrections.
+  - The non-privileged Guilds intent is enabled, because discord.py warned about state issues without it.
+- Open:
+  - **N2:** if full access is revoked while Discord is primary, Reminders still go to Discord and the buttons are refused.
+  - **N3:** two quick DMs can be processed out of order (discord.py event tasks).
+  - **N9:** partly covered. Still untested: the lifespan failure branch and Supabase `get_pairing_token_owner`. The web component still has no runner.
+- Evidence: pytest 1849 passed; ruff clean; `smoke_check.py --scheduler` passes; Gate A `--validate-only` passes; web lint and build pass. The new tests fail on the
+  pre-fix sources. No network calls to Discord. No billed runs.
