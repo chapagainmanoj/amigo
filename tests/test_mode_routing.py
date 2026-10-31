@@ -585,6 +585,7 @@ async def test_scheduler_recovery_shares_webhook_turn_lock_and_rechecks_current_
     monkeypatch.setattr(main, "update_coordinator", coordinator)
     monkeypatch.setattr(env.handlers.handoffs, "execute", execute)
     monkeypatch.setattr(main, "handlers", env.handlers)
+    monkeypatch.setattr(main, "handlers_by_channel", {env.channel.channel_id: env.handlers})
     started, release, scanned = asyncio.Event(), asyncio.Event(), asyncio.Event()
     pending = {"user_id": env.user["user_id"], "handoff_id": "fixture-pending"}
 

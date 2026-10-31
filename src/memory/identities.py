@@ -35,6 +35,12 @@ def validate_identity(channel: str, external_id: str) -> None:
         raise ValueError("invalid_channel_identity")
 
 
+def live_token_owner(tokens: dict[str, dict], token: str) -> str | None:
+    """The auth id behind a usable (unconsumed, live) Pairing token, without consuming it."""
+    row = tokens.get(token)
+    return row["supabase_auth_id"] if _token_usable(row, utc_now()) else None
+
+
 def _token_usable(row: dict | None, now: datetime) -> bool:
     if not row or row["consumed"] or row.get("invalidated_at"):
         return False

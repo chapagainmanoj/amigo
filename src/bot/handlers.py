@@ -233,18 +233,19 @@ class BotHandlers:
             return True
         if settings.access_mode == "closed":
             return False
+        if self.channel.channel_id != "telegram":
+            # Every other posture admits other apps only for linked full-access accounts (owner
+            # decision 31 Oct 2026). Pairing attempts reach Pairing, which applies the same rule.
+            if pairing_attempt:
+                return True
+            user = await self._participant(chat_id)
+            return bool(user and user.get("supabase_auth_id") and is_full_access_user(user))
         if settings.access_mode in {"registered", "invite"}:
             if pairing_attempt:
                 return True
             user = await self._participant(chat_id)
             return bool(user and user.get("supabase_auth_id"))
 
-        if self.channel.channel_id != "telegram":
-            # The allowlist names Telegram chats; other apps admit linked full-access accounts.
-            if pairing_attempt:
-                return True
-            user = await self._participant(chat_id)
-            return bool(user and is_full_access_user(user))
         try:
             allowed_ids = parse_allowed_chat_ids(settings.allowed_telegram_chat_ids)
         except UnsafeProductionConfigurationError:

@@ -16,6 +16,7 @@ async def wire_main(env, monkeypatch):
     monkeypatch.setattr(main, "store", env.store)
     monkeypatch.setattr(main, "channel", env.channel)
     monkeypatch.setattr(main, "handlers", env.handlers)
+    monkeypatch.setattr(main, "handlers_by_channel", {env.channel.channel_id: env.handlers})
     monkeypatch.setattr(main, "update_coordinator", ChannelUpdateCoordinator(env.store))
     return main
 

@@ -31,6 +31,7 @@ from src.memory.identities import (
     claim_telegram,
     delivery_columns,
     finish_claim,
+    live_token_owner,
     telegram_claim_ids,
     telegram_update_as_channel,
 )
@@ -1908,6 +1909,10 @@ class FakeStore:
     async def complete_pairing(self, token: str, chat_id: int) -> dict:
         """Atomically consume a token and link identities without reassignment."""
         return await self.complete_channel_pairing(token, "telegram", str(chat_id))
+
+    async def get_pairing_token_owner(self, token: str) -> str | None:
+        """The auth id behind a usable Pairing token, without consuming it."""
+        return live_token_owner(self.pairing_tokens, token)
 
     async def complete_channel_pairing(self, token: str, channel: str, external_id: str) -> dict:
         """Link a messaging app to the token's account; mirrors `complete_pairing_v2`."""

@@ -112,3 +112,49 @@ async def test_handoff_recovery_runs_only_on_the_primary_channels_controller():
 
     controllers["telegram"].execute.assert_not_awaited()
     controllers["fake2"].execute.assert_awaited_once()
+
+
+async def test_handoff_recovery_waits_when_the_primary_channel_runs_elsewhere():
+    store = FakeStore()
+    user = await store.create_user(51004)
+    store._identity_state.link(user["user_id"], "fake2", "ext-51004")
+    await store.set_primary_channel(user["user_id"], "fake2")
+    telegram = FakeChannel()
+    controller = HandoffController(
+        store, telegram, SimpleNamespace(), SimpleNamespace(), SimpleNamespace(),
+        channels=ChannelRegistry([telegram]),
+    )
+    controller.retire_unavailable = AsyncMock()
+    controller.execute = AsyncMock()
+    await controller._recover_execution(None, {"user_id": user["user_id"], "handoff_id": "h-2"})
+    # Neither sent on Telegram nor retired: the process running fake2 recovers it.
+    controller.execute.assert_not_awaited()
+    controller.retire_unavailable.assert_not_awaited()
+
+
+async def test_dashboard_mode_switch_opens_on_the_primary_channel(monkeypatch):
+    from src import main
+
+    store = FakeStore()
+    user = await store.create_user(51005)
+    store._identity_state.link(user["user_id"], "fake2", "ext-51005")
+    await store.set_primary_channel(user["user_id"], "fake2")
+    user = await store.get_user_by_id(user["user_id"])
+    telegram, fake2 = FakeChannel(), _fake2()
+    fake2.recipient_for = AsyncMock(return_value="ext-51005")
+    opened = {
+        channel_id: SimpleNamespace(turn_processor=SimpleNamespace(
+            open_mode=AsyncMock(return_value=(True, f"opened on {channel_id}"))
+        ))
+        for channel_id in ("telegram", "fake2")
+    }
+    monkeypatch.setattr(main, "channels", ChannelRegistry([telegram, fake2]))
+    monkeypatch.setattr(main, "handlers_by_channel", opened)
+    assert await main._open_mode(user, "coach") == (True, "opened on fake2")
+    opened["fake2"].turn_processor.open_mode.assert_awaited_once_with(
+        "ext-51005", user, "coach", note=None
+    )
+    opened["telegram"].turn_processor.open_mode.assert_not_awaited()
+
+    monkeypatch.setattr(main, "channels", ChannelRegistry([telegram]))
+    assert await main._open_mode(user, "coach") is None

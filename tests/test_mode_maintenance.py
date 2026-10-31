@@ -92,6 +92,7 @@ async def test_main_maintenance_isolates_every_stage_and_resets_failed_readiness
             ),
         ),
     )
+    monkeypatch.setattr(main, "handlers_by_channel", {"telegram": main.handlers})
     monkeypatch.setattr(main, "_recover_pending_handoffs", recover)
     monkeypatch.setattr(main, "coaching_worker", worker)
     monkeypatch.setattr(

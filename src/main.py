@@ -71,6 +71,8 @@ handlers = BotHandlers(
     channels=channels,
 )
 update_coordinator = ChannelUpdateCoordinator(store)
+# One BotHandlers per channel; all share the store, scheduler and the one Turn serializer.
+handlers_by_channel = {channel.channel_id: handlers}
 coaching_worker = CoachingDeliveryWorker(
     store, channels, admission_check=coach_readiness.complete
 )
@@ -81,8 +83,17 @@ bot_username: str | None = None
 
 
 async def _recover_pending_handoffs() -> None:
-    """Recovery uses the same recipient lock as webhook Turns, without recursive locking."""
-    await handlers.handoffs.recover(update_coordinator.serializer)
+    """Recovery uses the same recipient lock as webhook Turns, without recursive locking.
+
+    Each channel's controller recovers only participants whose primary channel it is.
+    """
+    for channel_handlers in handlers_by_channel.values():
+        await channel_handlers.handoffs.recover(update_coordinator.serializer)
+
+
+async def _close_expired_modes() -> None:
+    for channel_handlers in handlers_by_channel.values():
+        await channel_handlers.turn_processor.modes.conversations.close_expired()
 
 
 async def _refresh_coach_admission():
@@ -93,7 +104,7 @@ async def _refresh_coach_admission():
 async def _maintain_modes():
     await run_isolated_steps([
         ("memory_prune", handlers.memory.service.prune),
-        ("close_expired_modes", handlers.turn_processor.modes.conversations.close_expired),
+        ("close_expired_modes", _close_expired_modes),
         ("handoff_recovery", _recover_pending_handoffs),
         ("coach_readiness", _refresh_coach_admission),
         ("coach_reconcile", coaching_worker.reconcile),
@@ -155,12 +166,18 @@ app.state.memory_service = handlers.memory.service
 
 
 async def _open_mode(user, mode_id, *, note=None):
-    """Dashboard Mode switch, under the same per-participant lock as webhook Turns."""
-    recipient = await channel.recipient_for(user)
+    """Dashboard Mode switch on the participant's primary channel, under the Turn lock."""
+    primary = channels.for_user(user)
+    if primary is None:
+        return None
+    recipient = await primary.recipient_for(user)
     if recipient is None:
         return None
+    primary_handlers = handlers_by_channel[primary.channel_id]
     async with update_coordinator.serializer.hold(participant_key(user)):
-        return await handlers.turn_processor.open_mode(recipient, user, mode_id, note=note)
+        return await primary_handlers.turn_processor.open_mode(
+            recipient, user, mode_id, note=note
+        )
 
 
 app.state.open_mode = _open_mode

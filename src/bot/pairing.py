@@ -11,7 +11,10 @@ from src.memory.store import MemoryStore
 logger = logging.getLogger(__name__)
 
 # Telegram deep links arrive as "/start pair_<token>"; other apps type "/pair <token>".
-_PAIRING_COMMAND = re.compile(r"^(?:/start pair_|/pair(?:\s+|$))(.*)$", re.DOTALL)
+# Near-misses such as "/PAIR x" or "/pair_x" still count, so a token never reaches the model.
+_PAIRING_COMMAND = re.compile(
+    r"^(?:/start pair_|/pair(?:[\s_]+|$))(.*)$", re.DOTALL | re.IGNORECASE
+)
 _INVALID_LINK = (
     "⚠️ The pairing link is invalid or has expired. "
     "Please request a new link from the dashboard."
@@ -24,6 +27,21 @@ def pairing_token(text: str) -> str | None:
     return match.group(1).strip() if match else None
 
 
+async def _second_app_allowed(store: MemoryStore, token: str) -> bool:
+    """Other apps join only an existing, activated, full-access account; never create one.
+
+    Without this, a token from the Telegram link could create an account whose only app is
+    another channel, and that account could then never pair Telegram (owner decision 31 Oct 2026).
+    """
+    from src.access import is_full_access_user
+
+    auth_id = await store.get_pairing_token_owner(token)
+    user = await store.get_user_by_auth_id(auth_id) if auth_id else None
+    if user is None or not is_full_access_user(user):
+        return False
+    return (await store.get_activation_state(auth_id)).get("completed") is True
+
+
 async def handle_pairing(
     chat_id: Recipient, token: str, store: MemoryStore, channel: MessageChannel,
     *, conversation: ConversationRef | None = None,
@@ -33,6 +51,18 @@ async def handle_pairing(
     if not re.fullmatch(rf"[0-9a-f]{{{PAIRING_TOKEN_HEX_LENGTH}}}", token):
         logger.warning("Pairing failed: malformed token channel=%s", channel.channel_id)
         await channel.send_message(chat_id=chat_id, conversation=conversation, text=_INVALID_LINK)
+        return
+
+    if channel.channel_id != "telegram" and not await _second_app_allowed(store, token):
+        logger.warning("Pairing refused: not a full-access account channel=%s", channel.channel_id)
+        await channel.send_message(
+            chat_id=chat_id,
+            conversation=conversation,
+            text=(
+                f"⚠️ {app} can only be added to an activated Amigo account with full access. "
+                "Connect Telegram from the dashboard first."
+            ),
+        )
         return
 
     result = await store.complete_channel_pairing(token, channel.channel_id, str(chat_id))

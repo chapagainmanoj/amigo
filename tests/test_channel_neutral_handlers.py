@@ -23,6 +23,8 @@ TOKEN = f"{7:032x}"
         (f"  /pair   {TOKEN}  ", TOKEN),
         ("/pair", ""),
         ("/start pair_not a token", "not a token"),
+        (f"/PAIR {TOKEN}", TOKEN),
+        (f"/pair_{TOKEN}", TOKEN),
         ("/pairing", None),
         ("pair me", None),
         ("/start", None),
@@ -48,6 +50,7 @@ def _handlers(store, channel):
 @pytest.fixture
 def open_access(monkeypatch):
     monkeypatch.setattr("src.config.settings.access_mode", "open")
+    monkeypatch.setattr("src.config.settings.allowed_telegram_chat_ids", "41501")
 
 
 async def test_second_app_pairs_with_typed_command_and_then_reaches_the_same_participant(
@@ -71,6 +74,29 @@ async def test_second_app_pairs_with_typed_command_and_then_reaches_the_same_par
     assert "/mode" in fake2.last_text
 
 
+async def test_other_apps_never_create_or_join_accounts_without_full_access(
+    open_access, monkeypatch
+):
+    store = FakeStore()
+    fake2 = FakeChannel(channel_id="fake2")
+    handlers = _handlers(store, fake2)
+    # No profile yet: a dashboard token (e.g. from the Telegram link) must not create one.
+    await store.acknowledge_activation_terms("auth-new", ACTIVATION_POLICY_VERSION)
+    await store.create_pairing_token(TOKEN, "auth-new", utc_now() + timedelta(minutes=10))
+    await handlers.handle_message("ext-1", f"/pair {TOKEN}", update_id=1)
+    assert "full access" in fake2.last_text
+    assert await store.get_user_by_auth_id("auth-new") is None
+    assert await store.get_pairing_token_owner(TOKEN) == "auth-new"  # not consumed
+
+    # An activated Telegram account without full access cannot add another app either.
+    monkeypatch.setattr("src.config.settings.allowed_telegram_chat_ids", "1")
+    user, auth_id = await _activated_telegram_user(store)
+    await store.create_pairing_token(f"{8:032x}", auth_id, utc_now() + timedelta(minutes=10))
+    await handlers.handle_message("ext-2", f"/PAIR {8:032x}", update_id=2)
+    assert "full access" in fake2.last_text
+    assert await store.list_channel_identities(user["user_id"]) == {"telegram": "41501"}
+
+
 async def test_telegram_chat_id_on_another_channel_is_not_that_participant(open_access):
     store = FakeStore()
     await _activated_telegram_user(store)
@@ -82,9 +108,10 @@ async def test_telegram_chat_id_on_another_channel_is_not_that_participant(open_
     assert "verified dashboard" in fake2.last_text
 
 
+@pytest.mark.parametrize("posture", ["allowlist", "registered", "invite"])
 @pytest.mark.parametrize(("full_access", "allowed"), [(True, True), (False, False)])
-async def test_allowlist_admits_other_apps_only_for_linked_full_access_accounts(
-    full_access, allowed
+async def test_every_posture_admits_other_apps_only_for_linked_full_access_accounts(
+    posture, full_access, allowed
 ):
     store = FakeStore()
     user, _ = await _activated_telegram_user(store)
@@ -92,7 +119,7 @@ async def test_allowlist_admits_other_apps_only_for_linked_full_access_accounts(
     handlers = _handlers(store, FakeChannel(channel_id="fake2"))
 
     with patch("src.config.settings") as settings:
-        settings.access_mode = "allowlist"
+        settings.access_mode = posture
         settings.allowed_telegram_chat_ids = "41501" if full_access else "1"
         assert await handlers._is_allowed("ext-9") is allowed
         assert await handlers._is_allowed("unlinked") is False

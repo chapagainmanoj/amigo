@@ -132,3 +132,26 @@ One participant uses Telegram and Discord on the same Amigo account:
 - Discord runs in the same web process, behind a `ChannelRegistry`.
 - Access is limited to full-access accounts, and Discord is off by default (`DISCORD_ENABLED`).
 - Start Phase 0 now. Stop for review after Phases 0 and 1.
+
+## Changes after the independent review (31 Oct 2026; `discord-phase0-1-independent-review.md`)
+- Fixed before Phase 2: S1–S5. See the review queue.
+- Hosting:
+  - `render.yaml` is the free plan, which sleeps when idle. An outbound gateway connection neither keeps it awake nor wakes it.
+  - Phase 6 needs always-on hosting (owner cost decision), or Discord DMs sent while it sleeps are lost.
+- Phase 2 adapter:
+  - Interactions: acknowledge with a deferred update *before* the claim RPC (Discord's limit is 3 seconds). The coordinator needs an
+    "ack first" option.
+  - Buttons: re-chunk into at most 5 per row and 5 rows (`/mode` puts every Mode in one row). `custom_id` lengths are fine.
+  - Intents: `dm_messages`. Ignore the bot's own messages. Cache DM channel ids. Turn off mentions in sends.
+  - Errors: map "cannot send to this user" (verify the error code) to a visible delivery failure.
+  - Splitting: split at 2000 characters without breaking Markdown, and record the last part's id as proof.
+  - Gateway resume can redeliver messages, and channel update claims deduplicate them by message id. Verify
+    `claim_channel_update` semantics for non-Telegram channels in all three Stores.
+- Pairing: the dashboard endpoint for a second app should issue channel-scoped tokens, only to full-access
+  accounts (Phase 3). The bot side already refuses everything else.
+- Decide in Phase 2: when the primary channel's adapter is down or not registered, Reminders and recovery wait pending, and
+  nothing warns the participant. Add an operator-visible signal.
+- Spike checks to verify:
+  - whether typed `/mode` arrives as plain text;
+  - whether the bot can DM a user who installed the app but shares no server;
+  - whether two gateway sessions overlap during a rolling deploy.

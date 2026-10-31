@@ -1848,6 +1848,17 @@ class MemoryStore:
         return result.data
 
     @_observe_database_call
+    async def get_pairing_token_owner(self, token: str) -> str | None:
+        """The auth id behind a usable Pairing token, without consuming it."""
+        result = await (
+            self.db.table("pairing_tokens").select("supabase_auth_id")
+            .eq("token", token).eq("consumed", False).is_("invalidated_at", "null")
+            .gt("expires_at", utc_now().replace(tzinfo=UTC).isoformat())
+            .maybe_single().execute()
+        )
+        return result.data["supabase_auth_id"] if result and result.data else None
+
+    @_observe_database_call
     async def complete_channel_pairing(self, token: str, channel: str, external_id: str) -> dict:
         """Link a messaging app to the token's account (`complete_pairing_v2`)."""
         validate_identity(channel, external_id)

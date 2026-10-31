@@ -379,8 +379,11 @@ async def test_memory_store_completes_pairing_through_atomic_rpc():
     ]
 
 
-async def test_pairing_adopts_incoming_daily_without_creating_topic():
+async def test_pairing_adopts_incoming_daily_without_creating_topic(monkeypatch):
     from unittest.mock import AsyncMock
+
+    # Topic adoption, not access: the second-app gate has its own tests.
+    monkeypatch.setattr("src.bot.pairing._second_app_allowed", AsyncMock(return_value=True))
 
     from src.channels.base import ConversationRef
 

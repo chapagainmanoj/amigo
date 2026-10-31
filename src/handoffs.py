@@ -216,10 +216,15 @@ class HandoffController:
             ])
 
     def _recovered_elsewhere(self, user) -> bool:
+        """Another controller (or another process) owns this participant's recovery.
+
+        When the primary channel does not run here, the row stays pending, as a Reminder does,
+        rather than going out on a channel the participant did not choose.
+        """
         if self.channels is None:
             return False
         primary = self.channels.for_user(user)
-        return primary is not None and primary is not self.channel
+        return primary is None or primary.channel_id != self.channel.channel_id
 
     async def _recover_execution(self, serializer, pending):
         user = await self.store.get_user_by_id(pending["user_id"])

@@ -21,7 +21,9 @@ messaging app cannot hold a participant, and one participant cannot use two apps
   (Reminders, recovery summaries, Coaching nudges) go; `src/channels/delivery.py` holds the rule.
   It must name a channel the participant has linked (deferred foreign key). The participant chooses it
   on the dashboard; the choice is shown only when more than one channel is linked. Handoff replies and
-  notices stay with the conversation's own channel.
+  notices stay with the conversation's own channel. Crash recovery of a handoff is unprompted, so it
+  follows the primary channel, like a Reminder. Handoffs do not record their channel (provisional,
+  31 Oct 2026).
 - **The recipient is resolved at delivery time** from the primary channel's identity. Outbox payloads stop
   being the source of the recipient. The drain passes the legacy `telegram_chat_id` key only as a
   scheduling hint, which delivery overrides, and migration 023 removes it from the producers.
@@ -58,5 +60,8 @@ messaging app cannot hold a participant, and one participant cannot use two apps
   (`access.is_full_access_user`, configured as Telegram chat ids), Telegram `/start` Pairing in
   `bot/pairing.py` (other adapters call `complete_channel_pairing`), the Activation "telegram" step,
   and `smoke_check.py --channel`.
+- Other apps join only an existing, activated, full-access account (owner decision, 31 Oct 2026).
+  Pairing on them never creates a profile, and full access stays an owner list of Telegram chats,
+  so there are no full-access accounts without Telegram.
 - Identity rows are deleted with the profile (`ON DELETE CASCADE`). Data exports do not list them,
   because external ids are never returned to the dashboard.

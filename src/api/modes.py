@@ -174,9 +174,9 @@ async def open_mode(
         note = template.note()
     opener = getattr(request.app.state, "open_mode", None)
     if opener is None:
-        raise HTTPException(status_code=503, detail="Telegram is not connected here")
+        raise HTTPException(status_code=503, detail="Messaging is not connected here")
     result = await opener(user, mode_id, note=note)
     if result is None:
-        raise HTTPException(status_code=409, detail="Connect Telegram first")
+        raise HTTPException(status_code=409, detail="Connect a messaging app first")
     opened, message = result
     return {"status": "opened" if opened else "refused", "message": message}
