@@ -105,3 +105,13 @@ async def test_telegram_channel_edit_buttons_converts_markup():
     button = kwargs["reply_markup"].inline_keyboard[0][0]
     assert button.text == "Skip"
     assert button.callback_data == "skip:1"
+
+
+async def test_cli_recipient_comes_from_its_own_channel_identity():
+    from src.memory.memory_store import InMemoryStore
+
+    store = InMemoryStore()
+    user = await store.create_user(12345)
+    store._identity_state.link(user["user_id"], "cli", "dev-1")
+    assert await CLIChannel(store).recipient_for(user) == "dev-1"
+    assert await CLIChannel().recipient_for(user) == "cli"

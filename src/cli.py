@@ -186,8 +186,8 @@ async def run_cli(onboard: bool = False, preview_modes: bool = False):
     _print_banner()
 
     # Wire components with in-memory store
-    channel = CLIChannel()
     store = InMemoryStore()
+    channel = CLIChannel(store)
     session_mgr = SessionManager(store)
     reminder_scheduler = ReminderScheduler(channel=channel, store=store)
     outbox_worker = SchedulerOutboxWorker(store, reminder_scheduler)

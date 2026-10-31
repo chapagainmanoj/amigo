@@ -30,7 +30,9 @@ class CLIChannel:
     channel_id = "cli"
     capabilities = ChannelCapabilities(actions=True, message_editing=True)
 
-    def __init__(self):
+    def __init__(self, store=None):
+        # Resolves this adapter's own address from channel identities (ADR 0004).
+        self._store = store
         # Last set of buttons sent, so the input loop can resolve "1" → callback_data
         self.pending_buttons: list[dict[str, str]] = []
         self._pending_message_id: int | None = None
@@ -127,4 +129,8 @@ class CLIChannel:
         ) == str(recipient)
 
     async def recipient_for(self, user: dict) -> str | int | None:
-        return user.get("telegram_chat_id") or user.get("chat_id") or "cli"
+        if self._store is not None and user.get("user_id"):
+            identities = await self._store.list_channel_identities(user["user_id"])
+            if self.channel_id in identities:
+                return identities[self.channel_id]
+        return user.get("chat_id") or "cli"
