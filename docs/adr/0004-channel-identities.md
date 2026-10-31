@@ -53,3 +53,9 @@ messaging app cannot hold a participant, and one participant cannot use two apps
   channel identities.
 - Migration 023 later removes the legacy RPCs, the payload key, the dual-writes and, eventually,
   `telegram_chat_id`.
+- Telegram-only on purpose, not transition debt: the full-access allowlist
+  (`access.is_full_access_user`, configured as Telegram chat ids), Telegram `/start` Pairing in
+  `bot/pairing.py` (other adapters call `complete_channel_pairing`), the Activation "telegram" step,
+  and `smoke_check.py --channel`.
+- Identity rows are deleted with the profile (`ON DELETE CASCADE`). Data exports do not list them,
+  because external ids are never returned to the dashboard.
