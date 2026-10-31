@@ -1066,7 +1066,7 @@ class InMemoryStore:
             raise ValueError("Task not found")
 
         user = self._users.get(user_id)
-        if not user or not user.get("telegram_chat_id"):
+        if not user:
             raise ValueError("User not found")
 
         effects = []
@@ -1130,7 +1130,7 @@ class InMemoryStore:
             "reminder_id": reminder_id,
             "payload": {
                 "scheduled_time": scheduled_time,
-                "telegram_chat_id": user["telegram_chat_id"],
+                "telegram_chat_id": user.get("telegram_chat_id"),
                 "task_title": task["title"],
             },
             "status": "pending",

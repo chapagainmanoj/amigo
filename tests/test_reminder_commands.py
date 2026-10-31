@@ -165,6 +165,29 @@ async def test_scheduler_failure_keeps_effect_for_safe_replay():
     assert len(scheduler.scheduled) == 1
 
 
+@pytest.mark.parametrize("store_factory", [FakeStore, InMemoryStore])
+async def test_participant_without_telegram_schedules_through_the_outbox(store_factory):
+    """Like RPC 006, the Stores need only a profile; the outbox carries no address."""
+    store = store_factory()
+    journeys = getattr(store, "_activation_journeys", None)
+    if journeys is None:
+        journeys = store.activation_journeys
+    journeys["auth-x"] = {"acknowledged_at": "2026-10-31T00:00:00+00:00"}
+    await store.create_pairing_token("tok", "auth-x", datetime(2099, 1, 1, tzinfo=UTC))
+    assert await store.complete_channel_pairing("tok", "fake2", "ext-1") == {"status": "paired"}
+    user = await store.get_user_by_channel_identity("fake2", "ext-1")
+    task = await store.create_task(user["user_id"], "Prepare report")
+    await ScheduleReminderCommand(store).run(
+        CommandContext(user["user_id"], "fake2", "schedule-no-telegram"),
+        task_id=task["task_id"],
+        schedule=SCHEDULE,
+    )
+    scheduler = FakeScheduler()
+    assert await SchedulerOutboxWorker(store, scheduler).drain_once() == 1
+    assert scheduler.scheduled[0]["chat_id"] is None
+    assert scheduler.scheduled[0]["task_title"] == "Prepare report"
+
+
 async def test_scheduler_effect_becomes_visible_poison_after_bounded_retries():
     store = FakeStore()
     user = await store.create_user(123)

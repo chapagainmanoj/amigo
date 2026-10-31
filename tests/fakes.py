@@ -1142,7 +1142,7 @@ class FakeStore:
             (item for item in self.users.values() if item["user_id"] == user_id),
             None,
         )
-        if not user or not user.get("telegram_chat_id"):
+        if not user:
             raise ValueError("User not found")
 
         effects = []
@@ -1208,7 +1208,7 @@ class FakeStore:
             "reminder_id": reminder_id,
             "payload": {
                 "scheduled_time": scheduled_time,
-                "telegram_chat_id": user["telegram_chat_id"],
+                "telegram_chat_id": user.get("telegram_chat_id"),
                 "task_title": task["title"],
             },
             "status": "pending",
