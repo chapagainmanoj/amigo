@@ -1186,3 +1186,24 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   `INVALIDATING_INPUT_PATHS` additions). Daily instructions, Tool docstrings and signatures, and the Tool schema are unchanged; this was verified
   by the independent review.
 - Open: run baseline + candidate together with the next Daily release candidate.
+
+## Channel identities, transition step 2 (code moves + migration 023), 31 Oct 2026
+
+- Commits: `ac1416f` (reconciliation joins carry only `primary_channel`; no address hint on jobs), `852e214` (fix:
+  InMemoryStore/FakeStore refused `schedule_reminder_command` for participants without Telegram, unlike RPC 006; the new
+  test failed on the old code), `4409044` (CLI `recipient_for` reads its own channel identity), the ADR 0004 docs commit
+  (intentionally Telegram-only paths; identities cascade on delete and are not exported), `599f379` (migration 023 + Store
+  sync), and the commit with fixes from the independent review.
+- Protected/notable files: `migrations/023_channel_neutral_producers.sql` (new), `src/schema.py` (23),
+  `tests/sql/app_schema_version.sql`, `.github/workflows/ci.yml`, `scripts/check_schema_chain.py` (`PREDECESSOR_GATES` now
+  includes 22 and 23; 22 was missing). `smoke_check.py`, `src/config.py` and `src/db/supabase.py` are untouched.
+- 023: three producers (006 schedule, 008 Later, 013 Activation) copied verbatim minus the `telegram_chat_id` payload line;
+  `list_pending_handoff_executions` dropped and recreated without the column or the profile join. `ModeState.pending_executions` lost
+  its `users` argument. The column, the mirror trigger and the v1 RPCs are kept for a later migration.
+- Independent review (subagent): `proposals/023-independent-review.md`. No blockers and no should-fix. Fixed: N1 (README warning), N2 (Later payload contents), N4
+  (separate guard errors; anon is checked). Open nits: N3 (no SQL test reads a real listing row), N5 (an unused variable is kept so the body stays verbatim).
+- Evidence: pytest 1802 passed; ruff clean; `smoke_check.py --scheduler` passes; Gate A `--validate-only` passes. The full CI SQL chain
+  001–023 ran on local PG15 with exit 0, and `check_schema_chain.py` and `check_activation_lock_order.py` pass. In a mutation check, restoring the 006
+  producer makes `assert_023` fail. No billed runs.
+- Gate A: no new reachable modules. The evidence is still stale because hashed Stores changed; rerun it with the next Daily release candidate (owner).
+- Owner, open: accept ADR 0004; apply 022 and deploy; apply 023 in a later release and deploy (never apply 022 and 023 together under schema-21 code).
