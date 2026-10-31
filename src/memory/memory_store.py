@@ -707,7 +707,7 @@ class InMemoryStore:
         return await self._mode_state.pending_failure_notices(limit)
 
     async def list_pending_handoff_executions(self, limit: int = 25) -> list[dict]:
-        return await self._mode_state.pending_executions(self._users.values(), limit)
+        return await self._mode_state.pending_executions(limit)
 
     async def get_memory_source_message(self, user_id: str, session_id: str) -> dict | None:
         session = self._sessions.get(session_id)
@@ -1130,7 +1130,6 @@ class InMemoryStore:
             "reminder_id": reminder_id,
             "payload": {
                 "scheduled_time": scheduled_time,
-                "telegram_chat_id": user.get("telegram_chat_id"),
                 "task_title": task["title"],
             },
             "status": "pending",

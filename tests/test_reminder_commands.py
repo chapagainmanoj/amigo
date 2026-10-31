@@ -167,7 +167,7 @@ async def test_scheduler_failure_keeps_effect_for_safe_replay():
 
 @pytest.mark.parametrize("store_factory", [FakeStore, InMemoryStore])
 async def test_participant_without_telegram_schedules_through_the_outbox(store_factory):
-    """Like RPC 006, the Stores need only a profile; the outbox carries no address."""
+    """Like RPC 006/023, the Stores need only a profile; the outbox carries no address."""
     store = store_factory()
     journeys = getattr(store, "_activation_journeys", None)
     if journeys is None:
@@ -182,6 +182,9 @@ async def test_participant_without_telegram_schedules_through_the_outbox(store_f
         task_id=task["task_id"],
         schedule=SCHEDULE,
     )
+    assert [set(effect["payload"]) for effect in _outbox(store).values()] == [
+        {"scheduled_time", "task_title"}
+    ]
     scheduler = FakeScheduler()
     assert await SchedulerOutboxWorker(store, scheduler).drain_once() == 1
     assert scheduler.scheduled[0]["chat_id"] is None

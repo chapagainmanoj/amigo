@@ -51,7 +51,6 @@ def apply_later_transition(
             replacement,
             {
                 "scheduled_time": scheduled_at,
-                "telegram_chat_id": user["telegram_chat_id"],
                 "task_title": task["title"],
             },
         ),

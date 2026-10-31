@@ -171,6 +171,8 @@ Where to get these:
 24. Run [`migrations/022_channel_identities.sql`](migrations/022_channel_identities.sql). Apply it
     immediately before deploying the matching code: the startup gate requires schema 22 exactly
     ([ADR 0004](docs/adr/0004-channel-identities.md)).
+25. Run [`migrations/023_channel_neutral_producers.sql`](migrations/023_channel_neutral_producers.sql)
+    in a later release, after 022 is live. Apply it immediately before deploying code that requires schema 23.
 
 Apply migrations in numeric order. Migrations 003 and 004 make Pairing backend-only and enforce
 the reviewed cross-tenant grants and row-level policies. Migration 005 adds canonical Task states
@@ -277,9 +279,9 @@ python scripts/run_gate_a_eval.py --validate-only
 ```
 
 Python tests use in-memory fakes and make no Supabase, Telegram, or Gemini calls. CI additionally
-is configured to apply every checked-in migration (001–022) to PostgreSQL 15 and run legacy
+is configured to apply every checked-in migration (001–023) to PostgreSQL 15 and run legacy
 backfill, two-participant isolation, durable command/outbox, Activation, Mode conversation/handoff,
-lock-order, channel-identity, and schema-chain regressions for the exact schema-22 startup gate. This is separate
+lock-order, channel-identity, and schema-chain regressions for the exact schema-23 startup gate. This is separate
 from staging and Supabase deployment evidence. See
 [`tests/fakes.py`](tests/fakes.py) for the shared test doubles.
 

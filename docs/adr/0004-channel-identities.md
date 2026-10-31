@@ -51,8 +51,9 @@ messaging app cannot hold a participant, and one participant cannot use two apps
   handoff listing, the scheduler join, and the `later` and Activation outbox payloads. Profiles without
   Telegram (created only by `complete_pairing_v2`) are not production-ready until those reads move to
   channel identities.
-- Migration 023 later removes the legacy RPCs, the payload key, the dual-writes and, eventually,
-  `telegram_chat_id`.
+- Migration 023 removes the outbox payload key from the three producers (006, 008, 013) and the
+  `telegram_chat_id` column from the 017 handoff listing. A later migration retires the legacy RPCs,
+  the dual-writes and, eventually, `telegram_chat_id`, once production runs on the v2 RPCs.
 - Telegram-only on purpose, not transition debt: the full-access allowlist
   (`access.is_full_access_user`, configured as Telegram chat ids), Telegram `/start` Pairing in
   `bot/pairing.py` (other adapters call `complete_channel_pairing`), the Activation "telegram" step,

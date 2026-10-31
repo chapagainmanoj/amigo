@@ -247,7 +247,6 @@ def create_test(
         "reminder_id": reminder_id,
         "payload": {
             "scheduled_time": scheduled_time,
-            "telegram_chat_id": user["telegram_chat_id"],
             "task_title": task["title"],
         },
         "status": "pending",

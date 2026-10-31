@@ -552,10 +552,9 @@ class LocalModeState:
                     if row.get("execution_failed_at") and not row.get("execution_failure_notice_at")
                     ][:max(1, min(limit, 100))]
 
-    async def pending_executions(self, users: Iterable[dict], limit: int) -> list[dict]:
+    async def pending_executions(self, limit: int) -> list[dict]:
         async with self.lock:
             now = await _time(utc_now())
-            profiles = {user["user_id"]: user for user in users}
             result = []
             for row in self.handoffs.values():
                 if (row["resolution"] != "confirmed" or row.get("executed_at")
@@ -565,7 +564,5 @@ class LocalModeState:
                     continue
                 result.append({"user_id": row["user_id"], "handoff_id": row["handoff_id"],
                                "execution_session_id": row.get("execution_session_id"),
-                               "target_mode_id": row["target_mode_id"],
-                               "telegram_chat_id": profiles.get(row["user_id"], {}).get(
-                                   "telegram_chat_id")})
+                               "target_mode_id": row["target_mode_id"]})
             return result[:max(1, min(limit, 100))]
