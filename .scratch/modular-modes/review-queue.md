@@ -1322,3 +1322,23 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   - **N9:** partly covered. Still untested: the lifespan failure branch and Supabase `get_pairing_token_owner`. The web component still has no runner.
 - Evidence: pytest 1849 passed; ruff clean; `smoke_check.py --scheduler` passes; Gate A `--validate-only` passes; web lint and build pass. The new tests fail on the
   pre-fix sources. No network calls to Discord. No billed runs.
+
+## Design: one access rule for other apps, and the registry owns delivery (codebase-design items 3 and 1)
+
+- **Item 3:** `src/access.py` gains `OPEN_CHANNELS` and `may_use_channel(user, channel_id)`. It replaced 4 copies of the rule ("other apps only for linked
+  full-access accounts"):
+  - `handlers._is_allowed`, the non-open-channel branch
+  - `pairing._second_app_allowed`, which now takes the channel id
+  - `api/channels._connectable`
+  - delivery
+- **Item 1:** `src/channels/delivery.py` is deleted; it failed the deletion test. `ChannelRegistry.for_user` (primary + ready + `may_use_channel`) and
+  `ChannelRegistry.address` (adapter + recipient) are now the one delivery rule. The scheduler and the Coach worker call it directly.
+  `INVALIDATING_INPUT_PATHS` drops `delivery.py`; the currency test passes.
+- Behavior change (fixes open nit N2): an account that loses full access stops receiving proactive messages on Discord. They wait pending, and there is no fallback to
+  Telegram. This is provisional; the owner may prefer falling back to Telegram.
+- Tests:
+  - The routing tests in `test_mode_delivery.py` and `test_channel_registry.py` allow any app through an autouse fixture, because they test routing, not access.
+  - A new N2 test runs the real rule. With the access check removed from `for_user`, it fails.
+- Protected file: `scripts/smoke_check.py`. The SmokeChannel id is now `cli` (local, in-process); `smoke` would have been refused by the access rule.
+  The smoke check passes both before and after the change.
+- Evidence: pytest 1851 passed; ruff clean; `smoke_check.py --scheduler` passes; Gate A `--validate-only` passes. No billed runs.
