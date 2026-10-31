@@ -277,3 +277,35 @@ async def test_button_presses_are_acknowledged_before_the_claim(monkeypatch):
     assert order == ["ack", "claim"]
     handlers.handle_callback.assert_awaited_once()
     assert handlers.handle_callback.call_args.kwargs["data"] == "done:r1"
+
+
+async def test_turns_from_telegram_and_discord_for_one_participant_never_overlap():
+    import asyncio
+
+    store = FakeStore()
+    user = await store.create_user(61003)
+    store._identity_state.link(user["user_id"], "discord", "555")
+    telegram = ChannelUpdateCoordinator(store)
+    discord_coordinator = ChannelUpdateCoordinator(
+        store, telegram.serializer, channel_id="discord"
+    )
+    active, overlaps, entered = [], [], asyncio.Event()
+
+    async def turn(name):
+        if active:
+            overlaps.append(name)
+        active.append(name)
+        entered.set()
+        await asyncio.sleep(0.01)
+        active.remove(name)
+
+    first = asyncio.create_task(telegram.run(
+        update_id=1, chat_id=61003, update_kind="message", process=lambda: turn("telegram"),
+    ))
+    await entered.wait()
+    second = asyncio.create_task(discord_coordinator.run(
+        update_id=2, chat_id="555", update_kind="message", process=lambda: turn("discord"),
+    ))
+    results = await asyncio.gather(first, second)
+    assert [result.outcome for result in results] == ["completed", "completed"]
+    assert overlaps == []
