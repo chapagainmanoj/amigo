@@ -165,6 +165,8 @@ class DiscordChannel:
     def _build_client(self) -> discord.Client:
         intents = discord.Intents.none()
         intents.dm_messages = True  # DM content needs no privileged message-content intent.
+        # Not privileged and carries no message content; discord.py's state cache expects it.
+        intents.guilds = True
         client = discord.Client(intents=intents, allowed_mentions=discord.AllowedMentions.none())
 
         @client.event
