@@ -1,6 +1,6 @@
 """Application schema-version contract enforced before external side effects start."""
 
-EXPECTED_SCHEMA_VERSION = 23
+EXPECTED_SCHEMA_VERSION = 24
 
 
 class SchemaVersionMismatchError(RuntimeError):

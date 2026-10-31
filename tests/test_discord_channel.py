@@ -183,7 +183,9 @@ async def _two_app_process(monkeypatch):
     store = FakeStore()
     await store.acknowledge_activation_terms("auth-61002", ACTIVATION_POLICY_VERSION)
     user = await store.create_user(61002)
-    await store.update_user(user["user_id"], {"supabase_auth_id": "auth-61002"})
+    await store.update_user(
+        user["user_id"], {"supabase_auth_id": "auth-61002", "onboarding_complete": True}
+    )
     store.get_activation_state = AsyncMock(return_value={"completed": True})
     telegram, discord_channel = FakeChannel(), _discord(store)
     registry = ChannelRegistry([telegram, discord_channel])

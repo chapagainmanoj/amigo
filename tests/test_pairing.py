@@ -390,6 +390,11 @@ async def test_pairing_adopts_incoming_daily_without_creating_topic(monkeypatch)
     store, channel = FakeStore(), FakeChannel(threads=True, channel_id="fake")
     auth_id = str(uuid.uuid4())
     await _acknowledge(store, auth_id)
+    # A second app joins an existing, activated account (024).
+    existing = await store.create_user(9043)
+    await store.update_user(
+        existing["user_id"], {"supabase_auth_id": auth_id, "onboarding_complete": True}
+    )
     await store.create_pairing_token(_token(43), auth_id, utc_now() + timedelta(minutes=15))
     incoming = ConversationRef("fake", {"chat_id": 6043, "conversation_id": 43})
     channel.create_conversation = AsyncMock(wraps=channel.create_conversation)

@@ -37,7 +37,9 @@ def test_pairing_token_accepts_deep_link_and_typed_command(text, token):
 async def _activated_telegram_user(store, chat_id=41501, auth_id="auth-41501"):
     await store.acknowledge_activation_terms(auth_id, ACTIVATION_POLICY_VERSION)
     user = await store.create_user(chat_id)
-    await store.update_user(user["user_id"], {"supabase_auth_id": auth_id})
+    await store.update_user(user["user_id"], {
+        "supabase_auth_id": auth_id, "onboarding_complete": True,
+    })
     return user, auth_id
 
 
@@ -132,3 +134,15 @@ async def test_expired_or_unknown_code_on_another_app_says_the_link_is_invalid(o
     fake2 = FakeChannel(channel_id="fake2")
     await _handlers(store, fake2).handle_message("ext-3", f"/pair {9:032x}", update_id=1)
     assert "invalid or has expired" in fake2.last_text
+
+
+async def test_database_guard_refusal_reaches_the_participant(open_access, monkeypatch):
+    """024: even past the bot's own check, the Store refuses to create an account."""
+    monkeypatch.setattr("src.bot.pairing._second_app_allowed", AsyncMock(return_value=True))
+    store = FakeStore()
+    await store.acknowledge_activation_terms("auth-none", ACTIVATION_POLICY_VERSION)
+    await store.create_pairing_token(TOKEN, "auth-none", utc_now() + timedelta(minutes=10))
+    fake2 = FakeChannel(channel_id="fake2")
+    await _handlers(store, fake2).handle_message("ext-4", f"/pair {TOKEN}", update_id=1)
+    assert "full access" in fake2.last_text
+    assert await store.get_user_by_auth_id("auth-none") is None

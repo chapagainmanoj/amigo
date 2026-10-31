@@ -174,6 +174,9 @@ Where to get these:
 25. Run [`migrations/023_channel_neutral_producers.sql`](migrations/023_channel_neutral_producers.sql)
     in a later release, after 022 is live. Apply it immediately before deploying code that requires schema 23.
     Never apply 022 and 023 together under schema-21 code: that code reads the payload key strictly.
+26. Run [`migrations/024_second_app_pairing_requires_account.sql`](migrations/024_second_app_pairing_requires_account.sql)
+    after 023 is live, immediately before deploying code that requires schema 24
+    ([ADR 0006](docs/adr/0006-second-app-pairing-in-the-database.md)).
 
 Apply migrations in numeric order. Migrations 003 and 004 make Pairing backend-only and enforce
 the reviewed cross-tenant grants and row-level policies. Migration 005 adds canonical Task states
@@ -280,9 +283,9 @@ python scripts/run_gate_a_eval.py --validate-only
 ```
 
 Python tests use in-memory fakes and make no Supabase, Telegram, or Gemini calls. CI additionally
-is configured to apply every checked-in migration (001–023) to PostgreSQL 15 and run legacy
+is configured to apply every checked-in migration (001–024) to PostgreSQL 15 and run legacy
 backfill, two-participant isolation, durable command/outbox, Activation, Mode conversation/handoff,
-lock-order, channel-identity, and schema-chain regressions for the exact schema-23 startup gate. This is separate
+lock-order, channel-identity, and schema-chain regressions for the exact schema-24 startup gate. This is separate
 from staging and Supabase deployment evidence. See
 [`tests/fakes.py`](tests/fakes.py) for the shared test doubles.
 

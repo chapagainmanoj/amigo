@@ -89,6 +89,8 @@ jobs:
             -f tests/sql/assert_022_channel_identities.sql \
             -f migrations/023_channel_neutral_producers.sql \
             -f tests/sql/assert_023_channel_neutral_producers.sql \
+            -f migrations/024_second_app_pairing_requires_account.sql \
+            -f tests/sql/assert_024_second_app_pairing_requires_account.sql \
             -f tests/sql/app_schema_version.sql
 
       - name: Prove the Activation functions cannot deadlock

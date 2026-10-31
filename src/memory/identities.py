@@ -215,6 +215,10 @@ class LocalIdentityState:
             )
             owner_id = owner["user_id"] if owner else None
         else:
+            # 024 (ADR 0006): other apps only join an existing, activated account.
+            activated = bool(auth_user) and auth_user.get("onboarding_complete") is True
+            if channel != "cli" and not activated:
+                return {"status": "account_required"}
             owner_id = self.owner(channel, external_id)
             owner = next((u for u in users if u["user_id"] == owner_id), None)
         if owner and auth_user and owner["user_id"] == auth_user["user_id"]:

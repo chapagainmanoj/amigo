@@ -40,13 +40,19 @@ async def test_telegram_users_get_a_mirrored_identity_and_telegram_primary(store
     assert await store.get_user_by_channel_identity("telegram", "41001") is None
 
 
-async def test_first_app_without_telegram_creates_profile_with_that_primary(store):
+async def test_other_apps_never_create_accounts_but_the_local_cli_may(store):
+    """024 (ADR 0006): only Telegram (Activation) and the local CLI are first apps."""
     auth = str(uuid.uuid4())
-    assert await store.complete_channel_pairing(
-        await _token(store, auth), "fake2", "ext-1"
-    ) == {"status": "paired"}
-    user = await store.get_user_by_channel_identity("fake2", "ext-1")
-    assert user["primary_channel"] == "fake2"
+    token = await _token(store, auth)
+    assert await store.complete_channel_pairing(token, "fake2", "ext-1") == {
+        "status": "account_required"
+    }
+    tokens = getattr(store, "_pairing_tokens", None) or store.pairing_tokens
+    assert tokens[token]["consumed"] is False
+    assert await store.get_user_by_auth_id(auth) is None
+    assert await store.complete_channel_pairing(token, "cli", "ext-1") == {"status": "paired"}
+    user = await store.get_user_by_channel_identity("cli", "ext-1")
+    assert user["primary_channel"] == "cli"
     assert user["telegram_chat_id"] is None
     assert user["supabase_auth_id"] == auth
     assert await store.get_user_by_auth_id(auth) is not None
@@ -57,6 +63,10 @@ async def test_second_app_links_to_existing_profile_and_primary_stays(store):
     user = await store.create_user(41010)
     await store.update_user(user["user_id"], {"supabase_auth_id": auth})
     token = await _token(store, auth)
+    assert await store.complete_channel_pairing(token, "fake2", "ext-10") == {
+        "status": "account_required"  # 024: the account must have finished Activation
+    }
+    await store.update_user(user["user_id"], {"onboarding_complete": True})
     assert await store.complete_channel_pairing(token, "fake2", "ext-10") == {"status": "paired"}
     assert await store.complete_channel_pairing(token, "fake2", "ext-10") == {
         "status": "invalid_token"
@@ -72,24 +82,24 @@ async def test_second_app_links_to_existing_profile_and_primary_stays(store):
 
 async def test_telegram_as_second_app_links_instead_of_conflicting(store):
     auth = str(uuid.uuid4())
-    await store.complete_channel_pairing(await _token(store, auth), "fake2", "ext-20")
+    await store.complete_channel_pairing(await _token(store, auth), "cli", "ext-20")
     user = await store.get_user_by_auth_id(auth)
     assert await store.complete_pairing(await _token(store, auth), 41020) == {"status": "paired"}
     assert (await store.get_user_by_chat_id(41020))["user_id"] == user["user_id"]
     assert await store.list_channel_identities(user["user_id"]) == {
-        "fake2": "ext-20", "telegram": "41020",
+        "cli": "ext-20", "telegram": "41020",
     }
 
 
 async def test_pairing_conflicts_keep_the_token_and_identities(store):
     owner, other = str(uuid.uuid4()), str(uuid.uuid4())
-    await store.complete_channel_pairing(await _token(store, owner), "fake2", "ext-30")
+    await store.complete_channel_pairing(await _token(store, owner), "cli", "ext-30")
     token = await _token(store, other)
-    assert await store.complete_channel_pairing(token, "fake2", "ext-30") == {"status": "conflict"}
+    assert await store.complete_channel_pairing(token, "cli", "ext-30") == {"status": "conflict"}
     tokens = getattr(store, "_pairing_tokens", None) or store.pairing_tokens
     assert tokens[token]["consumed"] is False
     assert await store.complete_channel_pairing(
-        await _token(store, owner), "fake2", "ext-31"
+        await _token(store, owner), "cli", "ext-31"
     ) == {"status": "conflict"}
     # An unlinked legacy Telegram profile plus a signed-in profile are two people: no merge.
     await store.create_user(41030)
@@ -110,7 +120,9 @@ async def test_malformed_identities_are_rejected(store, channel, external_id):
 async def test_primary_channel_must_be_linked(store):
     auth = str(uuid.uuid4())
     user = await store.create_user(41040)
-    await store.update_user(user["user_id"], {"supabase_auth_id": auth})
+    await store.update_user(user["user_id"], {
+        "supabase_auth_id": auth, "onboarding_complete": True,
+    })
     await store.complete_channel_pairing(await _token(store, auth), "fake2", "ext-40")
     assert await store.set_primary_channel(user["user_id"], "fake2") == "fake2"
     with pytest.raises(ChannelNotLinkedError):

@@ -164,10 +164,11 @@ async def test_reconciliation_schedules_on_the_primary_channel_only():
 async def test_profile_without_telegram_is_scheduled_and_delivered_on_its_own_channel():
     """A participant whose only app is fake2 (no telegram_chat_id) still gets Reminders."""
     store = FakeStore()
-    auth = "auth-no-telegram"
-    store.activation_journeys.setdefault(auth, {"acknowledged_at": utc_now().isoformat()})
-    await store.create_pairing_token("tok", auth, utc_now() + timedelta(minutes=10))
-    assert await store.complete_channel_pairing("tok", "fake2", "ext-1") == {"status": "paired"}
+    # A profile without Telegram (only the local CLI can create one since 024; the shape matters).
+    store._insert_user(
+        {"supabase_auth_id": "auth-no-telegram", "primary_channel": "fake2"},
+        identity=("fake2", "ext-1"),
+    )
     user = await store.get_user_by_channel_identity("fake2", "ext-1")
     assert user["telegram_chat_id"] is None
     task = await store.create_task(user["user_id"], "Test task")

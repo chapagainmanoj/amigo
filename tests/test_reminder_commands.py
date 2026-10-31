@@ -174,11 +174,12 @@ async def test_participant_without_telegram_schedules_through_the_outbox(store_f
         journeys = store.activation_journeys
     journeys["auth-x"] = {"acknowledged_at": "2026-10-31T00:00:00+00:00"}
     await store.create_pairing_token("tok", "auth-x", datetime(2099, 1, 1, tzinfo=UTC))
-    assert await store.complete_channel_pairing("tok", "fake2", "ext-1") == {"status": "paired"}
-    user = await store.get_user_by_channel_identity("fake2", "ext-1")
+    # The local CLI is the one non-Telegram first app (024); its profile has no Telegram.
+    assert await store.complete_channel_pairing("tok", "cli", "ext-1") == {"status": "paired"}
+    user = await store.get_user_by_channel_identity("cli", "ext-1")
     task = await store.create_task(user["user_id"], "Prepare report")
     await ScheduleReminderCommand(store).run(
-        CommandContext(user["user_id"], "fake2", "schedule-no-telegram"),
+        CommandContext(user["user_id"], "cli", "schedule-no-telegram"),
         task_id=task["task_id"],
         schedule=SCHEDULE,
     )

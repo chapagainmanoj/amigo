@@ -21,6 +21,13 @@ _INVALID_LINK = (
 )
 
 
+def _refusal(app: str) -> str:
+    return (
+        f"⚠️ {app} can only be added to an activated Amigo account with full access. "
+        "Connect Telegram from the dashboard first."
+    )
+
+
 def pairing_token(text: str) -> str | None:
     """The token of a pairing command, or None when the text is not one."""
     match = _PAIRING_COMMAND.match(text.strip())
@@ -61,14 +68,7 @@ async def handle_pairing(
         store, token, channel.channel_id
     ):
         logger.warning("Pairing refused: not a full-access account channel=%s", channel.channel_id)
-        await channel.send_message(
-            chat_id=chat_id,
-            conversation=conversation,
-            text=(
-                f"⚠️ {app} can only be added to an activated Amigo account with full access. "
-                "Connect Telegram from the dashboard first."
-            ),
-        )
+        await channel.send_message(chat_id=chat_id, conversation=conversation, text=_refusal(app))
         return
 
     result = await store.complete_channel_pairing(token, channel.channel_id, str(chat_id))
@@ -77,6 +77,12 @@ async def handle_pairing(
     if status == "invalid_token":
         logger.warning("Pairing failed: invalid token channel=%s", channel.channel_id)
         await channel.send_message(chat_id=chat_id, conversation=conversation, text=_INVALID_LINK)
+        return
+
+    if status == "account_required":
+        # The database's own guard (024); the bot normally refuses before reaching it.
+        logger.warning("Pairing refused: account required channel=%s", channel.channel_id)
+        await channel.send_message(chat_id=chat_id, conversation=conversation, text=_refusal(app))
         return
 
     if status == "conflict":
