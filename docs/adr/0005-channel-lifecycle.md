@@ -31,14 +31,15 @@ Implementations:
   returned bot name, and webhook registration stays there. `close()` does nothing, because the webhook is
   deliberately left registered.
 - Discord: `start()` and `close()` stay as they are.
-- CLI and fakes: always ready, with no-op `start()` and `close()`.
+- CLI, fakes and `SmokeChannel` (`scripts/smoke_check.py`): always ready, with no-op `start()` and
+  `close()`.
 
 Provider-specific ingress stays inside each adapter and outside the protocol: Telegram's `decode_update` and
 `acknowledge_callback`, and Discord's gateway events.
 
 ## Consequences
 
-- Five implementations change: TelegramChannel, DiscordChannel, CLIChannel, FakeChannel, and both
-  FailingChannels through FakeChannel. AGENTS.md lists them.
+- Six implementations change: TelegramChannel, DiscordChannel, CLIChannel, FakeChannel, SmokeChannel,
+  and both FailingChannels through FakeChannel. AGENTS.md lists them.
 - Callers use the attributes directly; the `getattr`/`hasattr` fallbacks go.
 - `default_conversation_resolver` stays a Telegram-only hook. Only Telegram threads use it.

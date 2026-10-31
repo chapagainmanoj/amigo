@@ -23,7 +23,7 @@ from src.channels.registry import ChannelRegistry
 from src.memory.sessions import SessionManager
 from src.scheduler.reminders import ReminderScheduler
 from src.utils import utc_now
-from tests.fakes import FakeChannel, FakeStore
+from tests.fakes import FakeChannel, FakeStore, complete_activation
 
 _ids = itertools.count(9_000_000_000_000_000)
 
@@ -186,6 +186,7 @@ async def _two_app_process(monkeypatch):
     await store.update_user(
         user["user_id"], {"supabase_auth_id": "auth-61002", "onboarding_complete": True}
     )
+    await complete_activation(store, "auth-61002")
     store.get_activation_state = AsyncMock(return_value={"completed": True})
     telegram, discord_channel = FakeChannel(), _discord(store)
     registry = ChannelRegistry([telegram, discord_channel])

@@ -195,6 +195,7 @@ class LocalIdentityState:
         *,
         users: Iterable[dict],
         tokens: dict[str, dict],
+        journeys: dict[str, dict],
         token: str,
         channel: str,
         external_id: str,
@@ -215,8 +216,8 @@ class LocalIdentityState:
             )
             owner_id = owner["user_id"] if owner else None
         else:
-            # 024 (ADR 0006): other apps only join an existing, activated account.
-            activated = bool(auth_user) and auth_user.get("onboarding_complete") is True
+            # 024 (ADR 0006): other apps only join an existing account whose Activation is complete.
+            activated = bool(auth_user) and bool((journeys.get(auth_id) or {}).get("completed_at"))
             if channel != "cli" and not activated:
                 return {"status": "account_required"}
             owner_id = self.owner(channel, external_id)

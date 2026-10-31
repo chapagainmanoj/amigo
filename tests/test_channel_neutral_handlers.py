@@ -10,7 +10,7 @@ from src.bot.handlers import BotHandlers
 from src.bot.pairing import pairing_token
 from src.memory.sessions import SessionManager
 from src.utils import utc_now
-from tests.fakes import FakeChannel, FakeScheduler, FakeStore
+from tests.fakes import FakeChannel, FakeScheduler, FakeStore, complete_activation
 
 TOKEN = f"{7:032x}"
 
@@ -40,6 +40,7 @@ async def _activated_telegram_user(store, chat_id=41501, auth_id="auth-41501"):
     await store.update_user(user["user_id"], {
         "supabase_auth_id": auth_id, "onboarding_complete": True,
     })
+    await complete_activation(store, auth_id)
     return user, auth_id
 
 

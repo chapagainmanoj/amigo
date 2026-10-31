@@ -1783,7 +1783,8 @@ class InMemoryStore:
         """Link a messaging app to the token's account; mirrors `complete_pairing_v2`."""
         return self._identity_state.complete_pairing(
             users=self._users.values(), tokens=self._pairing_tokens, token=token,
-            channel=channel, external_id=external_id, insert_user=self._insert_user,
+            journeys=self._activation_journeys, channel=channel, external_id=external_id,
+            insert_user=self._insert_user,
         )
 
     # ── Dashboard-first Activation Journey ──

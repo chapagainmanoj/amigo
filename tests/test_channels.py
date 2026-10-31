@@ -121,17 +121,31 @@ def test_every_adapter_declares_the_channel_lifecycle():
     """ADR 0005: ready, connect_link, start and close are part of MessageChannel."""
     import inspect
 
+    from scripts.smoke_check import SmokeChannel
     from src.channels.discord import DiscordChannel
     from src.channels.telegram import TelegramChannel
     from tests.fakes import FakeChannel, FakeStore
 
     adapters = [
         TelegramChannel(token="unused"), CLIChannel(),
-        DiscordChannel(FakeStore(), token="unused"), FakeChannel(),
+        DiscordChannel(FakeStore(), token="unused"), FakeChannel(), SmokeChannel(),
     ]
     for adapter in adapters:
         assert isinstance(adapter.ready, bool), adapter
         assert adapter.connect_link is None or isinstance(adapter.connect_link, str)
         assert inspect.iscoroutinefunction(adapter.start), adapter
         assert inspect.iscoroutinefunction(adapter.close), adapter
-    assert [adapter.ready for adapter in adapters] == [True, True, False, True]
+    assert [adapter.ready for adapter in adapters] == [True, True, False, True, True]
+
+
+async def test_telegram_start_initializes_the_bot(monkeypatch):
+    """ADR 0005: Telegram's start() is its initialize()."""
+    from unittest.mock import AsyncMock
+
+    from src.channels.telegram import TelegramChannel
+
+    channel = TelegramChannel(token="unused")
+    channel.initialize = AsyncMock(return_value="amigo_bot")
+    monkeypatch.setattr("src.config.settings.app_env", "production")
+    await channel.start()
+    channel.initialize.assert_awaited_once_with(production=True)

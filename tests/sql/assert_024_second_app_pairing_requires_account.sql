@@ -10,7 +10,9 @@ BEGIN
          ('t024-b', pending, now() + interval '10 minutes'),
          ('t024-c', pending, now() + interval '10 minutes'),
          ('t024-d', local_auth, now() + interval '10 minutes'),
-         ('t024-e', fresh, now() + interval '10 minutes');
+         ('t024-e', fresh, now() + interval '10 minutes'),
+         ('t024-f', pending, now() + interval '10 minutes'),
+         ('t024-g', pending, now() + interval '10 minutes');
 
  -- No profile: another app never creates one, and the token survives.
  r := public.complete_pairing_v2('t024-a', 'fake2', 'ext-024a');
@@ -24,13 +26,31 @@ BEGIN
   VALUES (91024001, pending) RETURNING user_id INTO u;
  IF public.complete_pairing_v2('t024-b', 'fake2', 'ext-024b')->>'status' <> 'account_required'
  THEN RAISE EXCEPTION '024 linked an unactivated account'; END IF;
+ -- onboarding_complete alone (legacy bot onboarding) is not Activation.
  UPDATE public.user_profiles SET onboarding_complete = TRUE WHERE user_id = u;
+ IF public.complete_pairing_v2('t024-b', 'fake2', 'ext-024b')->>'status' <> 'account_required'
+ THEN RAISE EXCEPTION '024 trusted onboarding_complete without a completed Activation'; END IF;
+ INSERT INTO public.activation_journeys(auth_id, policy_version, acknowledged_at, completed_at)
+  VALUES (pending, '2026-10-23', now(), now());
  -- Call first: a subquery in the same statement would not see the function's insert.
  r := public.complete_pairing_v2('t024-c', 'fake2', 'ext-024b');
  IF r->>'status' <> 'paired'
   OR NOT EXISTS (SELECT 1 FROM public.channel_identities
     WHERE user_id = u AND channel = 'fake2' AND external_id = 'ext-024b')
  THEN RAISE EXCEPTION '024 refused an activated account'; END IF;
+
+ -- Guard order: once linked, losing Activation refuses before already_paired, token kept.
+ UPDATE public.activation_journeys SET completed_at = NULL WHERE auth_id = pending;
+ r := public.complete_pairing_v2('t024-f', 'fake2', 'ext-024b');
+ IF r->>'status' <> 'account_required'
+  OR (SELECT consumed FROM public.pairing_tokens WHERE token = 't024-f')
+ THEN RAISE EXCEPTION '024 guard ran after already_paired'; END IF;
+ -- A second fake2 address for an activated account is a conflict and keeps the token.
+ UPDATE public.activation_journeys SET completed_at = now() WHERE auth_id = pending;
+ r := public.complete_pairing_v2('t024-g', 'fake2', 'ext-024z');
+ IF r->>'status' <> 'conflict'
+  OR (SELECT consumed FROM public.pairing_tokens WHERE token = 't024-g')
+ THEN RAISE EXCEPTION '024 conflict consumed the token or linked twice'; END IF;
 
  -- The local CLI is still a first app; Telegram still creates through 015.
  r := public.complete_pairing_v2('t024-d', 'cli', 'dev-024');

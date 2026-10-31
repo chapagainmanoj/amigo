@@ -6,11 +6,10 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from src.activation import ACTIVATION_POLICY_VERSION
 from src.api.channels import router
 from src.auth import get_authenticated_user_id
 from src.memory.memory_store import InMemoryStore
-from tests.fakes import FakeStore
+from tests.fakes import FakeStore, complete_activation
 from tests.test_modes import _participant
 
 
@@ -68,7 +67,7 @@ async def test_full_access_accounts_get_a_pair_code_for_running_unlinked_apps(
     owner = await _participant(store, 931101)
     trial = await _participant(store, 931102)
     for auth_id in (owner["supabase_auth_id"], trial["supabase_auth_id"]):
-        await store.acknowledge_activation_terms(auth_id, ACTIVATION_POLICY_VERSION)
+        await complete_activation(store, auth_id)
     store.get_activation_state = AsyncMock(return_value={"completed": True})
     discord = FakeChannel(channel_id="discord")
     discord.connect_link = "https://discord.example/install"

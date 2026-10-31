@@ -19,14 +19,20 @@ account whose only app is not Telegram, and that account can never pair Telegram
   dashboard account has no profile, or its Activation is not complete, the function returns
   `{"status": "account_required"}` without consuming the token. It never inserts a profile for those
   channels.
+  - "Activation complete" means `activation_journeys.completed_at` is set (013), the same record the bot
+    checks through `get_activation_state`. `user_profiles.onboarding_complete` is not used, because the
+    legacy bot onboarding set it for profiles that never had a dashboard Activation.
+  - The rule runs before `already_paired` and `conflict`, so an account that is not activated gets
+    the same answer whatever its links are.
   - Telegram keeps creating profiles through Activation, as before.
   - `cli` is the local development app: it only ever runs on the in-memory Stores, and it is the first app
-    for its fixture.
+    for its fixture. The exemption is safe in the database because only `service_role` may call the
+    function.
 - InMemoryStore and FakeStore mirror the same rule.
 - The full-access part of the rule stays in the application (`access.may_use_channel`). Full access is
   owner configuration (`ALLOWED_TELEGRAM_CHAT_IDS`), not data, so the database can't enforce it.
   `get_pairing_token_owner` therefore stays.
-- The bot maps `account_required` to the same refusal it sends today.
+- The bot maps `account_required` to the same refusal it sends today. Nothing else reads the status yet.
 
 ## Consequences
 

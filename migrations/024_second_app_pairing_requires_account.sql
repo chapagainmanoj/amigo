@@ -50,9 +50,14 @@ BEGIN
   SELECT * INTO v_auth_user FROM public.user_profiles
     WHERE supabase_auth_id = v_token.supabase_auth_id FOR UPDATE;
   v_auth_exists := FOUND;
-  -- ADR 0006: apps other than Telegram (and the local cli) only join an existing, activated
-  -- account; they never create one. The token stays unconsumed so the dashboard can explain.
-  IF p_channel <> 'cli' AND (NOT v_auth_exists OR v_auth_user.onboarding_complete IS NOT TRUE) THEN
+  -- ADR 0006: apps other than Telegram (and the local cli) only join an existing account whose
+  -- dashboard Activation (013) is complete; they never create one. completed_at is the same record
+  -- the bot checks; onboarding_complete is not, because legacy bot onboarding also set it.
+  -- The token stays unconsumed, so it still works once Activation completes.
+  -- The cli exemption is safe because only service_role may call this function.
+  IF p_channel <> 'cli' AND (NOT v_auth_exists OR NOT EXISTS (
+       SELECT 1 FROM public.activation_journeys j
+       WHERE j.auth_id = v_token.supabase_auth_id AND j.completed_at IS NOT NULL)) THEN
     RETURN jsonb_build_object('status', 'account_required');
   END IF;
 

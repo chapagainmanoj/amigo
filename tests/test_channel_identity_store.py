@@ -11,7 +11,7 @@ from src.memory.identities import ChannelNotLinkedError
 from src.memory.memory_store import InMemoryStore
 from src.memory.store import MemoryStore
 from src.utils import utc_now
-from tests.fakes import FakeStore
+from tests.fakes import FakeStore, complete_activation
 
 
 @pytest.fixture(params=[InMemoryStore, FakeStore])
@@ -66,7 +66,7 @@ async def test_second_app_links_to_existing_profile_and_primary_stays(store):
     assert await store.complete_channel_pairing(token, "fake2", "ext-10") == {
         "status": "account_required"  # 024: the account must have finished Activation
     }
-    await store.update_user(user["user_id"], {"onboarding_complete": True})
+    await complete_activation(store, auth)
     assert await store.complete_channel_pairing(token, "fake2", "ext-10") == {"status": "paired"}
     assert await store.complete_channel_pairing(token, "fake2", "ext-10") == {
         "status": "invalid_token"
@@ -78,6 +78,56 @@ async def test_second_app_links_to_existing_profile_and_primary_stays(store):
         "fake2": "ext-10", "telegram": "41010",
     }
     assert (await store.get_user_by_id(user["user_id"]))["primary_channel"] == "telegram"
+
+
+def _journeys(store):
+    return store.activation_journeys if hasattr(store, "activation_journeys") else (
+        store._activation_journeys
+    )
+
+
+def _consumed(store, token):
+    tokens = getattr(store, "_pairing_tokens", None) or store.pairing_tokens
+    return tokens[token]["consumed"]
+
+
+async def test_second_app_needs_completed_activation_not_the_legacy_flag(store):
+    """024 (ADR 0006): `onboarding_complete` alone, as legacy onboarding set it, is not enough."""
+    auth = str(uuid.uuid4())
+    user = await store.create_user(41011)
+    await store.update_user(
+        user["user_id"], {"supabase_auth_id": auth, "onboarding_complete": True}
+    )
+    token = await _token(store, auth)
+    assert await store.complete_channel_pairing(token, "fake2", "ext-11") == {
+        "status": "account_required"
+    }
+    assert _consumed(store, token) is False
+
+
+async def test_activation_guard_runs_before_already_paired_and_conflict(store):
+    auth = str(uuid.uuid4())
+    user = await store.create_user(41012)
+    await store.update_user(user["user_id"], {"supabase_auth_id": auth})
+    await complete_activation(store, auth)
+    assert await store.complete_channel_pairing(
+        await _token(store, auth), "fake2", "ext-12"
+    ) == {"status": "paired"}
+
+    _journeys(store)[auth]["completed_at"] = None
+    token = await _token(store, auth)
+    assert await store.complete_channel_pairing(token, "fake2", "ext-12") == {
+        "status": "account_required"
+    }
+    assert _consumed(store, token) is False
+
+    await complete_activation(store, auth)
+    token = await _token(store, auth)
+    assert await store.complete_channel_pairing(token, "fake2", "ext-other") == {
+        "status": "conflict"
+    }
+    assert _consumed(store, token) is False
+    assert (await store.list_channel_identities(user["user_id"]))["fake2"] == "ext-12"
 
 
 async def test_telegram_as_second_app_links_instead_of_conflicting(store):
@@ -123,6 +173,7 @@ async def test_primary_channel_must_be_linked(store):
     await store.update_user(user["user_id"], {
         "supabase_auth_id": auth, "onboarding_complete": True,
     })
+    await complete_activation(store, auth)
     await store.complete_channel_pairing(await _token(store, auth), "fake2", "ext-40")
     assert await store.set_primary_channel(user["user_id"], "fake2") == "fake2"
     with pytest.raises(ChannelNotLinkedError):

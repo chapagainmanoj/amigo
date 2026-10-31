@@ -50,6 +50,22 @@ from src.schema import EXPECTED_SCHEMA_VERSION, require_schema_version
 from src.utils import utc_now
 
 
+async def complete_activation(store, auth_id: str) -> None:
+    """Mark the account's dashboard Activation complete in InMemoryStore or FakeStore.
+
+    The 024 rule (ADR 0006) reads `activation_journeys.completed_at`, as the bot does.
+    """
+    from src.activation import ACTIVATION_POLICY_VERSION
+
+    journeys = (
+        store.activation_journeys if hasattr(store, "activation_journeys")
+        else store._activation_journeys
+    )
+    if auth_id not in journeys:
+        await store.acknowledge_activation_terms(auth_id, ACTIVATION_POLICY_VERSION)
+    journeys[auth_id]["completed_at"] = utc_now().isoformat()
+
+
 def _utc_timestamp(value: str | datetime) -> datetime:
     """Interpret legacy naive timestamps as UTC; preserve explicitly offset instants."""
     instant = datetime.fromisoformat(value) if isinstance(value, str) else value
@@ -1927,7 +1943,8 @@ class FakeStore:
         """Link a messaging app to the token's account; mirrors `complete_pairing_v2`."""
         return self._identity_state.complete_pairing(
             users=self.users.values(), tokens=self.pairing_tokens, token=token,
-            channel=channel, external_id=external_id, insert_user=self._insert_user,
+            journeys=self.activation_journeys, channel=channel, external_id=external_id,
+            insert_user=self._insert_user,
         )
 
     # ── Dashboard-first Activation Journey ──

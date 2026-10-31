@@ -15,7 +15,7 @@ from src.memory.pairing import ActivationTermsRequiredError, PairingTokenRateLim
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
 from src.utils import utc_now
-from tests.fakes import FakeChannel, FakeScheduler, FakeStore
+from tests.fakes import FakeChannel, FakeScheduler, FakeStore, complete_activation
 
 
 def _token(number: int) -> str:
@@ -395,6 +395,7 @@ async def test_pairing_adopts_incoming_daily_without_creating_topic(monkeypatch)
     await store.update_user(
         existing["user_id"], {"supabase_auth_id": auth_id, "onboarding_complete": True}
     )
+    await complete_activation(store, auth_id)
     await store.create_pairing_token(_token(43), auth_id, utc_now() + timedelta(minutes=15))
     incoming = ConversationRef("fake", {"chat_id": 6043, "conversation_id": 43})
     channel.create_conversation = AsyncMock(wraps=channel.create_conversation)

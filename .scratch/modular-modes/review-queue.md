@@ -1342,3 +1342,42 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Protected file: `scripts/smoke_check.py`. The SmokeChannel id is now `cli` (local, in-process); `smoke` would have been refused by the access rule.
   The smoke check passes both before and after the change.
 - Evidence: pytest 1851 passed; ruff clean; `smoke_check.py --scheduler` passes; Gate A `--validate-only` passes. No billed runs.
+
+## ADR 0005 lifecycle, ADRs 0006/0007, migration 024 (e679a9b, ef6b370, 7deb2d6, plus the review-fix commit)
+
+- Commits:
+  - e679a9b: `MessageChannel` declares `ready`, `connect_link`, `start` and `close` (ADR 0005). ADRs 0006 and 0007 written.
+  - ef6b370: SmokeChannel declares the lifecycle, and AGENTS.md lists it. The smoke check failed in e679a9b because the
+    exit code was hidden by `| tail`; exit codes are now read directly.
+  - 7deb2d6: migration 024. Second-app Pairing never creates an account, enforced in `complete_pairing_v2` (ADR 0006).
+    Schema 24.
+  - Review fix (this entry): S1–S4 and nits from `.scratch/modular-modes/proposals/024-and-adr0005-independent-review.md`.
+    That review is the AGENTS.md-mandated independent migration review for 024: no blockers, 024 approvable.
+- Protected files touched: `scripts/smoke_check.py` (ef6b370, SmokeChannel lifecycle);
+  `migrations/024_second_app_pairing_requires_account.sql` (7deb2d6, review fix). Also AGENTS.md (ef6b370, the protocol
+  implementations list).
+- Review fixes:
+  - **S1:** the 024 guard now reads `activation_journeys.completed_at`, the same record the bot checks. It no longer reads
+    `onboarding_complete`, which legacy bot onboarding set without a dashboard Activation. The local Stores mirror it
+    (`journeys` passed to `complete_pairing`). New test helper `tests/fakes.complete_activation`.
+  - **S2:** ADR 0007 lists every remaining legacy read and write, Python and SQL. The Activation predicate moves to
+    migration 025, and 025 must move `check_activation_lock_order.py` to v2 before revoking v1.
+  - **S3:** this entry.
+  - **S4:** SQL and Python tests cover the guard order (an unactivated, already-linked account → `account_required`,
+    token kept), conflict (token kept), and the legacy flag alone → `account_required`.
+  - **Nits:** the 024 comments are corrected (the cli exemption is safe because only service_role may call the function;
+    nothing reads `account_required` except the bot). ADR 0005 names SmokeChannel. The lifecycle test covers
+    SmokeChannel and checks that Telegram `start()` calls `initialize`.
+  - ADR 0004's status ("Proposed") is left for the owner.
+- Evidence:
+  - pytest 1861 passed; ruff clean; `smoke_check.py --scheduler` exits 0; Gate A `--validate-only` exits 0.
+  - The full CI SQL chain (51 files) runs on a throwaway local PG15 database with exit 0.
+  - Mutation checks:
+    - The 7deb2d6 guard in the chain fails the new assert ("trusted onboarding_complete without a completed Activation").
+    - The old local guard fails 6 store tests.
+  - No billed runs. Nothing applied to Supabase.
+- Open (owner):
+  - Accept ADR 0004.
+  - Apply 022, 023 and 024 in order, each with its matching deploy.
+  - Before applying 024: profiles onboarded through the legacy bot flow without a completed journey can't pair a second
+    app until they finish dashboard Activation. This is intended; the dashboard offers Activation.
