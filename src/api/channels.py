@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, StrictStr
 
-from src.access import is_full_access_user
+from src.access import OPEN_CHANNELS, may_use_channel
 from src.api.dependencies import get_activated_user, get_store
 from src.memory.identities import ChannelNotLinkedError
 from src.memory.pairing import (
@@ -34,16 +34,17 @@ class PrimaryChannelRequest(BaseModel):
 
 
 def _connectable(request: Request, user: dict, linked) -> list[str]:
-    """Second apps this process runs that a full-access account may still link (owner decision).
+    """Second apps this process runs that this account may use and has not linked yet.
 
     Telegram stays the first app, linked through Activation; the others are added here.
     """
     registry = getattr(request.app.state, "channels", None)
-    if registry is None or not is_full_access_user(user):
+    if registry is None:
         return []
     return sorted(
         channel.channel_id for channel in registry
-        if channel.channel_id not in {"telegram", "cli"} and channel.channel_id not in linked
+        if channel.channel_id not in OPEN_CHANNELS and channel.channel_id not in linked
+        and may_use_channel(user, channel.channel_id)
     )
 
 

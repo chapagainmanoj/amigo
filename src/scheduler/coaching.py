@@ -5,7 +5,6 @@ import uuid
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from src.channels.delivery import proactive_recipient, reachable_here
 from src.channels.registry import ChannelRegistry
 from src.memory.proactive import instant
 from src.utils import default_clock
@@ -167,11 +166,11 @@ class CoachingDeliveryWorker:
                     not plan
                     or plan["kind"] != row["kind"]
                     or not await self.store.has_coaching_consent(user_id)
-                    or not reachable_here(self.channels, user)
+                    or self.channels.for_user(user) is None
                 ):
                     await self.store.finish_coaching_delivery(user_id, key, token, "cancelled")
                     continue
-                resolved = await proactive_recipient(self.channels, user)
+                resolved = await self.channels.address(user)
                 if resolved is None:
                     await self.store.finish_coaching_delivery(user_id, key, token, "cancelled")
                     continue

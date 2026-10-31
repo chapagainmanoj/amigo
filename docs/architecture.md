@@ -61,7 +61,7 @@ amigo/
   capability declarations. Telegram owns topic IDs, Bot API decoding, private-chat deep links,
   and the defensive unavailable-thread branch. Discord (opt-in, full-access accounts) owns the
   gateway, DMs and component buttons. Discord and CLI declare no threads and use in-chat Mode
-  commands. `ChannelRegistry` lists the channels a process runs, and `delivery.py` sends proactive
+  commands. `ChannelRegistry` lists the channels a process runs and sends proactive
   messages to the participant's primary one. Application code passes opaque conversation
   references rather than provider thread IDs.
 - `src/conversations.py` — `ModeConversationService` resolves or creates a Mode's channel
@@ -263,7 +263,7 @@ graph TD
    `recipient_for(user)` reads the adapter's own row from `store.list_channel_identities`.
 4. Run inbound events through `ChannelUpdateCoordinator(store, channel_id=...)`. It deduplicates and
    serializes Turns per participant across all channels. Proactive messages follow
-   `src/channels/delivery.py`: they go only to the participant's `primary_channel`.
+   `ChannelRegistry.address`: they go only to the participant's `primary_channel`.
 5. Register it in the process's `ChannelRegistry` (`src/channels/registry.py`) next to Telegram, with
    its own `BotHandlers` and `ChannelUpdateCoordinator` sharing the one `ParticipantTurnSerializer`, so
    the per-participant Turn lock spans apps. The scheduler, Coach worker and handoff recovery pick the

@@ -11,7 +11,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from src.bot.keyboards import reminder_keyboard
 from src.channels.base import MessageChannel, Recipient
-from src.channels.delivery import proactive_recipient, reachable_here
 from src.channels.registry import ChannelRegistry
 from src.memory.proactive import instant
 from src.memory.store import MemoryStore
@@ -98,7 +97,7 @@ class ReminderScheduler:
             profile = reminder.get("user_profiles") or {}
             task = reminder.get("tasks") or {}
             if (
-                not reachable_here(self.channels, {"user_id": user_id, **profile})
+                self.channels.for_user({"user_id": user_id, **profile}) is None
                 or task.get("user_id") != user_id
                 or task.get("status") != "pending"
                 or reminder["status"] == "sent"
@@ -232,9 +231,9 @@ class ReminderScheduler:
         user = await self.store.get_user_by_id(user_id)
         if not user or user["user_id"] != user_id:
             raise ValueError("Reminder endpoint no longer belongs to its participant")
-        if not reachable_here(self.channels, user):
+        if self.channels.for_user(user) is None:
             raise ValueError("Reminder channel is not the participant's primary channel")
-        resolved = await proactive_recipient(self.channels, user)
+        resolved = await self.channels.address(user)
         if resolved is None:
             raise ValueError("Participant has no linked messaging endpoint")
         channel, chat_id = resolved

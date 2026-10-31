@@ -2,7 +2,7 @@
 
 import logging
 
-from src.access import help_message, is_full_access_user
+from src.access import OPEN_CHANNELS, help_message, may_use_channel
 from src.agent.runtime import ModeRuntime
 from src.bot.reminder_actions import ReminderActions
 from src.bot.turns import TurnProcessor
@@ -231,13 +231,12 @@ class BotHandlers:
 
         if settings.access_mode == "closed":
             return False
-        if self.channel.channel_id not in {"telegram", "cli"}:
-            # Every posture, open included, admits other apps only for linked full-access
-            # accounts (owner decision 31 Oct 2026). Pairing applies the same rule itself.
+        if self.channel.channel_id not in OPEN_CHANNELS:
+            # Every posture, open included: other apps follow may_use_channel. Pairing attempts
+            # reach Pairing, which applies the same rule to the token's account.
             if pairing_attempt:
                 return True
-            user = await self._participant(chat_id)
-            return bool(user and user.get("supabase_auth_id") and is_full_access_user(user))
+            return may_use_channel(await self._participant(chat_id), self.channel.channel_id)
         if settings.access_mode == "open":
             return True
         if settings.access_mode in {"registered", "invite"}:

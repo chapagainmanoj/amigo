@@ -11,6 +11,12 @@ from src.utils import utc_now
 from tests.fakes import FakeChannel, FakeStore
 
 
+@pytest.fixture(autouse=True)
+def _any_app_allowed(monkeypatch):
+    """Routing tests: the access rule has its own tests (test_channel_registry)."""
+    monkeypatch.setattr("src.channels.registry.may_use_channel", lambda user, channel_id: True)
+
+
 async def _reminder(store, chat_id=123):
     user = await store.create_user(chat_id)
     task = await store.create_task(user["user_id"], "Test task")

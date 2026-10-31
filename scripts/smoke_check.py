@@ -33,7 +33,8 @@ from src.scheduler.reminders import ReminderScheduler  # noqa: E402
 class SmokeChannel:
     """Recording channel used by the in-memory scheduler smoke check."""
 
-    channel_id = "smoke"
+    # Local and in-process like the CLI, so it is an app every participant may use.
+    channel_id = "cli"
     capabilities = ChannelCapabilities()
 
     async def recipient_for(self, user):
@@ -90,7 +91,7 @@ class SmokeStore:
 
     async def get_user_by_id(self, user_id):
         if user_id == "smoke-user":
-            return {"user_id": user_id, "chat_id": 0, "primary_channel": "smoke"}
+            return {"user_id": user_id, "chat_id": 0, "primary_channel": "cli"}
         return None
 
     async def claim_reminder_for_send(

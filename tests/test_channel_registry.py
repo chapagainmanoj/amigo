@@ -6,12 +6,17 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.channels.delivery import proactive_recipient
 from src.channels.registry import ChannelRegistry
 from src.handoffs import HandoffController
 from src.scheduler.reminders import ReminderScheduler
 from src.utils import utc_now
 from tests.fakes import FakeChannel, FakeStore
+
+
+@pytest.fixture(autouse=True)
+def _any_app_allowed(monkeypatch):
+    """Routing tests: the access rule has its own tests (test_channel_registry)."""
+    monkeypatch.setattr("src.channels.registry.may_use_channel", lambda user, channel_id: True)
 
 
 def _fake2():
@@ -51,9 +56,7 @@ async def test_proactive_recipient_uses_the_primary_adapter_address():
     fake2.recipient_for = recipient_for
     registry = ChannelRegistry([FakeChannel(), fake2])
     await store.set_primary_channel(user["user_id"], "fake2")
-    channel, recipient = await proactive_recipient(
-        registry, await store.get_user_by_id(user["user_id"])
-    )
+    channel, recipient = await registry.address(await store.get_user_by_id(user["user_id"]))
     assert (channel, recipient) == (fake2, "ext-51001")
 
 
@@ -158,3 +161,25 @@ async def test_dashboard_mode_switch_opens_on_the_primary_channel(monkeypatch):
 
     monkeypatch.setattr(main, "channels", ChannelRegistry([telegram]))
     assert await main._open_mode(user, "coach") is None
+
+
+@pytest.mark.parametrize("full_access", [True, False])
+async def test_reminders_reach_another_app_only_while_the_participant_may_use_it(
+    monkeypatch, full_access
+):
+    """N2: losing full access stops proactive messages on other apps; they wait pending."""
+    monkeypatch.undo()  # the real may_use_channel
+    monkeypatch.setattr(
+        "src.config.settings.allowed_telegram_chat_ids", "51006" if full_access else "1"
+    )
+    store = FakeStore()
+    user = await store.create_user(51006)
+    await store.update_user(user["user_id"], {"supabase_auth_id": "auth-51006"})
+    store._identity_state.link(user["user_id"], "fake2", "ext-51006")
+    await store.set_primary_channel(user["user_id"], "fake2")
+    telegram, fake2 = FakeChannel(), _fake2()
+    fake2.recipient_for = AsyncMock(return_value="ext-51006")
+    registry = ChannelRegistry([telegram, fake2])
+    current = await store.get_user_by_id(user["user_id"])
+    assert (await registry.address(current) is not None) is full_access
+    assert registry.for_user({**current, "primary_channel": "telegram"}) is telegram

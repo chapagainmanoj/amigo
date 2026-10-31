@@ -1,15 +1,18 @@
-"""The messaging channels running in this process, and which one reaches a participant."""
+"""The messaging channels running in this process, and where unprompted messages go (ADR 0004)."""
 
 from collections.abc import Iterable, Iterator
 
-from src.channels.base import MessageChannel
+from src.access import may_use_channel
+from src.channels.base import MessageChannel, Recipient
 
 
 class ChannelRegistry:
     """Every channel adapter this process runs, keyed by `channel_id` (ADR 0004).
 
-    Proactive messages go only to the participant's primary channel. `for_user` returns that
-    channel's adapter when it runs here, and None when it does not: then this process never sends.
+    The one rule for proactive messages (Reminders, recovery summaries, Coach nudges, handoff
+    recovery): they go only to the participant's primary channel, and only when its adapter runs
+    here, is ready, and the participant may use it. Otherwise this process never sends and the
+    message waits pending; it never falls back to another app.
     """
 
     def __init__(self, channels: Iterable[MessageChannel]):
@@ -35,17 +38,21 @@ class ChannelRegistry:
         return self._channels.get(channel_id)
 
     def for_user(self, user: dict | None) -> MessageChannel | None:
-        """The participant's primary channel's adapter, if it runs here and can deliver now.
-
-        An adapter that is not ready (e.g. a gateway still connecting or down) is treated as not
-        running: proactive messages wait pending instead of failing for good.
-        """
+        """The adapter that may deliver to this participant now, or None."""
         if not user:
             return None
         channel = self._channels.get(user.get("primary_channel", "telegram"))
         if channel is None or not getattr(channel, "ready", True):
             return None
-        return channel
+        return channel if may_use_channel(user, channel.channel_id) else None
+
+    async def address(self, user: dict | None) -> tuple[MessageChannel, Recipient] | None:
+        """The adapter and its address for a proactive message, or None when none may be sent."""
+        channel = self.for_user(user)
+        if channel is None:
+            return None
+        recipient = await channel.recipient_for(user)
+        return None if recipient is None else (channel, recipient)
 
     def __iter__(self) -> Iterator[MessageChannel]:
         return iter(self._channels.values())

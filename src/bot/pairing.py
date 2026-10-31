@@ -27,17 +27,17 @@ def pairing_token(text: str) -> str | None:
     return match.group(1).strip() if match else None
 
 
-async def _second_app_allowed(store: MemoryStore, token: str) -> bool:
-    """Other apps join only an existing, activated, full-access account; never create one.
+async def _second_app_allowed(store: MemoryStore, token: str, channel_id: str) -> bool:
+    """Other apps join only an existing, activated account that may use them; never create one.
 
     Without this, a token from the Telegram link could create an account whose only app is
     another channel, and that account could then never pair Telegram (owner decision 31 Oct 2026).
     """
-    from src.access import is_full_access_user
+    from src.access import may_use_channel
 
     auth_id = await store.get_pairing_token_owner(token)
     user = await store.get_user_by_auth_id(auth_id) if auth_id else None
-    if user is None or not is_full_access_user(user):
+    if not may_use_channel(user, channel_id):
         return False
     return (await store.get_activation_state(auth_id)).get("completed") is True
 
@@ -57,7 +57,9 @@ async def handle_pairing(
         logger.warning("Pairing failed: invalid token channel=%s", channel.channel_id)
         await channel.send_message(chat_id=chat_id, conversation=conversation, text=_INVALID_LINK)
         return
-    if channel.channel_id != "telegram" and not await _second_app_allowed(store, token):
+    if channel.channel_id != "telegram" and not await _second_app_allowed(
+        store, token, channel.channel_id
+    ):
         logger.warning("Pairing refused: not a full-access account channel=%s", channel.channel_id)
         await channel.send_message(
             chat_id=chat_id,

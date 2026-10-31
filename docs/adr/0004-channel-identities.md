@@ -18,7 +18,7 @@ messaging app cannot hold a participant, and one participant cannot use two apps
   has at most one identity per channel. External ids are opaque provider identifiers. They never become
   participant identity, and the dashboard API never returns them.
 - **One primary channel.** `user_profiles.primary_channel` selects where proactive messages
-  (Reminders, recovery summaries, Coaching nudges) go; `src/channels/delivery.py` holds the rule.
+  (Reminders, recovery summaries, Coaching nudges) go; `ChannelRegistry` (`src/channels/registry.py`) holds the rule.
   It must name a channel the participant has linked (deferred foreign key). The participant chooses it
   on the dashboard; the choice is shown only when more than one channel is linked. Handoff replies and
   notices stay with the conversation's own channel. Crash recovery of a handoff is unprompted, so it

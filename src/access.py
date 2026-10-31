@@ -36,6 +36,25 @@ def is_full_access_user(user: dict) -> bool:
     return is_full_access(user.get("telegram_chat_id"))
 
 
+# Apps every linked participant may use. Telegram is the first app (Activation); the CLI is local.
+OPEN_CHANNELS = frozenset({"telegram", "cli"})
+
+
+def may_use_channel(user: dict | None, channel_id: str) -> bool:
+    """Whether this participant may chat, pair or be reached on this messaging app.
+
+    Other apps are only for linked dashboard accounts with full access (owner decision 31 Oct
+    2026), until the privacy promise and decision 04 cover their providers. The one rule for the
+    bot, Pairing, the dashboard and proactive delivery; Activation and access postures stay
+    with their callers.
+    """
+    if not user:
+        return False
+    if channel_id in OPEN_CHANNELS:
+        return True
+    return bool(user.get("supabase_auth_id")) and is_full_access_user(user)
+
+
 def grant_required(user: dict, mode) -> bool:
     """Whether opening this Mode for this participant needs an active operator grant."""
     if mode.entitlement == "grant":
