@@ -48,7 +48,9 @@ class ModeConversationService:
             return ConversationRef(channel_id, saved["endpoint"])
 
     async def ensure_by_chat(self, chat_id):
-        user = await self.store.get_user_by_chat_id(chat_id)
+        user = await self.store.get_user_by_channel_identity(
+            self.channel.channel_id, str(chat_id)
+        )
         if user is None:
             return None
         return await self.ensure(user, chat_id=chat_id)

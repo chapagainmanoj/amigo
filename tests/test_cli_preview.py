@@ -34,7 +34,7 @@ async def test_preview_lists_and_runs_every_mode_without_changing_catalogue():
     await _seed_dev_user(store)
     # Coach is open to every activated participant; the rest need full access or a grant.
     assert set(await _grant_preview_modes(store, runtime)) == {"reflect", "recommender", "cbt"}
-    channel = FakeChannel()
+    channel = FakeChannel(channel_id="cli")
     handlers = BotHandlers(
         channel, store, SessionManager(store), FakeScheduler(), mode_runtime=runtime
     )

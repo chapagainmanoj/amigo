@@ -97,6 +97,8 @@ class ConversationUnavailableError(RuntimeError):
 
 class MessageChannel(Protocol):
     channel_id: str
+    # How participant-facing copy names this app, e.g. "Telegram is connected".
+    display_name: str
     capabilities: ChannelCapabilities
 
     async def send_message(

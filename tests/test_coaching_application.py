@@ -41,7 +41,8 @@ async def coach_app(monkeypatch, request):
     live = replace(catalogue.COACH, status="live")
     monkeypatch.setattr(catalogue, "COACH", live)
     store, channel = FakeStore(), FakeChannel(threads=request.param, channel_id="fake")
-    owner, other = await _participant(store, 48101), await _participant(store, 48102)
+    owner = await _participant(store, 48101, link="fake")
+    other = await _participant(store, 48102, link="fake")
     monkeypatch.setattr(store, "get_activation_state", AsyncMock(return_value={"completed": True}))
     for user in (owner, other):
         await store.grant_mode(user["user_id"], "coach", "owner", "fictional application test")

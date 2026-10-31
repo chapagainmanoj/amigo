@@ -9,7 +9,7 @@ import pytest
 
 from src.activation import ACTIVATION_POLICY_VERSION
 from src.bot.handlers import BotHandlers
-from src.bot.pairing import handle_start_pairing
+from src.bot.pairing import handle_pairing
 from src.memory.memory_store import InMemoryStore
 from src.memory.pairing import ActivationTermsRequiredError, PairingTokenRateLimitError
 from src.memory.sessions import SessionManager
@@ -96,8 +96,8 @@ async def test_pairing_token_requires_beta_acknowledgement(store_factory):
         )
 
 
-async def test_handle_start_pairing_success():
-    """Verify that handle_start_pairing successfully links an existing Telegram user."""
+async def test_handle_pairing_success():
+    """Verify that handle_pairing successfully links an existing Telegram user."""
     store = FakeStore()
     channel = FakeChannel()
     auth_id = str(uuid.uuid4())
@@ -111,7 +111,7 @@ async def test_handle_start_pairing_success():
     await store.create_pairing_token(token, auth_id, expires_at)
 
     # Run pairing
-    await handle_start_pairing(chat_id, token, store, channel)
+    await handle_pairing(chat_id, token, store, channel)
 
     # User should be updated
     user = await store.get_user_by_chat_id(chat_id)
@@ -123,8 +123,8 @@ async def test_handle_start_pairing_success():
     assert "auth_id" not in channel.last_text
 
 
-async def test_handle_start_pairing_creates_user():
-    """Verify that handle_start_pairing creates a new user profile if it doesn't exist."""
+async def test_handle_pairing_creates_user():
+    """Verify that handle_pairing creates a new user profile if it doesn't exist."""
     store = FakeStore()
     channel = FakeChannel()
     auth_id = str(uuid.uuid4())
@@ -137,7 +137,7 @@ async def test_handle_start_pairing_creates_user():
     await store.create_pairing_token(token, auth_id, expires_at)
 
     # Run pairing
-    await handle_start_pairing(chat_id, token, store, channel)
+    await handle_pairing(chat_id, token, store, channel)
 
     # User profile should have been created and linked
     user = await store.get_user_by_chat_id(chat_id)
@@ -256,7 +256,7 @@ async def test_pairing_cannot_reassign_linked_telegram_profile():
         _token(30), attacker_auth_id, utc_now() + timedelta(minutes=15)
     )
 
-    await handle_start_pairing(chat_id, _token(30), store, channel)
+    await handle_pairing(chat_id, _token(30), store, channel)
 
     linked_user = await store.get_user_by_chat_id(chat_id)
     assert linked_user["supabase_auth_id"] == original_auth_id
@@ -274,7 +274,7 @@ async def test_pairing_cannot_duplicate_linked_dashboard_account():
     await store.update_user(user["user_id"], {"supabase_auth_id": auth_id})
     await store.create_pairing_token(_token(31), auth_id, utc_now() + timedelta(minutes=15))
 
-    await handle_start_pairing(other_chat_id, _token(31), store, channel)
+    await handle_pairing(other_chat_id, _token(31), store, channel)
 
     assert await store.get_user_by_chat_id(other_chat_id) is None
     assert (await store.get_user_by_auth_id(auth_id))["telegram_chat_id"] == original_chat_id
@@ -291,7 +291,7 @@ async def test_pairing_same_existing_link_is_idempotent():
     await store.update_user(user["user_id"], {"supabase_auth_id": auth_id})
     await store.create_pairing_token(_token(32), auth_id, utc_now() + timedelta(minutes=15))
 
-    await handle_start_pairing(chat_id, _token(32), store, channel)
+    await handle_pairing(chat_id, _token(32), store, channel)
 
     assert len(store.users) == 1
     assert "already connected" in channel.last_text.lower()
@@ -302,7 +302,7 @@ async def test_malformed_pairing_token_is_rejected_without_logging_secret(caplog
     channel = FakeChannel()
     malformed_token = "not-a-valid-token"
 
-    await handle_start_pairing(1234, malformed_token, store, channel)
+    await handle_pairing(1234, malformed_token, store, channel)
 
     assert await store.get_user_by_chat_id(1234) is None
     assert "invalid or has expired" in channel.last_text.lower()
@@ -390,8 +390,8 @@ async def test_pairing_adopts_incoming_daily_without_creating_topic():
     await store.create_pairing_token(_token(43), auth_id, utc_now() + timedelta(minutes=15))
     incoming = ConversationRef("fake", {"chat_id": 6043, "conversation_id": 43})
     channel.create_conversation = AsyncMock(wraps=channel.create_conversation)
-    await handle_start_pairing(6043, _token(43), store, channel, conversation=incoming)
-    user = await store.get_user_by_chat_id(6043)
+    await handle_pairing(6043, _token(43), store, channel, conversation=incoming)
+    user = await store.get_user_by_channel_identity("fake", "6043")
     canonical = await store.get_mode_conversation(user["user_id"], "daily", "fake")
     assert canonical["endpoint"] == dict(incoming.endpoint)
     assert channel.sent[-1]["conversation"] == incoming

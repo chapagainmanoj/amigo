@@ -2,7 +2,7 @@
 
 import logging
 
-from src.access import help_message
+from src.access import help_message, is_full_access_user
 from src.agent.runtime import ModeRuntime
 from src.bot.reminder_actions import ReminderActions
 from src.bot.turns import TurnProcessor
@@ -65,7 +65,10 @@ class BotHandlers:
         conversation: ConversationRef | None = None,
     ) -> None:
         """Handle incoming text message from user."""
-        pairing_attempt = text.startswith("/start pair_")
+        from src.bot.pairing import handle_pairing, pairing_token
+
+        token = pairing_token(text)
+        pairing_attempt = token is not None
         if not await self._is_allowed(chat_id, pairing_attempt=pairing_attempt):
             if self.channel.capabilities.threads and conversation is None:
                 return
@@ -75,18 +78,15 @@ class BotHandlers:
             )
             return
 
-        # Deep-link pairing check
-        if text.startswith("/start pair_"):
-            token = text.replace("/start pair_", "").strip()
-            from src.bot.pairing import handle_start_pairing
-
-            await handle_start_pairing(
+        # Pairing: Telegram's deep link or a typed /pair command.
+        if pairing_attempt:
+            await handle_pairing(
                 chat_id, token, self.store, self.channel, conversation=conversation
             )
             return
 
         # Dashboard-first Activation owns account creation and onboarding.
-        user = await self.store.get_user_by_chat_id(chat_id)
+        user = await self._participant(chat_id)
         if user is None:
             await self._send_activation_required(chat_id, conversation=conversation)
             return
@@ -152,7 +152,7 @@ class BotHandlers:
             return
 
         if data.startswith(("handoff:", "coach:", "suggest:", "memory:", "consent:", "mode:")):
-            user = await self.store.get_user_by_chat_id(chat_id)
+            user = await self._participant(chat_id)
             if user and user.get("supabase_auth_id"):
                 activation = await self.store.get_activation_state(user["supabase_auth_id"])
                 if activation.get("completed"):
@@ -194,13 +194,22 @@ class BotHandlers:
 
         await self.reminder_actions.handle_callback(chat_id, message_id, data)
 
+    async def _participant(self, chat_id: Recipient) -> dict | None:
+        """The participant this channel address is linked to (ADR 0004)."""
+        return await self.store.get_user_by_channel_identity(
+            self.channel.channel_id, str(chat_id)
+        )
+
     async def _send_activation_required(
         self, chat_id: Recipient, *, paired: bool = False, conversation=None
     ) -> None:
-        """Direct Telegram-only and incomplete accounts to the verified Dashboard journey."""
+        """Direct unlinked and incomplete accounts to the verified Dashboard journey."""
         from src.config import settings
 
-        prefix = "Telegram is connected. " if paired else "Start from your verified dashboard. "
+        prefix = (
+            f"{self.channel.display_name} is connected. " if paired
+            else "Start from your verified dashboard. "
+        )
         await self.channel.send_message(
             chat_id,
             prefix
@@ -213,7 +222,7 @@ class BotHandlers:
         """Acknowledge all pending reminders for a task and cancel APScheduler jobs."""
         await self.reminder_actions.cancel_for_task(task_id, user_id)
 
-    async def _is_allowed(self, chat_id: int, *, pairing_attempt: bool = False) -> bool:
+    async def _is_allowed(self, chat_id: Recipient, *, pairing_attempt: bool = False) -> bool:
         """Apply the configured open, closed, allowlist, or invitation access posture."""
         from src.config import settings
 
@@ -224,9 +233,15 @@ class BotHandlers:
         if settings.access_mode in {"registered", "invite"}:
             if pairing_attempt:
                 return True
-            user = await self.store.get_user_by_chat_id(chat_id)
+            user = await self._participant(chat_id)
             return bool(user and user.get("supabase_auth_id"))
 
+        if self.channel.channel_id != "telegram":
+            # The allowlist names Telegram chats; other apps admit linked full-access accounts.
+            if pairing_attempt:
+                return True
+            user = await self._participant(chat_id)
+            return bool(user and is_full_access_user(user))
         try:
             allowed_ids = parse_allowed_chat_ids(settings.allowed_telegram_chat_ids)
         except UnsafeProductionConfigurationError:

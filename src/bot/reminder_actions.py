@@ -73,7 +73,9 @@ class ReminderActions:
 
         action, reminder_id = parts
 
-        user = await self.store.get_user_by_chat_id(chat_id)
+        user = await self.store.get_user_by_channel_identity(
+            self.channel.channel_id, str(chat_id)
+        )
         if not user:
             return
 

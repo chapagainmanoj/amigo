@@ -1,65 +1,62 @@
-"""Account pairing and linking between Telegram and Supabase Auth."""
+"""Account pairing: link a messaging app to the verified dashboard account (ADR 0004)."""
 
 import logging
 import re
 
-from src.channels.base import ConversationRef, MessageChannel, endpoint_dict
+from src.channels.base import ConversationRef, MessageChannel, Recipient, endpoint_dict
 from src.config import settings
 from src.memory.pairing import PAIRING_TOKEN_HEX_LENGTH
 from src.memory.store import MemoryStore
 
 logger = logging.getLogger(__name__)
 
+# Telegram deep links arrive as "/start pair_<token>"; other apps type "/pair <token>".
+_PAIRING_COMMAND = re.compile(r"^(?:/start pair_|/pair(?:\s+|$))(.*)$", re.DOTALL)
+_INVALID_LINK = (
+    "⚠️ The pairing link is invalid or has expired. "
+    "Please request a new link from the dashboard."
+)
 
-async def handle_start_pairing(
-    chat_id: int, token: str, store: MemoryStore, channel: MessageChannel,
+
+def pairing_token(text: str) -> str | None:
+    """The token of a pairing command, or None when the text is not one."""
+    match = _PAIRING_COMMAND.match(text.strip())
+    return match.group(1).strip() if match else None
+
+
+async def handle_pairing(
+    chat_id: Recipient, token: str, store: MemoryStore, channel: MessageChannel,
     *, conversation: ConversationRef | None = None,
 ) -> None:
-    """Validate a pairing token and link the Telegram user to the Supabase Auth ID."""
+    """Validate a pairing token and link this channel's address to its dashboard account."""
+    app = channel.display_name
     if not re.fullmatch(rf"[0-9a-f]{{{PAIRING_TOKEN_HEX_LENGTH}}}", token):
-        logger.warning(
-            "Pairing failed: malformed token for chat_id %s",
-            chat_id,
-        )
-        await channel.send_message(
-            chat_id=chat_id,
-            conversation=conversation,
-            text=(
-                "⚠️ The pairing link is invalid or has expired. "
-                "Please request a new link from the dashboard."
-            ),
-        )
+        logger.warning("Pairing failed: malformed token channel=%s", channel.channel_id)
+        await channel.send_message(chat_id=chat_id, conversation=conversation, text=_INVALID_LINK)
         return
 
-    result = await store.complete_pairing(token, chat_id)
+    result = await store.complete_channel_pairing(token, channel.channel_id, str(chat_id))
     status = result["status"]
 
     if status == "invalid_token":
-        logger.warning("Pairing failed: invalid token for chat_id %s", chat_id)
-        await channel.send_message(
-            chat_id=chat_id,
-            conversation=conversation,
-            text=(
-                "⚠️ The pairing link is invalid or has expired. "
-                "Please request a new link from the dashboard."
-            ),
-        )
+        logger.warning("Pairing failed: invalid token channel=%s", channel.channel_id)
+        await channel.send_message(chat_id=chat_id, conversation=conversation, text=_INVALID_LINK)
         return
 
     if status == "conflict":
-        logger.warning("Pairing conflict for chat_id %s", chat_id)
+        logger.warning("Pairing conflict channel=%s", channel.channel_id)
         await channel.send_message(
             chat_id=chat_id,
             conversation=conversation,
             text=(
-                "⚠️ This dashboard account or Telegram profile is already linked to another "
+                f"⚠️ This dashboard account or {app} profile is already linked to another "
                 "account. Return to the dashboard or contact support."
             ),
         )
         return
 
     if status in {"paired", "already_paired"}:
-        user = await store.get_user_by_chat_id(chat_id)
+        user = await store.get_user_by_channel_identity(channel.channel_id, str(chat_id))
         if user and channel.capabilities.threads:
             from src.conversations import ModeConversationService
 
@@ -74,21 +71,21 @@ async def handle_start_pairing(
             )
 
     if status == "already_paired":
-        logger.info("Pairing already complete for chat_id %s", chat_id)
+        logger.info("Pairing already complete channel=%s", channel.channel_id)
         await channel.send_message(
             chat_id=chat_id,
             conversation=conversation,
-            text="Telegram is already connected to this Amigo dashboard account.",
+            text=f"{app} is already connected to this Amigo dashboard account.",
         )
         return
 
-    logger.info("Successfully paired Telegram chat_id %s", chat_id)
+    logger.info("Pairing complete channel=%s", channel.channel_id)
 
     await channel.send_message(
         chat_id=chat_id,
         conversation=conversation,
         text=(
-            "🎉 Successfully paired! Telegram is connected to your Amigo dashboard. "
+            f"🎉 Successfully paired! {app} is connected to your Amigo dashboard. "
             "No account identifiers are shown here. Return to the dashboard to finish your "
             f"profile and private test Reminder: {settings.dashboard_url}"
         ),

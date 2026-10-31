@@ -84,8 +84,11 @@ class _Script:
         return self.responses.pop(0) if self.responses else ModelResponse(parts=[TextPart("ok")])
 
 
-async def _participant(store: FakeStore, chat_id: int) -> dict:
+async def _participant(store: FakeStore, chat_id: int, *, link: str | None = None) -> dict:
+    """A Telegram participant; `link` also links that channel at the same address."""
     user = await store.create_user(chat_id)
+    if link is not None:
+        store._identity_state.link(user["user_id"], link, str(chat_id))
     await store.update_user(
         user["user_id"],
         {

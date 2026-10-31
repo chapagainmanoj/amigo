@@ -21,7 +21,7 @@ async def test_seeded_cli_user_passes_activation_and_runs_turn_without_pending_t
     assert (await store.get_activation_state(user["supabase_auth_id"]))["completed"] is True
     assert await store.get_pending_reminders(user["user_id"]) == []
     assert await store.claim_scheduler_effects(25, "cli-fixture-check") == []
-    channel = FakeChannel()
+    channel = FakeChannel(channel_id="cli")
     runtime = ModeRuntime(build_registry())
     handlers = BotHandlers(
         channel, store, SessionManager(store), FakeScheduler(), mode_runtime=runtime

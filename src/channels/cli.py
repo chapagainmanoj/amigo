@@ -28,6 +28,7 @@ class CLIChannel:
     """
 
     channel_id = "cli"
+    display_name = "The CLI"
     capabilities = ChannelCapabilities(actions=True, message_editing=True)
 
     def __init__(self, store=None):

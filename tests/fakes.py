@@ -73,6 +73,7 @@ class FakeChannel:
 
     def __init__(self, *, threads=False, channel_id="telegram"):
         self.channel_id = channel_id
+        self.display_name = "Telegram" if channel_id == "telegram" else channel_id
         self.capabilities = ChannelCapabilities(threads=threads, actions=True, message_editing=True)
         self.conversations: list[ConversationRef] = []
         self.closed_conversations: list[ConversationRef] = []

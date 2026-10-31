@@ -29,6 +29,7 @@ class TelegramChannel:
     """Topics are a transport capability; the application owns their Mode assignments."""
 
     channel_id = "telegram"
+    display_name = "Telegram"
     capabilities = _CAPABILITIES
     default_conversation_resolver: (
         Callable[[str | int], Awaitable[ConversationRef | None]] | None

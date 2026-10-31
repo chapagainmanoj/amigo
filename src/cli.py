@@ -58,20 +58,22 @@ Type /quit to exit, /tasks to see tasks, /debug to toggle debug logging{_RESET}
 """)
 
 
+async def _dev_user(store: InMemoryStore) -> dict | None:
+    return await store.get_user_by_channel_identity("cli", str(DEV_CHAT_ID))
+
+
 async def _seed_dev_user(store: InMemoryStore) -> dict:
     """Pre-create an onboarded dev user so you skip straight to chatting."""
     # This fixture exists only in the CLI's disposable InMemoryStore. Use the canonical
     # Activation transitions so Telegram's production gate stays exercised and unchanged.
     auth_id = "cli-development-fixture"
     await store.acknowledge_activation_terms(auth_id, ACTIVATION_POLICY_VERSION)
-    user = await store.create_user(DEV_CHAT_ID)
-    user_id = user["user_id"]
-    await store.update_user(user_id, {"supabase_auth_id": auth_id})
-    # The CLI links as its own channel through dashboard-token Pairing, like any second app.
+    # The CLI is this account's only app: dashboard-token Pairing creates the profile with
+    # the CLI as its primary channel, exactly as any non-Telegram first app would.
     token = secrets.token_hex(PAIRING_TOKEN_HEX_LENGTH // 2)
     await store.create_pairing_token(token, auth_id, utc_now() + timedelta(minutes=5))
     await store.complete_channel_pairing(token, "cli", str(DEV_CHAT_ID))
-    await store.set_primary_channel(user_id, "cli")
+    user_id = (await _dev_user(store))["user_id"]
     await store.update_activation_profile(
         auth_id, name="Dev", timezone=DEV_TIMEZONE, wake_time="07:30", sleep_time="23:00"
     )
@@ -97,7 +99,7 @@ async def _seed_dev_user(store: InMemoryStore) -> dict:
     activation = await store.get_activation_state(auth_id)
     if not activation["completed"]:
         raise RuntimeError("CLI development fixture failed Activation")
-    return await store.get_user_by_chat_id(DEV_CHAT_ID)
+    return await _dev_user(store)
 
 
 def _preview_runtime():
@@ -120,7 +122,7 @@ def _preview_runtime():
 
 
 async def _grant_preview_modes(store: InMemoryStore, runtime) -> list[str]:
-    user = await store.get_user_by_chat_id(DEV_CHAT_ID)
+    user = await _dev_user(store)
     granted = []
     for mode in runtime.registry:
         if grant_required(user, mode):
@@ -138,7 +140,7 @@ async def _handle_cli_commands(text: str, store: InMemoryStore) -> bool:
         return True
 
     if text == "/tasks":
-        user = await store.get_user_by_chat_id(DEV_CHAT_ID)
+        user = await _dev_user(store)
         if user:
             tasks = await store.get_today_tasks(user["user_id"], DEV_TIMEZONE)
             if tasks:

@@ -67,8 +67,8 @@ async def env(request, monkeypatch):
     for module in ("src.memory.modes", "tests.fakes"):
         monkeypatch.setattr(f"{module}.utc_now", clock.utc_now)
     store = FakeStore()
-    user = await _participant(store, 41001)
-    other = await _participant(store, 41002)
+    user = await _participant(store, 41001, link="fake")
+    other = await _participant(store, 41002, link="fake")
     monkeypatch.setattr(store, "get_activation_state", AsyncMock(return_value={"completed": True}))
     coach = replace(
         DAILY,
