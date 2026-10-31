@@ -1258,3 +1258,43 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
 - Evidence: pytest 1828 passed; ruff clean; `smoke_check.py --scheduler` passes; Gate A `--validate-only` passes. No billed runs. No protected files touched.
 - Plan updated (`discord-adapter-plan.md`): Render free-plan sleep (an owner hosting decision), acknowledge before claiming, button re-chunking, intents and mentions,
   channel-scoped second-app tokens, the down-primary signal, and the spike checks.
+
+## Discord adapter, Phases 2–5 (31 Oct 2026); stopped for the Phase 6 owner spike
+
+- Commits: `c4768a9` (adapter + wiring), `680abaf` (dashboard connect), `2a2f21d` (docs/runbook), `51f6f2c` (cross-app serialization test).
+- Protected and notable files:
+  - `src/config.py` (protected): `DISCORD_ENABLED`, `DISCORD_BOT_TOKEN`, `DISCORD_APPLICATION_ID`.
+  - `src/runtime_config.py`: a token is required when Discord is enabled.
+  - `pyproject.toml`: `discord.py>=2.7.1`, installed in `.venv`.
+  - `AGENTS.md`: env table, the `discord` import boundary, and DiscordChannel in the protocol list.
+- Adapter (`src/channels/discord.py`):
+  - Gateway with the `dm_messages` intent only, and no privileged intents. Ignores guild messages and bot messages, including its own.
+  - Buttons are components, re-chunked to at most 5 per row and 5 rows. `custom_id` is at most 100 characters.
+  - Text splits at 2000 characters on line or word boundaries. The proof id is the last part's.
+  - Mentions are off. DM channels are cached.
+  - One failing event is logged and never stops the gateway.
+- Wiring (`src/main.py`): when enabled, the registry runs [Telegram, Discord], each app has its own BotHandlers and coordinator, and they share one serializer.
+  - A gateway login failure is logged and Telegram keeps running.
+  - `_run_update` serves Discord only. The Telegram webhook path is unchanged on purpose.
+- Coordinator: `acknowledge_first` acknowledges button presses before the claim RPC, to meet Discord's 3-second limit.
+- Dashboard:
+  - `GET /api/channels` adds `available`: apps this process runs that are not linked yet, shown to full-access accounts only.
+  - `POST /api/channels/{channel}/pairing-token` returns a `/pair` code and an install link.
+  - `PrimaryChannel.jsx` gets a "Connect another app" control.
+- Provisional decisions:
+  - The token is a normal dashboard token, not scoped to one channel. The bot-side gate (an existing, activated, full-access account) limits what it can do.
+  - The install link is `scope=bot&permissions=0` (to verify).
+  - Disabling Discord leaves Discord-primary participants without Reminders until they switch back. Documented in the runbook.
+- Not done:
+  - There is no owner-visible signal when the primary adapter is down; Reminders just wait pending.
+  - Long-text splitting does not protect code blocks.
+  - The dashboard component was not checked visually, because there is no web test runner and the dashboard needs Supabase auth.
+- Evidence:
+  - pytest 1842 passed; ruff clean; `smoke_check.py --scheduler` passes; Gate A `--validate-only` passes.
+  - Web: `npm run lint` clean; `npm run build` ok.
+  - Importing `main` with Discord enabled wires [telegram, discord] with a shared serializer and intents dm_messages=True, message_content=False. A missing token is
+    rejected.
+  - In a mutation check, unshared serializers overlap and the shared one serializes.
+  - No network calls to Discord. No billed runs.
+- **STOP, Phase 6 (owner):** follow `docs/runbooks/discord-dogfood.md`: create the bot, set the env, pair, and run the checklist. Decide on hosting, because the free Render plan sleeps.
+  Before anyone who is not owner or internal uses it: the privacy promise and decision 04.
