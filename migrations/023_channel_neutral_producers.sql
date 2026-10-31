@@ -806,21 +806,25 @@ REVOKE ALL ON FUNCTION public.list_pending_handoff_executions(INT) FROM PUBLIC, 
 GRANT EXECUTE ON FUNCTION public.list_pending_handoff_executions(INT) TO service_role;
 
 DO $$ BEGIN
+ IF (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public'
+       AND p.proname IN ('schedule_reminder_command', 'apply_later_command',
+                         'create_activation_test_command')) <> 3
+  OR to_regprocedure('public.list_pending_handoff_executions(integer)') IS NULL
+ THEN RAISE EXCEPTION '023 objects were not created'; END IF;
  IF EXISTS (
    SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
    WHERE n.nspname = 'public'
      AND p.proname IN ('schedule_reminder_command', 'apply_later_command',
                        'create_activation_test_command')
      AND p.prosrc LIKE '%''telegram_chat_id''%')
- OR (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
-     WHERE n.nspname = 'public'
-       AND p.proname IN ('schedule_reminder_command', 'apply_later_command',
-                         'create_activation_test_command')) <> 3
- OR to_regprocedure('public.list_pending_handoff_executions(integer)') IS NULL
  OR (SELECT 'telegram_chat_id' = ANY(proargnames) FROM pg_catalog.pg_proc
    WHERE oid = 'public.list_pending_handoff_executions(integer)'::regprocedure)
- OR has_function_privilege('authenticated', 'public.list_pending_handoff_executions(integer)', 'EXECUTE')
  THEN RAISE EXCEPTION '023 producers still carry telegram_chat_id'; END IF;
+ IF has_function_privilege('authenticated', 'public.list_pending_handoff_executions(integer)', 'EXECUTE')
+  OR has_function_privilege('anon', 'public.list_pending_handoff_executions(integer)', 'EXECUTE')
+  OR NOT has_function_privilege('service_role', 'public.list_pending_handoff_executions(integer)', 'EXECUTE')
+ THEN RAISE EXCEPTION '023 handoff listing privileges wrong'; END IF;
  INSERT INTO public.schema_migrations(version) VALUES(23);
 END $$;
 COMMIT;

@@ -32,7 +32,9 @@ BEGIN
    at + interval '1 hour', ((at + interval '1 hour') AT TIME ZONE 'UTC')::DATE,
    ((at + interval '1 hour') AT TIME ZONE 'UTC')::TIME, 'UTC', FALSE, NULL);
  IF EXISTS (SELECT 1 FROM public.scheduler_outbox
-   WHERE user_id = u AND effect_type = 'schedule' AND payload ? 'telegram_chat_id')
+   WHERE user_id = u AND effect_type = 'schedule'
+     AND (payload ? 'telegram_chat_id' OR NOT payload ? 'scheduled_time'
+          OR payload->>'task_title' <> 'Synthetic 023'))
   OR (SELECT count(*) FROM public.scheduler_outbox WHERE user_id = u AND effect_type = 'schedule') <> 2
  THEN RAISE EXCEPTION '023 later payload shape wrong: %', r; END IF;
 

@@ -173,6 +173,7 @@ Where to get these:
     ([ADR 0004](docs/adr/0004-channel-identities.md)).
 25. Run [`migrations/023_channel_neutral_producers.sql`](migrations/023_channel_neutral_producers.sql)
     in a later release, after 022 is live. Apply it immediately before deploying code that requires schema 23.
+    Never apply 022 and 023 together under schema-21 code: that code reads the payload key strictly.
 
 Apply migrations in numeric order. Migrations 003 and 004 make Pairing backend-only and enforce
 the reviewed cross-tenant grants and row-level policies. Migration 005 adds canonical Task states
