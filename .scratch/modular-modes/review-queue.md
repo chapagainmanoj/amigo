@@ -1207,3 +1207,33 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   producer makes `assert_023` fail. No billed runs.
 - Gate A: no new reachable modules. The evidence is still stale because hashed Stores changed; rerun it with the next Daily release candidate (owner).
 - Owner, open: accept ADR 0004; apply 022 and deploy; apply 023 in a later release and deploy (never apply 022 and 023 together under schema-21 code).
+
+## Discord adapter, Phases 0 and 1 (owner request, 31 Oct 2026): the shared bot layer is channel-neutral and a ChannelRegistry exists
+
+- Plan and owner decisions: `proposals/discord-adapter-plan.md`. Discord runs in the same web process, is limited to full-access accounts, and is off by default.
+  Decision 16 (no production expansion) is unchanged.
+- Phase 0 (`e32f456`):
+  - Handlers, Reminder buttons, `ensure_by_chat` and Pairing resolve the sender with `get_user_by_channel_identity`. For Telegram on Supabase this is the same single
+    query.
+  - Pairing goes through `complete_channel_pairing` (v2 delegates to v1 for Telegram). It accepts a typed `/pair <token>` as well as Telegram's
+    `/start pair_<token>`.
+  - `MessageChannel.display_name` was added to the protocol. Telegram and CLI are updated; FakeChannel and both FailingChannels inherit it.
+  - Pairing logs no longer include chat ids.
+- Provisional (Phase 0): in the allowlist posture, non-Telegram apps admit only linked full-access accounts, and pairing attempts are allowed.
+- Phase 0 test fixtures:
+  - The CLI dev fixture is now a CLI-only account (first-app Pairing); Activation still completes.
+  - Fixtures that used `channel_id="fake"` with Telegram-only users now link a `fake` identity. They passed before only because handlers
+    ignored the channel.
+- Phase 1 (this commit):
+  - New `src/channels/registry.py`. `ReminderScheduler` and `CoachingDeliveryWorker` accept a channel or a registry; proactive sends use
+    `registry.for_user(user)`.
+  - Delivery proof records the sending adapter.
+  - Handoff crash recovery runs only on the controller of the participant's primary channel. This is provisional: handoffs do not record the channel they were
+    confirmed on, and recovery is unprompted, like a Reminder.
+  - `main.py` registers only Telegram.
+  - This reverses the earlier provisional "no ChannelRegistry" decision, as that decision itself foresaw.
+- Gate A: `src/channels/registry.py` was added to `INVALIDATING_INPUT_PATHS`. Daily instructions and the Tool schema are unchanged.
+- Evidence: pytest 1819 passed; ruff clean; `smoke_check.py --scheduler` passes; Gate A `--validate-only` passes. CLI `/help` and `/mode` were run end to end with
+  the CLI-only fixture. No billed runs.
+- Protected files: none touched in Phases 0 and 1.
+- Next: Phase 2 (Discord adapter) after owner review.
