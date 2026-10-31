@@ -22,6 +22,7 @@ from src.api.reminders import router as reminders_router
 from src.api.tasks import router as tasks_router
 from src.bot.handlers import BotHandlers
 from src.bot.update_claims import ChannelUpdateCoordinator, participant_key
+from src.channels.discord import DiscordChannel
 from src.channels.registry import ChannelRegistry
 from src.channels.telegram import TelegramChannel
 from src.config import settings
@@ -57,9 +58,11 @@ logger = logging.getLogger(__name__)
 
 # ── Wiring ──
 channel = TelegramChannel()
-# Every channel this process runs; proactive messages use each participant's primary one.
-channels = ChannelRegistry([channel])
 store = MemoryStore()
+# Discord is an opt-in second app in this process (ADR 0004; full-access accounts only).
+discord_channel = DiscordChannel(store) if settings.discord_enabled else None
+# Every channel this process runs; proactive messages use each participant's primary one.
+channels = ChannelRegistry([channel] + ([discord_channel] if discord_channel else []))
 session_mgr = SessionManager(store)
 reminder_scheduler = ReminderScheduler(channel=channels, store=store)
 outbox_worker = SchedulerOutboxWorker(store, reminder_scheduler)
@@ -73,6 +76,18 @@ handlers = BotHandlers(
 update_coordinator = ChannelUpdateCoordinator(store)
 # One BotHandlers per channel; all share the store, scheduler and the one Turn serializer.
 handlers_by_channel = {channel.channel_id: handlers}
+coordinators = {channel.channel_id: update_coordinator}
+if discord_channel is not None:
+    handlers_by_channel[discord_channel.channel_id] = BotHandlers(
+        channel=discord_channel,
+        store=store,
+        session_mgr=session_mgr,
+        reminder_scheduler=reminder_scheduler,
+        channels=channels,
+    )
+    coordinators[discord_channel.channel_id] = ChannelUpdateCoordinator(
+        store, update_coordinator.serializer, channel_id=discord_channel.channel_id
+    )
 coaching_worker = CoachingDeliveryWorker(
     store, channels, admission_check=coach_readiness.complete
 )
@@ -142,6 +157,15 @@ async def lifespan(app: FastAPI):
             raise RuntimeError("Telegram webhook initialization failed") from None
         logger.warning("Failed to initialize Telegram webhook/bot info: %s", e)
 
+    if discord_channel is not None:
+        discord_channel.on_update = _discord_update
+        try:
+            await discord_channel.start()
+            logger.info("Discord gateway connecting")
+        except Exception as error:
+            # Discord is an opt-in second app: a bad token or outage never stops Telegram.
+            logger.error("Discord gateway failed to start: %s", type(error).__name__)
+
     monitor_stop = asyncio.Event()
     monitor_task = asyncio.create_task(
         monitor_event_loop_delay(monitor_stop),
@@ -152,6 +176,8 @@ async def lifespan(app: FastAPI):
     finally:
         monitor_stop.set()
         await monitor_task
+        if discord_channel is not None:
+            await discord_channel.close()
         reminder_scheduler.shutdown()
         # The webhook is deliberately left registered. During a rolling deploy the old instance
         # stops after the new one has set it, and an idle spin-down must stay wakeable by
@@ -212,6 +238,49 @@ app.add_middleware(
     # Activation retry silently never happens.
     expose_headers=RETRYABLE_HEADERS,
 )
+
+
+async def _run_update(
+    channel_id: str, update, acknowledge=None, *, acknowledge_first: bool = False
+):
+    """Claim, serialize and process one decoded inbound update for its channel."""
+    channel_handlers = handlers_by_channel[channel_id]
+    coordinator = coordinators[channel_id]
+    if update.kind == "message":
+
+        async def process() -> None:
+            await channel_handlers.handle_message(
+                chat_id=update.chat_id,
+                text=update.text,
+                update_id=update.update_id,
+                conversation=update.conversation,
+            )
+
+    else:
+
+        async def process() -> None:
+            await channel_handlers.handle_callback(
+                chat_id=update.chat_id,
+                message_id=update.message_id,
+                data=update.data,
+                conversation=update.conversation,
+            )
+
+    return await coordinator.run(
+        update_id=update.update_id,
+        chat_id=update.chat_id,
+        update_kind=update.kind,
+        process=process,
+        acknowledge=acknowledge,
+        acknowledge_first=acknowledge_first,
+    )
+
+
+async def _discord_update(update, acknowledge) -> None:
+    """Discord gateway events; button presses are acknowledged before the claim (3 s limit)."""
+    await _run_update(
+        discord_channel.channel_id, update, acknowledge, acknowledge_first=acknowledge is not None
+    )
 
 
 @app.post("/webhook")

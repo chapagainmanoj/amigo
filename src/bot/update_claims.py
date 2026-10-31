@@ -71,12 +71,19 @@ class ChannelUpdateCoordinator:
         update_kind: str,
         process: Callable[[], Awaitable[None]],
         acknowledge: Callable[[], Awaitable[None]] | None = None,
+        acknowledge_first: bool = False,
     ) -> UpdateResult:
-        """Process only the first delivery and make any internal failure inspectable."""
+        """Process only the first delivery and make any internal failure inspectable.
+
+        `acknowledge_first` is for providers with a hard acknowledgement deadline (Discord: three
+        seconds), which never redeliver an interaction, so acknowledging before the claim is safe.
+        """
+        if acknowledge is not None and acknowledge_first:
+            await acknowledge()
         claim = await self.store.claim_channel_update(
             self.channel_id, str(update_id), str(chat_id), update_kind
         )
-        if acknowledge is not None:
+        if acknowledge is not None and not acknowledge_first:
             await acknowledge()
         if not claim["claimed"]:
             logger.info(

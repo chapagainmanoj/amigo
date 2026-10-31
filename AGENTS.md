@@ -84,13 +84,13 @@ python scripts/smoke_check.py --scheduler
 - **No Supabase queries outside `MemoryStore`** — all DB access goes
   through the store layer.
 - **No Telegram imports outside `src/channels/telegram.py`** — the
-  library is an implementation detail.
+  library is an implementation detail. Likewise `discord` stays in `src/channels/discord.py`.
 - **No direct side effects in `src/agent/`** — the agent classifies
   and plans; side effects go through `src/tools/` (see ADR 0001).
 - **Store sync**: any change to `MemoryStore` methods must be mirrored
   in `InMemoryStore` and `FakeStore` (three implementations).
 - **Protocol changes**: any change to `MessageChannel` requires verifying all implementations:
-  `TelegramChannel`, `CLIChannel`, `FakeChannel`, and both `FailingChannel` classes in
+  `TelegramChannel`, `DiscordChannel`, `CLIChannel`, `FakeChannel`, and both `FailingChannel` classes in
   `tests/test_reminders.py` and `tests/test_scheduler.py`. Model backends go through Pydantic AI
   (ADR 0002), routed in `src/model_routing.py`; there is no provider Protocol.
 - **Rate limits**: Gemini retries once then returns an error message.
@@ -104,6 +104,8 @@ python scripts/smoke_check.py --scheduler
 | `GOOGLE_API_KEY` | (required) | Gemini API key |
 | `TELEGRAM_BOT_TOKEN` | `""` | Telegram bot token |
 | `TELEGRAM_WEBHOOK_SECRET` | `""` | Webhook auth secret |
+| `DISCORD_ENABLED` | `false` | Run Discord as a second app in the web process (full-access accounts only) |
+| `DISCORD_BOT_TOKEN` / `DISCORD_APPLICATION_ID` | `""` | Discord bot credentials; token required when enabled |
 | `SUPABASE_URL` | `""` | Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | `""` | Supabase service role key |
 | `ACCESS_MODE` | `open` | `closed`, `allowlist`, or `registered` (alias `invite`) in production |

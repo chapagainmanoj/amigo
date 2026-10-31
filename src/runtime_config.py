@@ -81,6 +81,10 @@ def _required_key_settings(config: object) -> list[str]:
 def validate_runtime_configuration(config: object) -> None:
     """Reject unsafe production settings before startup creates any side effect."""
     _validate_model_routing(config)
+    if getattr(config, "discord_enabled", False) is True:
+        _require_secret(
+            "DISCORD_BOT_TOKEN", getattr(config, "discord_bot_token", ""), minimum_length=50
+        )
     if not is_production(config):
         return
 

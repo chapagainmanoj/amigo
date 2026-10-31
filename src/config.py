@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
 
+    # Discord (ADR 0004 multi-app proof): a second app in the same process, off by default and
+    # only for linked full-access accounts. Decision 16 still governs production expansion.
+    discord_enabled: bool = False
+    discord_bot_token: str = ""
+    discord_application_id: str = ""
+
     # Supabase (required when app_channel=telegram, ignored in cli mode)
     supabase_url: str = ""
     supabase_service_key: str = ""
