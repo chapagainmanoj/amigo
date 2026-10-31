@@ -20,6 +20,14 @@ async def _reminder(store, chat_id=123):
     return user, reminder
 
 
+def _stub_conversations(scheduler, channel_id="telegram", *, returns=None):
+    """Replace the scheduler's per-channel conversation service with a stub."""
+    service = type("ConversationService", (), {})()
+    service.ensure = AsyncMock(return_value=returns)
+    scheduler._mode_conversations[channel_id] = service
+    return service
+
+
 @pytest.mark.parametrize("recovery", [False, True])
 async def test_delivery_resolves_daily_conversation_after_scheduling(recovery):
     store, channel = FakeStore(), FakeChannel(threads=True)
@@ -27,9 +35,7 @@ async def test_delivery_resolves_daily_conversation_after_scheduling(recovery):
     scheduler = ReminderScheduler(channel, store)
     original = ConversationRef(channel.channel_id, {"chat_id": 123, "opaque": "old"})
     current = ConversationRef(channel.channel_id, {"chat_id": 123, "opaque": "current"})
-    service = type("ConversationService", (), {})()
-    service.ensure = AsyncMock(return_value=original)
-    scheduler._mode_conversations = service
+    service = _stub_conversations(scheduler, returns=original)
     scheduler.schedule_reminder(user["user_id"], reminder["reminder_id"],
                                 utc_now() + timedelta(minutes=5), 123, "Test task")
     service.ensure.return_value = current
@@ -50,11 +56,10 @@ async def test_delivery_uses_fresh_linked_chat_instead_of_scheduled_chat(monkeyp
         **user, "telegram_chat_id": 456,
     }))
     scheduler = ReminderScheduler(channel, store)
-    scheduler._mode_conversations = type("ConversationService", (), {})()
-    scheduler._mode_conversations.ensure = AsyncMock(return_value=None)
+    service = _stub_conversations(scheduler)
     await scheduler._send_reminder(user["user_id"], 123, reminder["reminder_id"], "Test task")
     assert channel.sent[0]["chat_id"] == 456
-    assert scheduler._mode_conversations.ensure.call_args.kwargs == {"chat_id": 456}
+    assert service.ensure.call_args.kwargs == {"chat_id": 456}
 
 
 async def test_different_primary_channel_is_not_sent_through_old_channel(monkeypatch):
@@ -124,8 +129,7 @@ async def test_reminder_goes_only_to_the_primary_channel_and_records_its_proof()
     assert store.reminders[0]["status"] == "pending"
 
     fake2 = ReminderScheduler(_fake2_channel(store), store)
-    fake2._mode_conversations = type("ConversationService", (), {})()
-    fake2._mode_conversations.ensure = AsyncMock(return_value=None)
+    _stub_conversations(fake2, "fake2")
     await fake2._send_reminder(user["user_id"], None, reminder["reminder_id"], "Test task")
     assert fake2.channel.sent[0]["chat_id"] == "ext-124"
     row = store.reminders[0]
@@ -166,8 +170,7 @@ async def test_profile_without_telegram_is_scheduled_and_delivered_on_its_own_ch
     )
 
     fake2 = ReminderScheduler(_fake2_channel(store), store)
-    fake2._mode_conversations = type("ConversationService", (), {})()
-    fake2._mode_conversations.ensure = AsyncMock(return_value=None)
+    _stub_conversations(fake2, "fake2")
     await fake2.reconcile()
     job = fake2.scheduler.get_job(f"{user['user_id']}:{reminder['reminder_id']}")
     assert job is not None and job.kwargs["chat_id"] is None

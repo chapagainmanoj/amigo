@@ -22,6 +22,7 @@ from src.api.reminders import router as reminders_router
 from src.api.tasks import router as tasks_router
 from src.bot.handlers import BotHandlers
 from src.bot.update_claims import ChannelUpdateCoordinator, participant_key
+from src.channels.registry import ChannelRegistry
 from src.channels.telegram import TelegramChannel
 from src.config import settings
 from src.maintenance import run_isolated_steps
@@ -56,19 +57,22 @@ logger = logging.getLogger(__name__)
 
 # ── Wiring ──
 channel = TelegramChannel()
+# Every channel this process runs; proactive messages use each participant's primary one.
+channels = ChannelRegistry([channel])
 store = MemoryStore()
 session_mgr = SessionManager(store)
-reminder_scheduler = ReminderScheduler(channel=channel, store=store)
+reminder_scheduler = ReminderScheduler(channel=channels, store=store)
 outbox_worker = SchedulerOutboxWorker(store, reminder_scheduler)
 handlers = BotHandlers(
     channel=channel,
     store=store,
     session_mgr=session_mgr,
     reminder_scheduler=reminder_scheduler,
+    channels=channels,
 )
 update_coordinator = ChannelUpdateCoordinator(store)
 coaching_worker = CoachingDeliveryWorker(
-    store, channel, admission_check=coach_readiness.complete
+    store, channels, admission_check=coach_readiness.complete
 )
 
 # Unknown until getMe succeeds for the configured token. Never seeded with a literal

@@ -1,19 +1,24 @@
 """Proactive delivery addressing: the single rule for where unprompted messages go (ADR 0004)."""
 
 from src.channels.base import MessageChannel, Recipient
+from src.channels.registry import ChannelRegistry
 
 
-def reachable_here(channel: MessageChannel, user: dict | None) -> bool:
+def reachable_here(channels: ChannelRegistry, user: dict | None) -> bool:
     """Proactive messages go only to the participant's primary channel.
 
-    A process whose channel is not the primary never sends, even when the participant has an
-    identity on it; the primary channel's own process delivers instead.
+    A process that does not run the primary channel never sends, even when the participant has
+    an identity on one of its channels; the process running the primary channel delivers instead.
     """
-    return bool(user) and user.get("primary_channel", "telegram") == channel.channel_id
+    return channels.for_user(user) is not None
 
 
-async def proactive_recipient(channel: MessageChannel, user: dict | None) -> Recipient | None:
-    """This channel's address for a proactive message to `user`, or None when it must not send."""
-    if not reachable_here(channel, user):
+async def proactive_recipient(
+    channels: ChannelRegistry, user: dict | None
+) -> tuple[MessageChannel, Recipient] | None:
+    """The primary adapter and its address for `user`; None when this process must not send."""
+    channel = channels.for_user(user)
+    if channel is None:
         return None
-    return await channel.recipient_for(user)
+    recipient = await channel.recipient_for(user)
+    return None if recipient is None else (channel, recipient)

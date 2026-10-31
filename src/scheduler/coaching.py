@@ -6,6 +6,7 @@ from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from src.channels.delivery import proactive_recipient, reachable_here
+from src.channels.registry import ChannelRegistry
 from src.memory.proactive import instant
 from src.utils import default_clock
 
@@ -94,7 +95,8 @@ class CoachingDeliveryWorker:
         admission_check=None,
     ):
         self.store = store
-        self.channel = channel
+        # Every channel this process runs; nudges go only to the participant's primary one.
+        self.channels = ChannelRegistry.of(channel)
         self.clock = clock
         self.admission_enabled = admission_enabled
         self.admission_check = admission_check
@@ -165,14 +167,15 @@ class CoachingDeliveryWorker:
                     not plan
                     or plan["kind"] != row["kind"]
                     or not await self.store.has_coaching_consent(user_id)
-                    or not reachable_here(self.channel, user)
+                    or not reachable_here(self.channels, user)
                 ):
                     await self.store.finish_coaching_delivery(user_id, key, token, "cancelled")
                     continue
-                recipient = await proactive_recipient(self.channel, user)
-                if recipient is None:
+                resolved = await proactive_recipient(self.channels, user)
+                if resolved is None:
                     await self.store.finish_coaching_delivery(user_id, key, token, "cancelled")
                     continue
+                channel, recipient = resolved
                 auth_id = user.get("supabase_auth_id")
                 activation = await self.store.get_activation_state(auth_id) if auth_id else {}
                 if activation.get("completed") is not True:
@@ -189,7 +192,7 @@ class CoachingDeliveryWorker:
                     continue
                 from src.conversations import ModeConversationService
 
-                conversation = await ModeConversationService(self.store, self.channel).ensure(
+                conversation = await ModeConversationService(self.store, channel).ensure(
                     user, "coach"
                 )
                 messages = {
@@ -223,7 +226,7 @@ class CoachingDeliveryWorker:
                         for action in actions
                     ]
                 ]
-                message_id = await self.channel.send_message(
+                message_id = await channel.send_message(
                     recipient,
                     messages[row["kind"]],
                     conversation=conversation,

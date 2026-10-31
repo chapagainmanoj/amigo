@@ -29,6 +29,8 @@ class BotHandlers:
         session_mgr: SessionManager,
         reminder_scheduler: ReminderScheduler,
         mode_runtime: ModeRuntime | None = None,
+        *,
+        channels=None,
     ):
         self.channel = channel
         self.store = store
@@ -49,7 +51,8 @@ class BotHandlers:
         )
         self.coaching = CoachingController(store, channel)
         self.handoffs = HandoffController(
-            store, channel, reminder_scheduler, session_mgr, self.turn_processor.mode_runtime
+            store, channel, reminder_scheduler, session_mgr, self.turn_processor.mode_runtime,
+            channels=channels,
         )
         if hasattr(channel, "default_conversation_resolver"):
             channel.default_conversation_resolver = (

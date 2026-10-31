@@ -260,9 +260,11 @@ graph TD
 4. Run inbound events through `ChannelUpdateCoordinator(store, channel_id=...)`. It deduplicates and
    serializes Turns per participant across all channels. Proactive messages follow
    `src/channels/delivery.py`: they go only to the participant's `primary_channel`.
-5. Wire it in a new entrypoint, one channel per process. Add a channel registry only when two channels
-   share a process. Decision 16's demand and cross-channel release gates still apply;
-   implementing the protocol does not authorize another production channel.
+5. Register it in the process's `ChannelRegistry` (`src/channels/registry.py`) next to Telegram, with
+   its own `BotHandlers` and `ChannelUpdateCoordinator` sharing the one `ParticipantTurnSerializer`, so
+   the per-participant Turn lock spans apps. The scheduler, Coach worker and handoff recovery pick the
+   participant's primary channel from the registry. Decision 16's demand and cross-channel release
+   gates still apply; implementing the protocol does not authorize another production channel.
 
 ### Adding a new LLM provider
 

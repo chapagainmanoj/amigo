@@ -12,6 +12,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from src.bot.keyboards import reminder_keyboard
 from src.channels.base import MessageChannel, Recipient
 from src.channels.delivery import proactive_recipient, reachable_here
+from src.channels.registry import ChannelRegistry
 from src.memory.proactive import instant
 from src.memory.store import MemoryStore
 from src.utils import Clock, default_clock
@@ -50,13 +51,20 @@ class ReminderScheduler:
     Uses stable job IDs (user_id:reminder_id) for idempotency.
     """
 
-    def __init__(self, channel: MessageChannel, store: MemoryStore, clock: Clock = default_clock):
+    def __init__(
+        self,
+        channel: MessageChannel | ChannelRegistry,
+        store: MemoryStore,
+        clock: Clock = default_clock,
+    ):
         self.scheduler = AsyncIOScheduler(timezone=ZoneInfo("UTC"))
-        self.channel = channel
+        # Every channel this process runs; proactive sends use the participant's primary one.
+        self.channels = ChannelRegistry.of(channel)
+        self.channel = self.channels.default
         self.store = store
         self.clock = clock
         self.worker_id = str(uuid.uuid4())
-        self._mode_conversations = None
+        self._mode_conversations: dict[str, object] = {}
 
     def start(self) -> None:
         """Start the scheduler."""
@@ -90,7 +98,7 @@ class ReminderScheduler:
             profile = reminder.get("user_profiles") or {}
             task = reminder.get("tasks") or {}
             if (
-                not reachable_here(self.channel, {"user_id": user_id, **profile})
+                not reachable_here(self.channels, {"user_id": user_id, **profile})
                 or task.get("user_id") != user_id
                 or task.get("status") != "pending"
                 or reminder["status"] == "sent"
@@ -124,7 +132,9 @@ class ReminderScheduler:
                         result="error",
                         normalized_cause="interrupted_delivery_unknown",
                         retry_decision="do_not_retry",
-                        **self._delivery_proof(None),
+                        **self._delivery_proof(
+                            None, self.channels.for_user({"user_id": user_id, **profile})
+                        ),
                     )
                     report["failed"] += 1
                     continue
@@ -222,15 +232,18 @@ class ReminderScheduler:
         user = await self.store.get_user_by_id(user_id)
         if not user or user["user_id"] != user_id:
             raise ValueError("Reminder endpoint no longer belongs to its participant")
-        if not reachable_here(self.channel, user):
+        if not reachable_here(self.channels, user):
             raise ValueError("Reminder channel is not the participant's primary channel")
-        chat_id = await proactive_recipient(self.channel, user)
-        if chat_id is None:
+        resolved = await proactive_recipient(self.channels, user)
+        if resolved is None:
             raise ValueError("Participant has no linked messaging endpoint")
-        if self._mode_conversations is None:
-            self._mode_conversations = ModeConversationService(self.store, self.channel)
-        conversation = await self._mode_conversations.ensure(user, "daily", chat_id=chat_id)
-        return chat_id, conversation
+        channel, chat_id = resolved
+        conversations = self._mode_conversations.get(channel.channel_id)
+        if conversations is None:
+            conversations = ModeConversationService(self.store, channel)
+            self._mode_conversations[channel.channel_id] = conversations
+        conversation = await conversations.ensure(user, "daily", chat_id=chat_id)
+        return channel, chat_id, conversation
 
     def _schedule_recovery_summary(
         self,
@@ -255,7 +268,8 @@ class ReminderScheduler:
         self, user_id: str, chat_id: Recipient | None, reminders: list[dict]
     ) -> None:
         user = await self.store.get_user_by_id(user_id)
-        if not reachable_here(self.channel, user):
+        channel = self.channels.for_user(user)
+        if channel is None:
             return
         local = instant(self.clock.utc_now()).astimezone(ZoneInfo(user.get("timezone") or "UTC"))
         scheduled_at = local.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
@@ -273,7 +287,7 @@ class ReminderScheduler:
         claimed: list[tuple[dict, str]] = []
         dispatched = False
         try:
-            chat_id, conversation = await self._daily_delivery(user_id)
+            channel, chat_id, conversation = await self._daily_delivery(user_id)
             # Atomic transition fences concurrent recovery workers and crash replay.
             if not await self.store.mark_proactive_dispatch(user_id, delivery_key):
                 return
@@ -292,7 +306,7 @@ class ReminderScheduler:
             text = "A few reminders were delayed while Amigo restarted:\n" + "\n".join(
                 f"• {title}" for title in titles
             )
-            message_id = await self.channel.send_message(
+            message_id = await channel.send_message(
                 chat_id, text, conversation=conversation,
             )
             await self.store.finish_proactive_delivery(
@@ -309,13 +323,13 @@ class ReminderScheduler:
                     reminder_id=reminder["reminder_id"], user_id=user_id,
                     result="timeout" if isinstance(error, TimeoutError) else "error",
                     normalized_cause=type(error).__name__, retry_decision="do_not_retry",
-                    **self._delivery_proof(None),
+                    **self._delivery_proof(None, channel),
                 )
             raise
         for reminder, attempt_id in claimed:
             await self._finish_provider_result(
                 attempt_id=attempt_id, reminder_id=reminder["reminder_id"],
-                user_id=user_id, message_id=message_id,
+                user_id=user_id, message_id=message_id, channel=channel,
             )
 
     def schedule_reminder(
@@ -373,7 +387,8 @@ class ReminderScheduler:
         try:
             # After a primary-channel switch the old channel must not claim (and fail) the
             # Reminder: leave it pending so the primary channel's process delivers it.
-            if not reachable_here(self.channel, await self.store.get_user_by_id(user_id)):
+            channel = self.channels.for_user(await self.store.get_user_by_id(user_id))
+            if channel is None:
                 return
             # Guard: atomically claim the reminder before sending so deploy overlap
             # or accidental scale-out cannot send the same reminder twice.
@@ -387,8 +402,8 @@ class ReminderScheduler:
             attempt_id = reminder["attempt"]["attempt_id"]
 
             try:
-                chat_id, conversation = await self._daily_delivery(user_id)
-                message_id = await self.channel.send_message(
+                channel, chat_id, conversation = await self._daily_delivery(user_id)
+                message_id = await channel.send_message(
                     chat_id,
                     f"Hey — you mentioned wanting to \"{task_title}\" today. Good time? 📋",
                     buttons=reminder_keyboard(reminder_id),
@@ -402,7 +417,7 @@ class ReminderScheduler:
                     result="timeout" if isinstance(error, TimeoutError) else "error",
                     normalized_cause=type(error).__name__,
                     retry_decision="do_not_retry",
-                    **self._delivery_proof(None),
+                    **self._delivery_proof(None, channel),
                 )
                 raise
 
@@ -411,6 +426,7 @@ class ReminderScheduler:
                 reminder_id=reminder_id,
                 user_id=user_id,
                 message_id=message_id,
+                channel=channel,
             )
 
         except Exception:
@@ -423,6 +439,7 @@ class ReminderScheduler:
         reminder_id: str,
         user_id: str,
         message_id: int | None,
+        channel: MessageChannel,
     ) -> None:
         """Normalize provider acceptance into one immutable attempt outcome."""
         accepted = message_id is not None
@@ -433,12 +450,14 @@ class ReminderScheduler:
             result="accepted" if accepted else "rejected",
             normalized_cause=None if accepted else "missing_provider_message_id",
             retry_decision="do_not_retry",
-            **self._delivery_proof(message_id),
+            **self._delivery_proof(message_id, channel),
         )
 
-    def _delivery_proof(self, message_id: int | str | None) -> dict:
-        """Provider acceptance recorded against the channel that actually sent it."""
-        channel = self.channel.channel_id
+    def _delivery_proof(
+        self, message_id: int | str | None, sender: MessageChannel | None
+    ) -> dict:
+        """Provider acceptance recorded against the channel that actually sent (or tried to)."""
+        channel = (sender or self.channel).channel_id
         return {
             "telegram_message_id": message_id if channel == "telegram" else None,
             "channel": channel,

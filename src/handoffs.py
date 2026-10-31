@@ -39,9 +39,12 @@ def _hold(serializer, user):
 
 
 class HandoffController:
-    def __init__(self, store, channel, scheduler, sessions, runtime):
+    def __init__(self, store, channel, scheduler, sessions, runtime, *, channels=None):
         self.store, self.channel, self.scheduler = store, channel, scheduler
         self.sessions, self.runtime = sessions, runtime
+        # With several channels in one process, each controller recovers only the rows whose
+        # participant's primary channel is its own; recovery is unprompted, like a Reminder.
+        self.channels = channels
         self.conversations = ModeConversationService(store, channel)
         self.worker_id = str(uuid.uuid4())
 
@@ -212,8 +215,16 @@ class HandoffController:
                 ("handoff_row", partial(self._recover_execution, serializer, pending))
             ])
 
+    def _recovered_elsewhere(self, user) -> bool:
+        if self.channels is None:
+            return False
+        primary = self.channels.for_user(user)
+        return primary is not None and primary is not self.channel
+
     async def _recover_execution(self, serializer, pending):
         user = await self.store.get_user_by_id(pending["user_id"])
+        if user is not None and self._recovered_elsewhere(user):
+            return
         if user is None:
             await self.retire_unavailable(pending, "owner_unavailable")
             return
@@ -239,6 +250,8 @@ class HandoffController:
     async def _recover_notice(self, serializer, pending):
         user_id, handoff_id = pending["user_id"], pending["handoff_id"]
         user = await self.store.get_user_by_id(user_id)
+        if user is not None and self._recovered_elsewhere(user):
+            return
         if user is None:
             await self.store.claim_handoff_failure_notice(user_id, handoff_id, "owner_unavailable")
             return
