@@ -41,6 +41,8 @@ messaging app cannot hold a participant, and one participant cannot use two apps
 
 ## Consequences
 
+- Discord is the multi-app proof (31 Oct 2026). It runs in the same process behind `ChannelRegistry`, is off
+  by default (`DISCORD_ENABLED`), and is open only to full-access accounts. See `docs/runbooks/discord-dogfood.md`.
 - Production remains Telegram-only. Decision 16's demand and release gates still govern any new
   production channel. This ADR only removes the identity barrier.
 - Participant Turns serialize by `user_id`, not by chat, so two apps cannot run concurrent Turns for one

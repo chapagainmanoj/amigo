@@ -253,7 +253,10 @@ class DiscordChannel:
         from src.config import settings
 
         app_id = str(settings.discord_application_id).strip()
-        return f"https://discord.com/oauth2/authorize?client_id={app_id}" if app_id else None
+        # Adding the bot to a server the participant shares with it lets it DM them.
+        if not app_id:
+            return None
+        return f"https://discord.com/oauth2/authorize?client_id={app_id}&scope=bot&permissions=0"
 
     async def recipient_for(self, user: dict) -> str | int | None:
         if not user.get("user_id"):

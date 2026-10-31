@@ -53,13 +53,17 @@ amigo/
   the Mode before any write, loads and persists Session Messages, and maps model failures to the
   friendly participant reply. The model framework remains behind the runtime's owned result and
   history types; this layer does not import it.
-- `src/bot/` — Telegram-specific glue. `BotHandlers` routes Pairing deep links first, permits
+- `src/bot/` — channel-neutral glue, one `BotHandlers` per channel. It resolves senders by channel
+  identity. It routes Pairing (a Telegram deep link or a typed `/pair <code>`) first, permits
   Reminder callbacks needed by the Activation test, and requires canonical Activation completion
   before ordinary text reaches Turn processing. Legacy Telegram-only onboarding is unreachable.
 - `src/channels/` — `MessageChannel`, immutable `ConversationRef` addresses, and explicit
   capability declarations. Telegram owns topic IDs, Bot API decoding, private-chat deep links,
-  and the defensive unavailable-thread branch; CLI declares no threads and uses in-chat Mode
-  commands. Application code passes opaque conversation references rather than provider thread IDs.
+  and the defensive unavailable-thread branch. Discord (opt-in, full-access accounts) owns the
+  gateway, DMs and component buttons. Discord and CLI declare no threads and use in-chat Mode
+  commands. `ChannelRegistry` lists the channels a process runs, and `delivery.py` sends proactive
+  messages to the participant's primary one. Application code passes opaque conversation
+  references rather than provider thread IDs.
 - `src/conversations.py` — `ModeConversationService` resolves or creates a Mode's channel
   conversation and closes unavailable specialized conversations. Unknown incoming conversations
   become additional Daily aliases; the model does not choose provider endpoints. A Mode can have
