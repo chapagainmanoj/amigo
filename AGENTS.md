@@ -104,7 +104,7 @@ python scripts/smoke_check.py --scheduler
 | `GOOGLE_API_KEY` | (required) | Gemini API key |
 | `TELEGRAM_BOT_TOKEN` | `""` | Telegram bot token |
 | `TELEGRAM_WEBHOOK_SECRET` | `""` | Webhook auth secret |
-| `DISCORD_ENABLED` | `false` | Run Discord as a second app in the web process (full-access accounts only) |
+| `DISCORD_ENABLED` | `false` | Discord as a second app in the web process; offered to every full-access account, so keep that list owner/internal until decision 04 covers Discord |
 | `DISCORD_BOT_TOKEN` / `DISCORD_APPLICATION_ID` | `""` | Discord bot credentials; token required when enabled |
 | `SUPABASE_URL` | `""` | Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | `""` | Supabase service role key |

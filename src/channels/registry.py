@@ -35,10 +35,17 @@ class ChannelRegistry:
         return self._channels.get(channel_id)
 
     def for_user(self, user: dict | None) -> MessageChannel | None:
-        """The participant's primary channel's adapter, if it runs in this process."""
+        """The participant's primary channel's adapter, if it runs here and can deliver now.
+
+        An adapter that is not ready (e.g. a gateway still connecting or down) is treated as not
+        running: proactive messages wait pending instead of failing for good.
+        """
         if not user:
             return None
-        return self._channels.get(user.get("primary_channel", "telegram"))
+        channel = self._channels.get(user.get("primary_channel", "telegram"))
+        if channel is None or not getattr(channel, "ready", True):
+            return None
+        return channel
 
     def __iter__(self) -> Iterator[MessageChannel]:
         return iter(self._channels.values())

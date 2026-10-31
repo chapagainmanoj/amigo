@@ -53,6 +53,10 @@ async def handle_pairing(
         await channel.send_message(chat_id=chat_id, conversation=conversation, text=_INVALID_LINK)
         return
 
+    if channel.channel_id != "telegram" and await store.get_pairing_token_owner(token) is None:
+        logger.warning("Pairing failed: invalid token channel=%s", channel.channel_id)
+        await channel.send_message(chat_id=chat_id, conversation=conversation, text=_INVALID_LINK)
+        return
     if channel.channel_id != "telegram" and not await _second_app_allowed(store, token):
         logger.warning("Pairing refused: not a full-access account channel=%s", channel.channel_id)
         await channel.send_message(

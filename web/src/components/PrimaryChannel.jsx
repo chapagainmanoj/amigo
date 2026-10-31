@@ -5,6 +5,10 @@ import './PrimaryChannel.css'
 
 const LABELS = { telegram: 'Telegram', discord: 'Discord', cli: 'Local CLI' }
 const label = channel => LABELS[channel] ?? channel.charAt(0).toUpperCase() + channel.slice(1)
+const expiry = iso => {
+  const at = new Date(iso)
+  return Number.isNaN(at.getTime()) ? '' : ` and expires at ${at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+}
 
 // Shown once a participant has linked more than one messaging app, or may connect another.
 export default function PrimaryChannel({ request = apiRequest }) {
@@ -83,7 +87,7 @@ export default function PrimaryChannel({ request = apiRequest }) {
       {pairing && <ol>
         {pairing.app_link && <li><a href={pairing.app_link} target="_blank" rel="noreferrer">Add Amigo in {label(pairing.channel)}</a>.</li>}
         <li>Send Amigo this message in {label(pairing.channel)}: <code>{pairing.command}</code></li>
-        <li>Then <button className="coaching-button" type="button" disabled={busy} onClick={load}>refresh settings</button>. The code works once and expires in a few minutes.</li>
+        <li>Then <button className="coaching-button" type="button" disabled={busy} onClick={load}>refresh settings</button>. The code works once{expiry(pairing.expires_at)}.</li>
       </ol>}
     </div>}
     <p role="status">{busy ? 'Updating messaging app settings…' : notice}</p>

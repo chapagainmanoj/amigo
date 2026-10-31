@@ -103,9 +103,9 @@ async def test_telegram_chat_id_on_another_channel_is_not_that_participant(open_
     fake2 = FakeChannel(channel_id="fake2")
     handlers = _handlers(store, fake2)
 
-    # The same digits on another app are a different, unlinked address.
+    # The same digits on another app are a different, unlinked address, refused even when open.
     await handlers.handle_message(41501, "/help", update_id=1)
-    assert "verified dashboard" in fake2.last_text
+    assert "isn't open" in fake2.last_text
 
 
 @pytest.mark.parametrize("posture", ["allowlist", "registered", "invite"])
@@ -124,3 +124,11 @@ async def test_every_posture_admits_other_apps_only_for_linked_full_access_accou
         assert await handlers._is_allowed("ext-9") is allowed
         assert await handlers._is_allowed("unlinked") is False
         assert await handlers._is_allowed("unlinked", pairing_attempt=True) is True
+
+
+async def test_expired_or_unknown_code_on_another_app_says_the_link_is_invalid(open_access):
+    store = FakeStore()
+    await _activated_telegram_user(store)
+    fake2 = FakeChannel(channel_id="fake2")
+    await _handlers(store, fake2).handle_message("ext-3", f"/pair {9:032x}", update_id=1)
+    assert "invalid or has expired" in fake2.last_text

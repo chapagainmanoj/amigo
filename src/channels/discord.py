@@ -34,21 +34,34 @@ _CAPABILITIES = ChannelCapabilities(
 UpdateHandler = Callable[[IncomingUpdate, Callable[[], Awaitable[None]] | None], Awaitable[None]]
 
 
+_FENCE = "```"
+
+
 def split_text(text: str, limit: int = MESSAGE_LIMIT) -> list[str]:
-    """Split at paragraph, line or word boundaries so no part exceeds Discord's limit."""
+    """Split at paragraph, line or word boundaries so no part exceeds Discord's limit.
+
+    A part that would end inside a code block closes it, and the next part reopens it.
+    Whitespace-only text yields no parts.
+    """
     parts: list[str] = []
     rest = text
+    budget = limit - len(_FENCE) - 1  # room to close a fence opened in this part
     while len(rest) > limit:
-        window = rest[:limit]
-        cut = max(window.rfind("\n\n"), window.rfind("\n"))
+        window = rest[:budget]
+        cut = window.rfind("\n\n")
+        if cut <= budget // 2:
+            cut = window.rfind("\n")
         if cut <= 0:
             cut = window.rfind(" ")
         if cut <= 0:
-            cut = limit
-        parts.append(rest[:cut].rstrip())
-        rest = rest[cut:].lstrip("\n ")
+            cut = budget
+        part, rest = rest[:cut].rstrip(), rest[cut:].lstrip("\n")
+        if part.count(_FENCE) % 2:
+            part += "\n" + _FENCE
+            rest = _FENCE + "\n" + rest
+        parts.append(part)
     parts.append(rest)
-    return [part for part in parts if part] or [""]
+    return [part for part in parts if part.strip()]
 
 
 def button_rows(buttons: list[list[dict[str, str]]] | None) -> list[list[dict[str, str]]]:
@@ -121,6 +134,17 @@ def decode_interaction(interaction) -> IncomingUpdate | None:
     )
 
 
+def _log_gateway_exit(task: asyncio.Task) -> None:
+    """A gateway that stops (bad intents, revoked token) must say so, not die silently."""
+    if task.cancelled():
+        return
+    error = task.exception()
+    if error is not None:
+        logger.error("Discord gateway stopped: %s", type(error).__name__)
+    else:
+        logger.warning("Discord gateway stopped")
+
+
 class DiscordChannel:
     """Direct messages with one Discord bot; the recipient is the participant's Discord user id."""
 
@@ -134,6 +158,8 @@ class DiscordChannel:
         self.on_update: UpdateHandler | None = None
         self._dm_channels: dict[str, object] = {}
         self._task: asyncio.Task | None = None
+        self._inflight: set[asyncio.Task] = set()
+        self._closing = False
         self.client = client or self._build_client()
 
     def _build_client(self) -> discord.Client:
@@ -150,21 +176,43 @@ class DiscordChannel:
             update = decode_interaction(interaction)
 
             async def acknowledge() -> None:
-                if not interaction.response.is_done():
+                # A failed acknowledgement (expired, or another instance already answered)
+                # must not drop the press: the claim still deduplicates and the action runs.
+                if interaction.response.is_done():
+                    return
+                try:
                     await interaction.response.defer()
+                except discord.HTTPException as error:
+                    logger.warning("Discord interaction ack failed code=%s", error.code)
 
             await self._dispatch(update, acknowledge if update else None)
 
         return client
 
     async def _dispatch(self, update, acknowledge) -> None:
-        if update is None or self.on_update is None:
+        if update is None or self.on_update is None or self._closing:
             return
+        # discord.py runs each event in its own untracked task; track ours so shutdown can let
+        # in-flight Turns finish instead of cutting them off mid-reply.
+        task = asyncio.current_task()
+        if task is not None:
+            self._inflight.add(task)
         try:
             await self.on_update(update, acknowledge)
         except Exception:
             # One bad event must never stop the gateway loop.
             logger.exception("Discord update failed kind=%s", update.kind)
+        finally:
+            if task is not None:
+                self._inflight.discard(task)
+
+    @property
+    def ready(self) -> bool:
+        """Connected and able to deliver; until then proactive messages wait pending."""
+        return (
+            self._task is not None and not self._task.done() and not self._closing
+            and self.client.is_ready()
+        )
 
     async def start(self) -> None:
         """Log in (fails fast on a bad token), then keep the gateway connected in the background."""
@@ -176,8 +224,16 @@ class DiscordChannel:
         self._task = asyncio.create_task(
             self.client.connect(reconnect=True), name="discord-gateway"
         )
+        self._task.add_done_callback(_log_gateway_exit)
 
-    async def close(self) -> None:
+    async def close(self, *, drain_timeout: float = 10.0) -> None:
+        """Stop taking events, let in-flight Turns finish (bounded), then disconnect."""
+        self._closing = True
+        pending = [task for task in self._inflight if task is not asyncio.current_task()]
+        if pending:
+            _, unfinished = await asyncio.wait(pending, timeout=drain_timeout)
+            if unfinished:
+                logger.warning("Discord shutdown left %d Turn(s) unfinished", len(unfinished))
         await self.client.close()
         if self._task is not None:
             self._task.cancel()
@@ -214,8 +270,11 @@ class DiscordChannel:
         """
         self._validate_conversation(chat_id, conversation)
         view = _view(buttons)
-        channel = await self._dm(chat_id)
         parts = split_text(text)
+        if not parts:
+            logger.warning("Discord send skipped: empty text")
+            return None
+        channel = await self._dm(chat_id)
         message = None
         for index, part in enumerate(parts):
             last = index == len(parts) - 1
@@ -254,7 +313,7 @@ class DiscordChannel:
 
         app_id = str(settings.discord_application_id).strip()
         # Adding the bot to a server the participant shares with it lets it DM them.
-        if not app_id:
+        if not app_id.isdigit():
             return None
         return f"https://discord.com/oauth2/authorize?client_id={app_id}&scope=bot&permissions=0"
 

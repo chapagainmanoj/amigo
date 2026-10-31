@@ -51,6 +51,11 @@ logging.basicConfig(
 # httpx logs every request URL at INFO, and Telegram Bot API URLs embed the bot token.
 for _noisy in ("httpx", "httpcore"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
+# discord.http logs request bodies (participant messages) at DEBUG; discord.client warns
+# about voice support Amigo never uses.
+logging.getLogger("discord.http").setLevel(logging.INFO)
+logging.getLogger("discord.client").setLevel(logging.ERROR)
+DISCORD_LOGIN_TIMEOUT = 15
 # Only staging performance evidence needs routine logs; LOG_LEVEL=DEBUG brings them back.
 if settings.app_env.strip().lower() != "staging" and settings.log_level != "DEBUG":
     quiet_routine_logs()
@@ -137,6 +142,16 @@ async def lifespan(app: FastAPI):
     # Establish capabilities before schedulers can deliver any message.
     bot_username = await channel.initialize(production=is_production(settings))
     app.state.bot_username = bot_username
+    if discord_channel is not None:
+        # Before the scheduler starts, bounded so a slow or failing login never delays Telegram.
+        # Until the gateway is ready, Discord-primary Reminders wait pending (ChannelRegistry).
+        discord_channel.on_update = _discord_update
+        try:
+            await asyncio.wait_for(discord_channel.start(), timeout=DISCORD_LOGIN_TIMEOUT)
+            logger.info("Discord gateway connecting")
+        except Exception as error:
+            # Discord is an opt-in second app: a bad token or outage never stops Telegram.
+            logger.error("Discord gateway failed to start: %s", type(error).__name__)
     await initialize_runtime(store, reminder_scheduler, outbox_worker)
 
     await reminder_scheduler.start_mode_maintenance(_maintain_modes)
@@ -157,15 +172,6 @@ async def lifespan(app: FastAPI):
             raise RuntimeError("Telegram webhook initialization failed") from None
         logger.warning("Failed to initialize Telegram webhook/bot info: %s", e)
 
-    if discord_channel is not None:
-        discord_channel.on_update = _discord_update
-        try:
-            await discord_channel.start()
-            logger.info("Discord gateway connecting")
-        except Exception as error:
-            # Discord is an opt-in second app: a bad token or outage never stops Telegram.
-            logger.error("Discord gateway failed to start: %s", type(error).__name__)
-
     monitor_stop = asyncio.Event()
     monitor_task = asyncio.create_task(
         monitor_event_loop_delay(monitor_stop),
@@ -176,9 +182,10 @@ async def lifespan(app: FastAPI):
     finally:
         monitor_stop.set()
         await monitor_task
+        # Stop proactive sends first, then let in-flight Discord Turns finish before disconnecting.
+        reminder_scheduler.shutdown()
         if discord_channel is not None:
             await discord_channel.close()
-        reminder_scheduler.shutdown()
         # The webhook is deliberately left registered. During a rolling deploy the old instance
         # stops after the new one has set it, and an idle spin-down must stay wakeable by
         # Telegram; deleting it here would leave the bot unreachable.

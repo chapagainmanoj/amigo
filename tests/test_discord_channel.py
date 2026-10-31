@@ -113,8 +113,17 @@ def test_long_text_splits_under_the_limit_at_line_boundaries():
     assert len(parts) > 1 and all(len(part) <= MESSAGE_LIMIT for part in parts)
     assert all(part.startswith("line ") for part in parts)
     assert "".join(parts).replace("\n", "") == text.replace("\n", "")
-    assert [len(part) for part in split_text("y" * 4100)] == [2000, 2000, 100]
+    assert sum(len(part) for part in split_text("y" * 4100)) == 4100
     assert split_text("short") == ["short"]
+    assert split_text("  \n ") == []
+
+
+def test_split_keeps_code_blocks_closed_and_indentation():
+    code = "\n".join(f"    line {i}" for i in range(300))
+    parts = split_text(f"Here:\n```\n{code}\n```\nDone")
+    assert len(parts) > 1 and all(len(part) <= MESSAGE_LIMIT for part in parts)
+    assert all(part.count("```") % 2 == 0 for part in parts)
+    assert parts[1].startswith("```\n    line")
 
 
 def test_buttons_rechunk_to_discord_rows_and_reject_what_cannot_fit():
@@ -133,7 +142,7 @@ async def test_send_splits_puts_buttons_on_last_part_and_disables_mentions():
     buttons = [[{"text": "Done", "callback_data": "done:r1"}]]
     message_id = await channel.send_message("555", "z" * 2500, buttons=buttons)
     dm = channel.client.dms[555]
-    assert [len(item["content"]) for item in dm.sent] == [2000, 500]
+    assert [len(item["content"]) for item in dm.sent] == [1996, 504]
     assert "view" not in dm.sent[0] and dm.sent[1]["view"].children[0].custom_id == "done:r1"
     assert all(
         item["allowed_mentions"].to_dict() == discord.AllowedMentions.none().to_dict()
@@ -168,6 +177,7 @@ async def test_one_failing_event_never_reaches_the_gateway_loop():
 # ── Two apps in one process: the proof ──
 
 async def _two_app_process(monkeypatch):
+    monkeypatch.setattr(DiscordChannel, "ready", property(lambda self: True))
     monkeypatch.setattr("src.config.settings.access_mode", "registered")
     monkeypatch.setattr("src.config.settings.allowed_telegram_chat_ids", "61002")
     store = FakeStore()
@@ -309,3 +319,89 @@ async def test_turns_from_telegram_and_discord_for_one_participant_never_overlap
     results = await asyncio.gather(first, second)
     assert [result.outcome for result in results] == ["completed", "completed"]
     assert overlaps == []
+
+
+
+async def test_empty_text_is_never_sent():
+    channel = _discord()
+    assert await channel.send_message("555", "   ") is None
+    assert channel.client.fetches == 0
+
+
+async def test_a_failed_acknowledgement_still_processes_the_press(monkeypatch):
+    channel = DiscordChannel(FakeStore(), token="unused")  # real discord.py client, no network
+    seen = []
+
+    async def on_update(update, acknowledge):
+        await acknowledge()
+        seen.append(update.data)
+
+    channel.on_update = on_update
+    interaction = _interaction("done:r1")
+    response = SimpleNamespace(status=404, reason="Not Found")
+    interaction.response.defer = AsyncMock(
+        side_effect=discord.NotFound(response, {"code": 10062, "message": "Unknown interaction"})
+    )
+    handler = channel.client.on_interaction
+    await handler(interaction)
+    assert seen == ["done:r1"]
+
+
+def test_real_client_listens_to_direct_messages_only():
+    channel = DiscordChannel(FakeStore(), token="unused")
+    intents = channel.client.intents
+    assert intents.dm_messages and not intents.guild_messages and not intents.message_content
+    assert channel.ready is False  # not connected: Discord-primary messages wait pending
+
+
+async def test_not_ready_primary_adapter_leaves_reminders_pending():
+    store = FakeStore()
+    user = await store.create_user(61004)
+    store._identity_state.link(user["user_id"], "discord", "555")
+    await store.set_primary_channel(user["user_id"], "discord")
+    discord_channel = _discord(store)  # never started, so not ready
+    scheduler = ReminderScheduler(ChannelRegistry([FakeChannel(), discord_channel]), store)
+    task = await store.create_task(user["user_id"], "Stretch")
+    reminder = await store.create_reminder(
+        task["task_id"], user["user_id"], (utc_now() + timedelta(minutes=5)).isoformat(),
+    )
+    await scheduler._send_reminder(user["user_id"], None, reminder["reminder_id"], "Stretch")
+    assert store.reminders[0]["status"] == "pending"
+    assert channel_sent(discord_channel) == 0
+
+
+def channel_sent(channel):
+    return sum(len(dm.sent) for dm in channel.client.dms.values())
+
+
+async def test_gateway_exit_is_logged_and_shutdown_drains_inflight_turns(caplog):
+    import asyncio
+
+    channel = _discord()
+    release, finished = asyncio.Event(), []
+
+    async def on_update(update, acknowledge):
+        await release.wait()
+        finished.append(update.text)
+
+    channel.on_update = on_update
+    channel.client.close = AsyncMock()
+    turn = asyncio.create_task(channel._dispatch(decode_message(_message("hi")), None))
+    await asyncio.sleep(0)
+    closing = asyncio.create_task(channel.close(drain_timeout=2))
+    await asyncio.sleep(0)
+    await channel._dispatch(decode_message(_message("late", message_id=7)), None)
+    release.set()
+    await asyncio.gather(turn, closing)
+    assert finished == ["hi"]  # in-flight Turn finished; the late event was not taken
+    channel.client.close.assert_awaited_once()
+
+    from src.channels.discord import _log_gateway_exit
+
+    async def boom():
+        raise RuntimeError("gateway")
+
+    failed = asyncio.create_task(boom())
+    await asyncio.sleep(0)
+    _log_gateway_exit(failed)
+    assert "Discord gateway stopped: RuntimeError" in caplog.text
