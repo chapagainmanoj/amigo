@@ -8,7 +8,13 @@ is an owner decision, like a model pin: it never comes from participant input.
 import logging
 
 from src.channels.base import Recipient
-from src.runtime_config import UnsafeProductionConfigurationError, parse_allowed_chat_ids
+from src.runtime_config import (
+    ACCESS_CLOSED,
+    ACCESS_OPEN,
+    ACCESS_REGISTERED,
+    UnsafeProductionConfigurationError,
+    parse_allowed_chat_ids,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +59,57 @@ def may_use_channel(user: dict | None, channel_id: str) -> bool:
     if channel_id in OPEN_CHANNELS:
         return True
     return bool(user.get("supabase_auth_id")) and is_full_access_user(user)
+
+
+async def admitted(
+    store, channel_id: str, chat_id: Recipient, *, pairing_attempt: bool = False
+) -> bool:
+    """Whether this chat address may talk to the bot under the configured ACCESS_MODE.
+
+    The one access-posture rule for every messaging app's handler: closed admits nobody; other
+    apps follow ``may_use_channel`` in every posture; open admits everyone; registered admits
+    Pairing attempts and linked dashboard accounts; allowlist admits the listed Telegram chats.
+    Pairing attempts are admitted here because Pairing applies the rule to the token's account.
+    """
+    from src.config import settings
+
+    if settings.access_mode == ACCESS_CLOSED:
+        return False
+    if channel_id not in OPEN_CHANNELS:
+        if pairing_attempt:
+            return True
+        return may_use_channel(await _participant(store, channel_id, chat_id), channel_id)
+    if settings.access_mode == ACCESS_OPEN:
+        return True
+    if settings.access_mode in ACCESS_REGISTERED:
+        if pairing_attempt:
+            return True
+        user = await _participant(store, channel_id, chat_id)
+        return bool(user and user.get("supabase_auth_id"))
+
+    try:
+        allowed_ids = parse_allowed_chat_ids(settings.allowed_telegram_chat_ids)
+    except UnsafeProductionConfigurationError:
+        logger.error("Invalid ALLOWED_TELEGRAM_CHAT_IDS; denying Telegram access")
+        return False
+    return chat_id in allowed_ids
+
+
+async def _participant(store, channel_id: str, chat_id: Recipient) -> dict | None:
+    """The participant this channel address is linked to (ADR 0004)."""
+    return await store.get_user_by_channel_identity(channel_id, str(chat_id))
+
+
+async def activation_completed(store, user: dict | None) -> bool:
+    """Whether this participant's dashboard account has completed Activation.
+
+    The one check behind every "Activation first" gate: bot, Pairing, proactive delivery,
+    handoff notices and the dashboard API.
+    """
+    auth_id = (user or {}).get("supabase_auth_id")
+    if not auth_id:
+        return False
+    return (await store.get_activation_state(auth_id)).get("completed") is True
 
 
 def grant_required(user: dict, mode) -> bool:

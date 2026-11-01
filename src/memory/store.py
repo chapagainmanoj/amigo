@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from functools import wraps
 from time import perf_counter
 
+from src.agent.modes import DAILY_MODE_ID
 from src.commands.base import (
     IdempotencyConflictError,
     InvalidTransitionError,
@@ -280,7 +281,7 @@ class MemoryStore:
     # ── Sessions ──
 
     @_observe_database_call
-    async def get_active_session(self, user_id: str, mode_id: str = "daily") -> dict | None:
+    async def get_active_session(self, user_id: str, mode_id: str = DAILY_MODE_ID) -> dict | None:
         """Get the current open session (ended_at is NULL)."""
         result = await (
             self.db.table("sessions")
@@ -297,7 +298,7 @@ class MemoryStore:
 
     @_observe_database_call
     async def create_session(
-        self, user_id: str, session_type: str = "casual", mode_id: str = "daily"
+        self, user_id: str, session_type: str = "casual", mode_id: str = DAILY_MODE_ID
     ) -> dict:
         """Start a new session."""
         result = await (
@@ -306,7 +307,7 @@ class MemoryStore:
                 "user_id": user_id,
                 "session_type": session_type,
                 "mode_id": mode_id,
-                "active_mode_id": None if mode_id == "daily" else mode_id,
+                "active_mode_id": None if mode_id == DAILY_MODE_ID else mode_id,
             })
             .execute()
         )
@@ -1100,7 +1101,7 @@ class MemoryStore:
                     "channel",
                 )
             },
-            "mode_id": session.get("mode_id", "daily"),
+            "mode_id": session.get("mode_id", DAILY_MODE_ID),
         }
 
     @_observe_database_call
@@ -1130,7 +1131,7 @@ class MemoryStore:
 
     @_observe_database_call
     async def has_session_on_local_day(
-        self, user_id: str, timezone: str, mode_id: str = "daily"
+        self, user_id: str, timezone: str, mode_id: str = DAILY_MODE_ID
     ) -> bool:
         """Return whether the user has any session that started today locally."""
         start_utc, end_utc = local_day_utc_range(timezone)
@@ -1148,7 +1149,7 @@ class MemoryStore:
 
     @_observe_database_call
     async def get_yesterday_summary(
-        self, user_id: str, timezone: str, mode_id: str = "daily"
+        self, user_id: str, timezone: str, mode_id: str = DAILY_MODE_ID
     ) -> str | None:
         """Get the most recent closed session summary from yesterday locally."""
         yesterday = yesterday_in_tz(timezone)

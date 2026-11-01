@@ -6,7 +6,7 @@ executors. The declaration describes current v1 semantics; it is not a persisted
 
 from dataclasses import asdict, dataclass
 
-from src.memory.proactive import instant
+from src.utils import instant
 
 
 @dataclass(frozen=True)

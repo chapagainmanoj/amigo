@@ -8,15 +8,21 @@ targets, and evaluation suite. Definitions carry no side effects; the Mode runti
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic_ai.toolsets import AbstractToolset
-
-from src.tools.context import ToolContext
 from src.workflows import WorkflowDefinition
 
+if TYPE_CHECKING:
+    from pydantic_ai.toolsets import AbstractToolset
+
+    # Type-only: Mode declarations name the Turn context they receive, never construct it.
+    from src.tools.context import ToolContext
+
+# The default Mode: every participant's home, never entitled or handed off away from.
+DAILY_MODE_ID = "daily"
+
 ModeStatus = Literal["live", "planned", "disabled"]
-ContextProvider = Callable[[ToolContext], Awaitable[str | None]]
+ContextProvider = Callable[["ToolContext"], Awaitable[str | None]]
 
 _MODE_ID = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 
@@ -62,7 +68,8 @@ class ModeDefinition:
     purpose: str
     status: ModeStatus
     instructions: Callable[[TurnFacts], str] | None = None
-    toolsets: tuple[AbstractToolset[ToolContext], ...] = ()
+    # String annotation: Pydantic AI stays type-only here, so get_type_hints() on this class fails.
+    toolsets: "tuple[AbstractToolset[ToolContext], ...]" = ()
     # The order Tools are presented to the model. Models are sensitive to it, and Toolsets are
     # grouped by domain rather than by presentation, so a Mode may pin it. Unlisted Tools follow
     # in Toolset order.

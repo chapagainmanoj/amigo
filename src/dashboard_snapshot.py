@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from src.utils import UTC, utc_now
+from src.utils import UTC, Clock, default_clock
 
 
 def _datetime(value) -> datetime:
@@ -23,9 +23,10 @@ def build_dashboard_snapshot(
     *,
     activation: dict | None = None,
     generated_at: datetime | None = None,
+    clock: Clock = default_clock,
 ) -> dict:
     """Build one tenant-scoped read model from a single Store observation."""
-    now = (generated_at or utc_now()).replace(tzinfo=UTC)
+    now = (generated_at or clock.utc_now()).replace(tzinfo=UTC)
     timezone = user.get("timezone") or "UTC"
     planning_day = now.astimezone(ZoneInfo(timezone)).date().isoformat()
     owned_tasks = {task["task_id"]: dict(task) for task in tasks}

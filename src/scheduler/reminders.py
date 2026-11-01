@@ -9,12 +9,12 @@ from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from src.agent.modes import DAILY_MODE_ID
 from src.bot.keyboards import reminder_keyboard
 from src.channels.base import MessageChannel, Recipient
 from src.channels.registry import ChannelRegistry
-from src.memory.proactive import instant
 from src.memory.store import MemoryStore
-from src.utils import Clock, default_clock
+from src.utils import Clock, default_clock, instant
 
 logger = logging.getLogger(__name__)
 
@@ -241,7 +241,7 @@ class ReminderScheduler:
         if conversations is None:
             conversations = ModeConversationService(self.store, channel)
             self._mode_conversations[channel.channel_id] = conversations
-        conversation = await conversations.ensure(user, "daily", chat_id=chat_id)
+        conversation = await conversations.ensure(user, DAILY_MODE_ID, chat_id=chat_id)
         return channel, chat_id, conversation
 
     def _schedule_recovery_summary(

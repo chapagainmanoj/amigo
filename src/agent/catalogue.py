@@ -11,7 +11,7 @@ from src.agent.context import (
     todays_tasks,
     yesterday_summary,
 )
-from src.agent.modes import ModeDefinition, ModelPolicy, TurnFacts
+from src.agent.modes import DAILY_MODE_ID, ModeDefinition, ModelPolicy, TurnFacts
 from src.agent.prompts import build_system_prompt
 from src.agent.recommender import recommender_context, recommender_instructions
 from src.agent.reflect import REFLECT_CANDIDATE
@@ -28,7 +28,7 @@ def daily_instructions(facts: TurnFacts) -> str:
 
 
 DAILY = ModeDefinition(
-    id="daily",
+    id=DAILY_MODE_ID,
     name="Daily",
     purpose="Help me decide, remember, and follow through on what I intend to do today.",
     status="live",
@@ -69,7 +69,7 @@ COACH = ModeDefinition(
     context=(coaching_context,),
     eval_suite="evals/coach/v1/cases.json",
     invalidating_inputs=("src/agent/coach.py", "src/tools/coaching.py", "src/coaching.py"),
-    handoffs=("daily",),
+    handoffs=(DAILY_MODE_ID,),
     examples=(
         "Walk 20 minutes, 3 days a week",
         "Read 10 pages every weekday evening",
@@ -107,7 +107,7 @@ RECOMMENDER = ModeDefinition(
     entitlement=FULL_ACCESS,
     eval_suite="evals/recommender/v1/cases.json",
     invalidating_inputs=("src/agent/recommender.py", "src/tools/recommender.py"),
-    handoffs=("daily",),
+    handoffs=(DAILY_MODE_ID,),
     examples=(
         "Which detergent for sensitive skin?",
         "Cold or warm wash for dark jeans?",

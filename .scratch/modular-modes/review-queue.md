@@ -1381,3 +1381,39 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   - Apply 022, 023 and 024 in order, each with its matching deploy.
   - Before applying 024: profiles onboarded through the legacy bot flow without a completed journey can't pair a second
     app until they finish dashboard Activation. This is intended; the dashboard offers Activation.
+
+## Cosmic-python whole-project review fixes (1 Nov 2026, uncommitted)
+
+- Scope: findings from `/cosmic-python whole project`. No behaviour change intended.
+- Changes:
+  - `reliability` reclassified domain → service in `tests/test_layering.py` (awaits the Store, logs).
+  - `dashboard_snapshot.build_dashboard_snapshot` takes `clock: Clock = default_clock` (no direct `utc_now()`).
+  - Access posture moved from `BotHandlers._is_allowed` to `access.admitted` (handler is a thin wrapper);
+    posture constants `ACCESS_OPEN/CLOSED/ALLOWLIST/REGISTERED` in `runtime_config` (also used in
+    `api/pairing`). `Settings.access_mode` Literal left as is (`src/config.py` not touched).
+  - `access.activation_completed(store, user)` replaces 6 inline checks: `bot/handlers` (×2),
+    `scheduler/coaching`, `handoffs`, `bot/pairing`, `api/dependencies`. Semantics now uniformly
+    `completed is True` (four sites were truthy: `bot/handlers` ×2, `handoffs`, `api/dependencies`;
+    no runtime effect, `completed` is always bool/null from SQL 013 and `derive_activation_state`). `cli.py` dev fixture and
+    `api/pairing` / `api/activation` read other state fields and keep their own reads.
+  - `DAILY_MODE_ID` in `agent/modes`, replacing ~70 `"daily"` literals across src (not the `ModeScope`
+    Literal in `api/memory`, not tests). Value unchanged, so Daily instructions and Tool schema stay
+    byte-identical.
+  - `agent/modes` imports `AbstractToolset` under `TYPE_CHECKING` only.
+  - `ModeRunResult.reply_only()` in `agent/runtime`; `turns` no longer imports Pydantic AI.
+  - `src/auth.py` Supabase Auth JWT check recorded as an exemption to `AP-SUPABASE-OUTSIDE-STORE`
+    (auth call, not a table query) in the skill catalogue.
+  - New tests in `tests/test_allowlist.py` (`TestAccessRules`).
+- Protected files touched: none.
+- Evidence: pytest 1863 passed; ruff clean; `test_layering` passes with `KNOWN_EDGES` unchanged;
+  `smoke_check.py --scheduler` exits 0; Gate A `--validate-only` exits 0. No billed runs.
+- Gate A: `access.py`, `agent/*`, `bot/*`, `handoffs`, `conversations`, `dashboard_snapshot`,
+  `gate_a.py` and others are invalidating inputs, so existing Gate A evidence is stale for this tree.
+- Open (owner): remaining bare Mode-id sets (`memory/suggestions.py:39`, `mode_readiness.py:20`) could
+  derive from the registry; left for a Mode-catalogue change.
+- Independent review (subagent, 1 Nov 2026): no blockers, no should-fix; 4 nits, all addressed:
+  `test_layering._imports` now resolves `from src import x`, `from src.pkg import submodule` and
+  relative imports (new `test_import_forms_are_resolved`); `TestAccessRules` covers non-bool
+  `completed` and a linked full-access Discord account; `ModeDefinition.toolsets` notes that
+  `get_type_hints()` fails by design; the truthy-site count above corrected. Reviewer verified
+  byte-identical `tool_schema()` and Mode instructions vs HEAD for all five Modes. pytest 1865 passed.

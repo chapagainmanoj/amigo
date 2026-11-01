@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
+from src.agent.modes import DAILY_MODE_ID
 from src.api.dependencies import get_activated_user, get_store
 from src.memory_service import PAYLOAD_FIELDS, MemoryService, memory_csv, memory_now
 
@@ -97,12 +98,12 @@ async def preview_memory(body: PreviewRequest, user: Actor, service: Service):
             payload = dict(
                 category=body.category,
                 text=body.text,
-                source_mode_id="daily",
+                source_mode_id=DAILY_MODE_ID,
                 source_channel="dashboard",
                 source_message_id=None,
                 source_date=memory_now(service.clock).date().isoformat(),
                 creation_path="dashboard_explicit",
-                scopes=body.scopes or ["daily"],
+                scopes=body.scopes or [DAILY_MODE_ID],
                 valid_until=body.valid_until.isoformat() if body.valid_until else None,
             )
         else:

@@ -26,6 +26,7 @@ from pydantic_ai.usage import RunUsage
 
 from src.agent.catalogue import build_registry
 from src.agent.modes import (
+    DAILY_MODE_ID,
     PLACEHOLDER_FACTS,
     ModeDefinition,
     TurnFacts,
@@ -65,6 +66,11 @@ class ModeRunResult:
     output: str
     messages: list[Any]
     usage: Any
+
+    @classmethod
+    def reply_only(cls, output: str) -> "ModeRunResult":
+        """A reply produced without a model run: no messages, zero usage."""
+        return cls(output, [], RunUsage())
 
 
 def configured_model() -> str:
@@ -190,7 +196,7 @@ class ModeRuntime:
 
             reference = resolve_model(
                 settings,
-                mode_id=mode.id if mode else "daily",
+                mode_id=mode.id if mode else DAILY_MODE_ID,
                 user_id=context.user["user_id"] if context else None,
             )
             # Existing declared primary policies remain supported below operator routing.

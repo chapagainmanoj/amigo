@@ -8,8 +8,6 @@ import logging
 import time
 from typing import Any
 
-from pydantic_ai.usage import RunUsage
-
 from src.agent.modes import ModeDefinition, ModeUnavailableError
 from src.agent.runtime import (
     FAILURE_REPLY,
@@ -19,9 +17,9 @@ from src.agent.runtime import (
     default_runtime,
 )
 from src.memory.context import ContextBuilder
+from src.mode_readiness import reflect_safety_response
 from src.telemetry import TurnRecord, emit_turn_record, record_count
 from src.tools.context import ToolContext
-from src.wellbeing import reflect_safety_response
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +42,7 @@ class SessionTurnOrchestrator:
         started = time.perf_counter()
         safety_reply = await reflect_safety_response(requested_mode, text)
         if safety_reply is not None:
-            return ModeRunResult(safety_reply, [], RunUsage())
+            return ModeRunResult.reply_only(safety_reply)
         initial_count = record_count.get()
         try:
             mode = await self.runtime.resolve(context, requested_mode)

@@ -9,6 +9,13 @@ class UnsafeProductionConfigurationError(RuntimeError):
     """Raised when production configuration is missing or unsafe."""
 
 
+# ACCESS_MODE postures (the Literal on ``Settings.access_mode`` lists the same values).
+ACCESS_OPEN = "open"
+ACCESS_CLOSED = "closed"
+ACCESS_ALLOWLIST = "allowlist"
+ACCESS_REGISTERED = frozenset({"registered", "invite"})  # "invite" is the legacy alias
+
+
 def is_production(config: object) -> bool:
     """Return whether the configured environment is production."""
     return str(getattr(config, "app_env", "")).strip().lower() == "production"
@@ -106,11 +113,11 @@ def validate_runtime_configuration(config: object) -> None:
     _require_non_placeholder("DEFAULT_MODEL", getattr(config, "default_model", ""))
 
     access_mode = str(getattr(config, "access_mode", "")).strip().lower()
-    if access_mode == "open":
+    if access_mode == ACCESS_OPEN:
         _invalid("ACCESS_MODE", "cannot be open in production")
-    if access_mode not in {"closed", "allowlist", "registered", "invite"}:
+    if access_mode not in {ACCESS_CLOSED, ACCESS_ALLOWLIST, *ACCESS_REGISTERED}:
         _invalid("ACCESS_MODE", "must be closed, allowlist, or registered in production")
-    if access_mode == "allowlist" and not parse_allowed_chat_ids(
+    if access_mode == ACCESS_ALLOWLIST and not parse_allowed_chat_ids(
         str(getattr(config, "allowed_telegram_chat_ids", ""))
     ):
         _invalid("ALLOWED_TELEGRAM_CHAT_IDS", "cannot be empty in allowlist mode")

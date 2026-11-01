@@ -4,6 +4,7 @@ import logging
 import uuid
 
 from src.access import trial_exhausted, trial_finished_message
+from src.agent.modes import DAILY_MODE_ID
 from src.agent.runtime import ModeRuntime, default_runtime
 from src.bot.modes import ModeController
 from src.channels.base import ConversationRef, MessageChannel, Recipient
@@ -83,7 +84,7 @@ class TurnProcessor:
         Coach template) is sent after the intro and kept in the Mode's Session, so the Mode's
         next Turn sees it.
         """
-        command = "/daily" if mode_id == "daily" else f"/mode {mode_id}"
+        command = "/daily" if mode_id == DAILY_MODE_ID else f"/mode {mode_id}"
         prepared = await self.modes.prepare(chat_id, user, command, f"dashboard-{uuid.uuid4()}")
         context = prepared.context
         await self.channel.send_message(

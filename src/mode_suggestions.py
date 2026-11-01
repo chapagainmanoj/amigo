@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 
 from src.access import grant_required
-from src.agent.modes import ModeUnavailableError
+from src.agent.modes import DAILY_MODE_ID, ModeUnavailableError
 from src.agent.runtime import FAILURE_REPLY
 from src.tools.context import ToolContext
 
@@ -63,7 +63,7 @@ class ModeSuggestionController:
         self.turn_clearance = turn_clearance or deny_turn_clearance
 
     async def offer(self, context, text, response):
-        if context.mode_id != "daily" or response == FAILURE_REPLY:
+        if context.mode_id != DAILY_MODE_ID or response == FAILURE_REPLY:
             return None
         if not await self.readiness.complete():
             return None

@@ -14,6 +14,7 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from src.agent.modes import DAILY_MODE_ID
 from src.commands.base import IdempotencyConflictError, InvalidTransitionError, StaleVersionError
 from src.utils import utc_now
 
@@ -299,7 +300,7 @@ class LocalMemoryState:
                 if (
                     not session
                     or session["user_id"] != user_id
-                    or session.get("mode_id", "daily") != value["source_mode_id"]
+                    or session.get("mode_id", DAILY_MODE_ID) != value["source_mode_id"]
                 ):
                     raise ValueError("Memory source unavailable")
             day = _local_day(user)

@@ -8,8 +8,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from src.memory.memory_store import InMemoryStore
-from src.memory.proactive import LocalProactiveState, instant
+from src.memory.proactive import LocalProactiveState
 from src.scheduler.coaching import CoachingDeliveryWorker, plan_coaching_delivery
+from src.utils import instant
 from tests.fakes import FakeChannel, FakeStore
 
 

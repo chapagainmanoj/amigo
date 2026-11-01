@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+from src.agent.modes import DAILY_MODE_ID
 from src.utils import Clock, default_clock
 
 if TYPE_CHECKING:
@@ -34,7 +35,7 @@ class SessionManager:
 
     async def get_or_create_session(
         self, user_id: str, timeout_minutes: int = 120, timezone: str = "UTC",
-        *, mode_id: str = "daily"
+        *, mode_id: str = DAILY_MODE_ID
     ) -> tuple[dict, bool]:
         """Get active session or create a new one.
 

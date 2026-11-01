@@ -6,7 +6,7 @@ from src.access import entitled
 from src.agent.catalogue import build_registry
 from src.agent.modes import PLACEHOLDER_FACTS
 from src.config import settings
-from src.wellbeing import reflect_safety_response
+from src.mode_readiness import reflect_safety_response
 from tests.fakes import FakeStore
 
 FULL, TRIAL = 111, 222

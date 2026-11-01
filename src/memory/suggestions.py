@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import timedelta
 from zoneinfo import ZoneInfo
 
+from src.agent.modes import DAILY_MODE_ID
 from src.utils import utc_now
 
 
@@ -40,7 +41,11 @@ class LocalSuggestionState:
             raise ValueError("Unsupported suggestion target")
         async with self.lock:
             session = await self.owned_session(user_id, session_id)
-            if not session or session.get("ended_at") or session.get("mode_id", "daily") != "daily":
+            if (
+                not session
+                or session.get("ended_at")
+                or session.get("mode_id", DAILY_MODE_ID) != DAILY_MODE_ID
+            ):
                 return None
             if not await self.preference(user_id):
                 return None
@@ -94,12 +99,12 @@ class LocalSuggestionState:
         ):
             return False
         source = await self.owned_session(actor, offer["source_session_id"])
-        selected = offer["target_mode_id"] if offer["state"] == "confirmed" else "daily"
+        selected = offer["target_mode_id"] if offer["state"] == "confirmed" else DAILY_MODE_ID
         if (
             not source
             or source.get("ended_at")
-            or source.get("mode_id", "daily") != "daily"
-            or (source.get("active_mode_id") or "daily") != selected
+            or source.get("mode_id", DAILY_MODE_ID) != DAILY_MODE_ID
+            or (source.get("active_mode_id") or DAILY_MODE_ID) != selected
         ):
             return False
         sessions = getattr(self.store, "_sessions", None)
@@ -108,11 +113,11 @@ class LocalSuggestionState:
             row
             for row in rows
             if row["user_id"] == actor
-            and row.get("mode_id", "daily") == "daily"
+            and row.get("mode_id", DAILY_MODE_ID) == DAILY_MODE_ID
             and not row.get("ended_at")
         ]
         controls.sort(key=lambda row: (row["started_at"], row["session_id"]), reverse=True)
-        if not controls or (controls[0].get("active_mode_id") or "daily") != selected:
+        if not controls or (controls[0].get("active_mode_id") or DAILY_MODE_ID) != selected:
             return False
         if (
             offer["state"] == "confirmed"
@@ -143,7 +148,7 @@ class LocalSuggestionState:
             row
             for row in rows
             if row["user_id"] == actor
-            and row.get("mode_id", "daily") == target_mode
+            and row.get("mode_id", DAILY_MODE_ID) == target_mode
             and not row.get("ended_at")
         ]
         candidates.sort(key=lambda row: (row["started_at"], row["session_id"]), reverse=True)
@@ -203,7 +208,7 @@ class LocalSuggestionState:
                 row
                 for row in rows
                 if row["user_id"] == user_id
-                and row.get("mode_id", "daily") == "daily"
+                and row.get("mode_id", DAILY_MODE_ID) == DAILY_MODE_ID
                 and not row.get("ended_at")
             ]
             controls.sort(key=lambda row: (row["started_at"], row["session_id"]), reverse=True)

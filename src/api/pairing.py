@@ -15,6 +15,7 @@ from src.memory.pairing import (
     ActivationTermsRequiredError,
     PairingTokenRateLimitError,
 )
+from src.runtime_config import ACCESS_CLOSED
 from src.utils import UTC, utc_now
 
 router = APIRouter()
@@ -33,7 +34,7 @@ async def get_pairing_token(
     activation = await store.get_activation_state(auth_id)
     if not activation.get("acknowledged_at"):
         raise HTTPException(status_code=403, detail="Review and accept the beta limits first.")
-    if settings.access_mode == "closed":
+    if settings.access_mode == ACCESS_CLOSED:
         raise HTTPException(status_code=503, detail="New Pairing links are temporarily disabled.")
     if await store.get_user_by_auth_id(auth_id):
         raise HTTPException(status_code=409, detail="Dashboard account is already linked.")

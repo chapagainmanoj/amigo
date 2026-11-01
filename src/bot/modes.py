@@ -4,11 +4,14 @@ import logging
 from dataclasses import dataclass
 
 from src.access import grant_required
-from src.agent.modes import ModeDefinition, ModeUnavailableError
+from src.agent.modes import DAILY_MODE_ID, ModeDefinition, ModeUnavailableError
 from src.conversations import ModeConversationService
-from src.mode_readiness import COACH_CONSENT_BUTTONS, COACH_PROCESSING_NOTICE
+from src.mode_readiness import (
+    COACH_CONSENT_BUTTONS,
+    COACH_PROCESSING_NOTICE,
+    reflect_safety_response,
+)
 from src.tools.context import ToolContext
-from src.wellbeing import reflect_safety_response
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +55,7 @@ class ModeController:
             entered_by="topic" if addressed_mode is not None else "command",
         )
         if command == "/mode" and len(parts) == 1:
-            current = selected or "daily"
+            current = selected or DAILY_MODE_ID
             lines, buttons = [], []
             for mode in await self.runtime.registry.live():
                 if not await self.runtime.entitlements.allows(context, mode):
@@ -73,27 +76,27 @@ class ModeController:
                 command == "/mode" and len(parts) != 2
             ):
                 return PreparedModeTurn(context, selected, "Use /mode, /mode <id>, or /daily.")
-            selected = "daily" if command == "/daily" else parts[1]
+            selected = DAILY_MODE_ID if command == "/daily" else parts[1]
         safety_reply = await reflect_safety_response(selected, text)
         if safety_reply is not None:
             return PreparedModeTurn(context, selected, safety_reply)
         try:
             mode = await self.runtime.resolve(context, selected)
         except ModeUnavailableError as error:
-            if not is_mode_command and control is not None and selected != "daily":
-                await self.store.set_active_mode(user_id, control["session_id"], "daily")
+            if not is_mode_command and control is not None and selected != DAILY_MODE_ID:
+                await self.store.set_active_mode(user_id, control["session_id"], DAILY_MODE_ID)
             buttons = (
                 COACH_CONSENT_BUTTONS
                 if error.participant_message == COACH_PROCESSING_NOTICE else None
             )
             return PreparedModeTurn(
-                context, selected or "daily", error.participant_message, buttons
+                context, selected or DAILY_MODE_ID, error.participant_message, buttons
             )
         except Exception as error:
             from src.agent.runtime import FAILURE_REPLY
 
             logger.error("Mode resolution failed: %s", type(error).__name__)
-            return PreparedModeTurn(context, selected or "daily", FAILURE_REPLY)
+            return PreparedModeTurn(context, selected or DAILY_MODE_ID, FAILURE_REPLY)
         selected = mode.id
         session, _ = await self.sessions.get_or_create_session(
             user_id, timeout, timezone=timezone, mode_id=selected
@@ -101,7 +104,7 @@ class ModeController:
         context.session_id = session["session_id"]
         # 016's trusted source check is kept in sync with the fixed Mode-scoped Session.
         result = {"status": "set"}
-        if (session.get("active_mode_id") or "daily") != selected:
+        if (session.get("active_mode_id") or DAILY_MODE_ID) != selected:
             result = await self.store.set_active_mode(
                 user_id, session["session_id"], selected,
                 grant_required=grant_required(user, mode),
@@ -113,7 +116,7 @@ class ModeController:
         if is_mode_command:
             if control is None:
                 control, _ = await self.sessions.get_or_create_session(user_id, timezone=timezone)
-            if (control.get("active_mode_id") or "daily") != selected:
+            if (control.get("active_mode_id") or DAILY_MODE_ID) != selected:
                 await self.store.set_active_mode(
                     user_id, control["session_id"], selected,
                     grant_required=grant_required(user, mode),

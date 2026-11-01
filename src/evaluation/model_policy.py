@@ -4,6 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from src.agent.modes import DAILY_MODE_ID
+
 
 def fallback_currency(mode, root: Path) -> dict:
     """Current evaluated behavior, excluding the declaration of the fallback itself.
@@ -60,7 +62,7 @@ def require_evaluated_fallback(mode, root: Path) -> None:
         inputs = evidence["release_inputs"]
         if inputs.get("fallback_currency") != fallback_currency(mode, root):
             raise ValueError("fallback evidence execution sources or SDK versions are stale")
-        if inputs.get("mode_id", "daily") != mode.id:
+        if inputs.get("mode_id", DAILY_MODE_ID) != mode.id:
             raise ValueError("fallback evidence is for another Mode")
         candidate = mode.model.fallback.removeprefix("google:")
         if inputs["model"].removeprefix("google:") != candidate:
@@ -77,7 +79,7 @@ def require_evaluated_fallback(mode, root: Path) -> None:
                 mode.instructions(PLACEHOLDER_FACTS)
             ):
                 raise ValueError("fallback evidence Mode instructions are stale")
-        elif mode.id != "daily":
+        elif mode.id != DAILY_MODE_ID:
             raise ValueError("fallback evidence must pin its Mode instructions")
         # Recompute every case score and aggregate, never trust a manifest's passed flag.
         # Supplying the Mode avoids registration recursion while validating startup invariants.
@@ -129,7 +131,7 @@ def require_evaluated_model(mode, model: str, root: Path) -> None:
         inputs = evidence["release_inputs"]
         _require_model_review(entry, evidence)
         if (
-            inputs.get("mode_id", "daily") != mode.id
+            inputs.get("mode_id", DAILY_MODE_ID) != mode.id
             or normalize_model(inputs["model"]) != model
             or normalize_model(inputs["provider_model"]) != model
             or inputs.get("fallback_currency") != fallback_currency(mode, root)

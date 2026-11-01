@@ -61,15 +61,6 @@ async def safety_tier(text: str) -> SafetyTier:
     return "ordinary"
 
 
-async def reflect_safety_response(mode_id: str | None, text: str) -> str | None:
-    """Deterministic safety response, available even while Reflect processing is disabled."""
-    if mode_id not in {"reflect", "cbt"}:
-        return None
-    from src.mode_readiness import wellbeing_policy
-
-    return await wellbeing_policy.referral(await safety_tier(text))
-
-
 def _utc(instant: datetime) -> datetime:
     return instant.replace(tzinfo=UTC) if instant.tzinfo is None else instant.astimezone(UTC)
 

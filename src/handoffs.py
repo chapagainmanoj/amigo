@@ -8,8 +8,8 @@ from datetime import UTC, datetime
 from functools import partial
 from zoneinfo import ZoneInfo
 
-from src.access import grant_required
-from src.agent.modes import ModeUnavailableError
+from src.access import activation_completed, grant_required
+from src.agent.modes import DAILY_MODE_ID, ModeUnavailableError
 from src.agent.runtime import FAILURE_REPLY
 from src.bot.update_claims import participant_key
 from src.conversations import ModeConversationService
@@ -184,7 +184,7 @@ class HandoffController:
                     user_id, handoff_id, "endpoint_unavailable"
                 )
                 return
-            ref = await self.conversations.ensure(user, "daily", chat_id=recipient)
+            ref = await self.conversations.ensure(user, DAILY_MODE_ID, chat_id=recipient)
         except Exception as error:
             logger.warning("Handoff notice endpoint unavailable: %s", type(error).__name__)
             await self.store.claim_handoff_failure_notice(
@@ -283,7 +283,4 @@ class HandoffController:
             await self.failure_notice(current, handoff_id)
 
     async def _activated(self, user):
-        auth_id = user.get("supabase_auth_id")
-        return bool(auth_id) and bool(
-            (await self.store.get_activation_state(auth_id)).get("completed")
-        )
+        return await activation_completed(self.store, user)

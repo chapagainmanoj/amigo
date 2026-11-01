@@ -104,3 +104,56 @@ class TestAllowlist:
 
         assert "ALLOWED_TELEGRAM_CHAT_IDS" in caplog.text
         assert "not-an-id" not in caplog.text
+
+
+class TestAccessRules:
+    """The access posture and Activation gate live in ``src.access``, not in a handler."""
+
+    @pytest.mark.asyncio
+    async def test_activation_completed_needs_a_linked_completed_account(self):
+        from unittest.mock import AsyncMock
+
+        from src.access import activation_completed
+
+        store = FakeStore()
+        user = await store.create_user(111)
+        assert await activation_completed(store, None) is False
+        assert await activation_completed(store, user) is False  # no dashboard account
+        user = await store.update_user(user["user_id"], {"supabase_auth_id": "auth-1"})
+        assert await activation_completed(store, user) is False  # linked, not finished
+        # The full journey (terms, profile, test Reminder) is covered in test_activation.
+        store.get_activation_state = AsyncMock(return_value={"completed": True})
+        assert await activation_completed(store, user) is True
+        store.get_activation_state.assert_awaited_with("auth-1")
+        store.get_activation_state = AsyncMock(return_value={"completed": 1})
+        assert await activation_completed(store, user) is False  # only a real True counts
+
+    @pytest.mark.asyncio
+    async def test_other_apps_follow_may_use_channel_in_every_open_posture(self):
+        from src.access import admitted
+
+        store = FakeStore()
+        for posture in ("open", "registered", "allowlist"):
+            with patch("src.config.settings") as mock_settings:
+                mock_settings.access_mode = posture
+                mock_settings.allowed_telegram_chat_ids = "111"
+                assert await admitted(store, "discord", "999") is False
+                assert await admitted(store, "discord", "999", pairing_attempt=True) is True
+        with patch("src.config.settings") as mock_settings:
+            mock_settings.access_mode = "closed"
+            assert await admitted(store, "discord", "999", pairing_attempt=True) is False
+
+    @pytest.mark.asyncio
+    async def test_a_linked_full_access_account_may_use_another_app(self):
+        from src.access import admitted
+
+        store = FakeStore()
+        user = await store.create_user(111)
+        await store.update_user(user["user_id"], {"supabase_auth_id": "auth-1"})
+        store._identity_state.link(user["user_id"], "discord", "999")  # as Pairing would
+        with patch("src.config.settings") as mock_settings:
+            mock_settings.access_mode = "registered"
+            mock_settings.allowed_telegram_chat_ids = "111"
+            assert await admitted(store, "discord", "999") is True
+            mock_settings.allowed_telegram_chat_ids = "222"  # linked, but not full access
+            assert await admitted(store, "discord", "999") is False

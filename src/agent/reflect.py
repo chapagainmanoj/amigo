@@ -1,6 +1,6 @@
 """Reflect candidate instructions. Operational wellbeing gates remain outside the model."""
 
-from src.agent.modes import ModeDefinition, TurnFacts
+from src.agent.modes import DAILY_MODE_ID, ModeDefinition, TurnFacts
 
 
 def reflect_instructions(facts: TurnFacts) -> str:
@@ -63,7 +63,7 @@ REFLECT_CANDIDATE = ModeDefinition(
     purpose="Examine one chosen experience and find a participant-owned takeaway.",
     instructions=reflect_instructions,
     entitlement="grant",
-    handoffs=("daily",),
+    handoffs=(DAILY_MODE_ID,),
     toolsets=(),
     context=(),
     eval_suite="evals/reflect/v1/cases.json",

@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 
+from src.access import activation_completed
 from src.auth import get_authenticated_user_id
 
 
@@ -46,7 +47,6 @@ async def get_activated_user(
     user = await store.get_user_by_auth_id(auth_id)
     if not user:
         raise HTTPException(status_code=404, detail="User profile not paired with Telegram yet.")
-    state = await store.get_activation_state(auth_id)
-    if not state.get("completed"):
+    if not await activation_completed(store, user):
         raise HTTPException(status_code=409, detail="Complete setup before using the dashboard.")
     return user

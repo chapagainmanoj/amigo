@@ -6,7 +6,7 @@ thought, what is unknown, possible alternative, optional takeaway). The wording 
 not a qualified-reviewed CBT protocol.
 """
 
-from src.agent.modes import ModeDefinition, TurnFacts
+from src.agent.modes import DAILY_MODE_ID, ModeDefinition, TurnFacts
 
 
 def cbt_instructions(facts: TurnFacts) -> str:
@@ -62,7 +62,7 @@ CBT = ModeDefinition(
     ),
     instructions=cbt_instructions,
     entitlement="grant",
-    handoffs=("daily",),
+    handoffs=(DAILY_MODE_ID,),
     toolsets=(),
     context=(),
     eval_suite="evals/cbt/v1/cases.json",

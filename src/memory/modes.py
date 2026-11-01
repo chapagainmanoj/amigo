@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Literal, NotRequired, TypedDict
 
+from src.agent.modes import DAILY_MODE_ID
 from src.utils import utc_now
 
 MODE_GRANT_TTL = timedelta(days=14)
@@ -147,7 +148,7 @@ class LocalModeState:
         expiry = started + MODE_GRANT_TTL if expires_at is None else await _time(expires_at)
         if (
             not await _valid_mode(mode_id)
-            or mode_id == "daily"
+            or mode_id == DAILY_MODE_ID
             or not operator
             or not operator.strip()
             or not reason
@@ -235,14 +236,14 @@ class LocalModeState:
             if not session or session["user_id"] != user_id or session.get("ended_at") is not None:
                 return {"status": "unavailable"}
             if (
-                mode_id not in {None, "daily"}
+                mode_id not in {None, DAILY_MODE_ID}
                 and grant_required
                 and not await self._active_grant(user_id, mode_id, await _time(utc_now()))
             ):
                 return {"status": "unavailable"}
             if mode_id is not None and not await _valid_mode(mode_id):
                 raise ValueError("Invalid active Mode identifier")
-            session["active_mode_id"] = None if mode_id == "daily" else mode_id
+            session["active_mode_id"] = None if mode_id == DAILY_MODE_ID else mode_id
             return {"status": "set"}
 
     async def create_handoff(
@@ -272,7 +273,7 @@ class LocalModeState:
                 not session
                 or session["user_id"] != user_id
                 or session.get("ended_at") is not None
-                or (session.get("active_mode_id") or "daily") != source_mode_id
+                or (session.get("active_mode_id") or DAILY_MODE_ID) != source_mode_id
             ):
                 return {"status": "unavailable"}
             now = await _time(utc_now())
@@ -281,7 +282,7 @@ class LocalModeState:
                 (target_mode_id, target_grant_required),
             ):
                 if (
-                    mode_id != "daily"
+                    mode_id != DAILY_MODE_ID
                     and required
                     and not await self._active_grant(user_id, mode_id, now)
                 ):
@@ -337,7 +338,7 @@ class LocalModeState:
             elif (
                 not session
                 or session.get("ended_at") is not None
-                or (session.get("active_mode_id") or "daily") != row["source_mode_id"]
+                or (session.get("active_mode_id") or DAILY_MODE_ID) != row["source_mode_id"]
             ):
                 resolution = "unavailable"
             else:
@@ -347,7 +348,7 @@ class LocalModeState:
                     (row["target_mode_id"], row["target_grant_required"]),
                 ):
                     if (
-                        mode_id != "daily"
+                        mode_id != DAILY_MODE_ID
                         and required
                         and not await self._active_grant(user_id, mode_id, now)
                     ):
@@ -356,7 +357,7 @@ class LocalModeState:
             row.update(resolved_at=now.isoformat(), resolution=resolution)
             if resolution == "confirmed":
                 session["active_mode_id"] = (
-                    None if row["target_mode_id"] == "daily" else row["target_mode_id"]
+                    None if row["target_mode_id"] == DAILY_MODE_ID else row["target_mode_id"]
                 )
                 return {"status": "confirmed", "handoff": copy.deepcopy(row)}
             return {"status": resolution}
@@ -438,13 +439,13 @@ class LocalModeState:
             session = sessions.get(bound_id)
             if (not session or session["user_id"] != user_id
                     or (session.get("ended_at") is not None and not row.get("execution_session_id"))
-                    or session.get("mode_id", "daily") != row["target_mode_id"]
+                    or session.get("mode_id", DAILY_MODE_ID) != row["target_mode_id"]
                     or (row.get("execution_session_id") and execution_session_id is not None
                         and execution_session_id != row["execution_session_id"])):
                 row.update(execution_failed_at=now.isoformat(),
                            execution_failure_reason="session_unavailable")
                 return {"status": "unavailable", "terminal": True}
-            if (row["target_mode_id"] != "daily" and row["target_grant_required"]
+            if (row["target_mode_id"] != DAILY_MODE_ID and row["target_grant_required"]
                     and not await self._active_grant(user_id, row["target_mode_id"], now)):
                 row.update(execution_failed_at=now.isoformat(),
                            execution_failure_reason="target_unavailable")

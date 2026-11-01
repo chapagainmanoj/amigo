@@ -17,6 +17,7 @@ from datetime import UTC, timedelta
 
 from src.access import grant_required
 from src.activation import ACTIVATION_POLICY_VERSION
+from src.agent.modes import DAILY_MODE_ID
 from src.bot.handlers import BotHandlers
 from src.bot.update_claims import ParticipantTurnSerializer, inbound_participant_key
 from src.channels.cli import CLIChannel
@@ -115,7 +116,7 @@ def _preview_runtime():
     if settings.app_env == "production":
         raise SystemExit("--preview-modes is development-only")
     registry = ModeRegistry(
-        mode if mode.id == "daily" else replace(mode, status="live", entry_guard=None)
+        mode if mode.id == DAILY_MODE_ID else replace(mode, status="live", entry_guard=None)
         for mode in build_registry()
     )
     return ModeRuntime(registry)

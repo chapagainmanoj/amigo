@@ -3,6 +3,7 @@
 Invariant: store UTC in database, interpret in user's timezone for display/logic.
 """
 
+from datetime import UTC as _STDLIB_UTC
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -85,6 +86,14 @@ def local_time_to_utc(hour: int, minute: int, timezone: str) -> datetime:
 def utc_now() -> datetime:
     """Naive UTC now (for Supabase timestamps)."""
     return default_clock.utc_now()
+
+
+def instant(value: datetime | str) -> datetime:
+    """Parse an ISO string or datetime into an aware UTC datetime; naive input is taken as UTC."""
+    value = datetime.fromisoformat(value) if isinstance(value, str) else value
+    if value.tzinfo is None:
+        return value.replace(tzinfo=_STDLIB_UTC)
+    return value.astimezone(_STDLIB_UTC)
 
 
 def local_day_utc_range(timezone: str, day: date | None = None) -> tuple[datetime, datetime]:

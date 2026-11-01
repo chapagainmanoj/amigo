@@ -2,7 +2,7 @@
 
 import logging
 
-from src.access import OPEN_CHANNELS, help_message, may_use_channel
+from src.access import activation_completed, admitted, help_message
 from src.agent.runtime import ModeRuntime
 from src.bot.reminder_actions import ReminderActions
 from src.bot.turns import TurnProcessor
@@ -13,7 +13,6 @@ from src.handoffs import HandoffController
 from src.memory.sessions import SessionManager
 from src.memory.store import MemoryStore
 from src.memory_service import MemoryController, MemoryService
-from src.runtime_config import UnsafeProductionConfigurationError, parse_allowed_chat_ids
 from src.scheduler.reminders import ReminderScheduler
 
 logger = logging.getLogger(__name__)
@@ -93,12 +92,10 @@ class BotHandlers:
         if user is None:
             await self._send_activation_required(chat_id, conversation=conversation)
             return
-        auth_id = user.get("supabase_auth_id")
-        if not auth_id:
+        if not user.get("supabase_auth_id"):
             await self._send_activation_required(chat_id, conversation=conversation)
             return
-        activation = await self.store.get_activation_state(auth_id)
-        if not activation.get("completed"):
+        if not await activation_completed(self.store, user):
             await self._send_activation_required(chat_id, paired=True, conversation=conversation)
             return
 
@@ -156,37 +153,35 @@ class BotHandlers:
 
         if data.startswith(("handoff:", "coach:", "suggest:", "memory:", "consent:", "mode:")):
             user = await self._participant(chat_id)
-            if user and user.get("supabase_auth_id"):
-                activation = await self.store.get_activation_state(user["supabase_auth_id"])
-                if activation.get("completed"):
-                    if data.startswith("memory:"):
-                        await self.memory.handle_callback(user, chat_id, data, conversation)
-                    elif data.startswith("suggest:"):
-                        await self.turn_processor.suggestions.handle_callback(
-                            user, chat_id, data, conversation
+            if await activation_completed(self.store, user):
+                if data.startswith("memory:"):
+                    await self.memory.handle_callback(user, chat_id, data, conversation)
+                elif data.startswith("suggest:"):
+                    await self.turn_processor.suggestions.handle_callback(
+                        user, chat_id, data, conversation
+                    )
+                elif data.startswith("mode:"):
+                    # A tap on the /mode list: same path as typing /mode <id>.
+                    try:
+                        await self.channel.edit_message_buttons(
+                            chat_id, message_id, buttons=None, conversation=conversation
                         )
-                    elif data.startswith("mode:"):
-                        # A tap on the /mode list: same path as typing /mode <id>.
-                        try:
-                            await self.channel.edit_message_buttons(
-                                chat_id, message_id, buttons=None, conversation=conversation
-                            )
-                        except Exception as error:
-                            # An old list may no longer be editable; still switch.
-                            logger.warning("Mode list not cleared: %s", type(error).__name__)
-                        mode_id = data.split(":", 1)[1]
-                        if mode_id:
-                            await self.turn_processor.open_mode(chat_id, user, mode_id)
-                    elif data.startswith("consent:"):
-                        if await self.coaching.handle_consent(user, chat_id, data, conversation):
-                            # The tap answered "/mode coach": open Coach rather than ask again.
-                            await self.turn_processor.open_mode(chat_id, user, "coach")
-                    elif data.startswith("coach:"):
-                        await self.coaching.handle_callback(user, chat_id, data, conversation)
-                    else:
-                        await self.handoffs.handle_callback(
-                            user, chat_id, data, conversation, message_id=message_id
-                        )
+                    except Exception as error:
+                        # An old list may no longer be editable; still switch.
+                        logger.warning("Mode list not cleared: %s", type(error).__name__)
+                    mode_id = data.split(":", 1)[1]
+                    if mode_id:
+                        await self.turn_processor.open_mode(chat_id, user, mode_id)
+                elif data.startswith("consent:"):
+                    if await self.coaching.handle_consent(user, chat_id, data, conversation):
+                        # The tap answered "/mode coach": open Coach rather than ask again.
+                        await self.turn_processor.open_mode(chat_id, user, "coach")
+                elif data.startswith("coach:"):
+                    await self.coaching.handle_callback(user, chat_id, data, conversation)
+                else:
+                    await self.handoffs.handle_callback(
+                        user, chat_id, data, conversation, message_id=message_id
+                    )
             return
 
         # Legacy onboarding controls must not bypass Dashboard-first Activation.
@@ -226,28 +221,7 @@ class BotHandlers:
         await self.reminder_actions.cancel_for_task(task_id, user_id)
 
     async def _is_allowed(self, chat_id: Recipient, *, pairing_attempt: bool = False) -> bool:
-        """Apply the configured open, closed, allowlist, or invitation access posture."""
-        from src.config import settings
-
-        if settings.access_mode == "closed":
-            return False
-        if self.channel.channel_id not in OPEN_CHANNELS:
-            # Every posture, open included: other apps follow may_use_channel. Pairing attempts
-            # reach Pairing, which applies the same rule to the token's account.
-            if pairing_attempt:
-                return True
-            return may_use_channel(await self._participant(chat_id), self.channel.channel_id)
-        if settings.access_mode == "open":
-            return True
-        if settings.access_mode in {"registered", "invite"}:
-            if pairing_attempt:
-                return True
-            user = await self._participant(chat_id)
-            return bool(user and user.get("supabase_auth_id"))
-
-        try:
-            allowed_ids = parse_allowed_chat_ids(settings.allowed_telegram_chat_ids)
-        except UnsafeProductionConfigurationError:
-            logger.error("Invalid ALLOWED_TELEGRAM_CHAT_IDS; denying Telegram access")
-            return False
-        return chat_id in allowed_ids
+        """Apply the configured access posture (``access.admitted``) to this chat."""
+        return await admitted(
+            self.store, self.channel.channel_id, chat_id, pairing_attempt=pairing_attempt
+        )

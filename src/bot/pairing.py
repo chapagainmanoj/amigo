@@ -3,6 +3,7 @@
 import logging
 import re
 
+from src.agent.modes import DAILY_MODE_ID
 from src.channels.base import ConversationRef, MessageChannel, Recipient, endpoint_dict
 from src.config import settings
 from src.memory.pairing import PAIRING_TOKEN_HEX_LENGTH
@@ -40,13 +41,13 @@ async def _second_app_allowed(store: MemoryStore, token: str, channel_id: str) -
     Without this, a token from the Telegram link could create an account whose only app is
     another channel, and that account could then never pair Telegram (owner decision 31 Oct 2026).
     """
-    from src.access import may_use_channel
+    from src.access import activation_completed, may_use_channel
 
     auth_id = await store.get_pairing_token_owner(token)
     user = await store.get_user_by_auth_id(auth_id) if auth_id else None
     if not may_use_channel(user, channel_id):
         return False
-    return (await store.get_activation_state(auth_id)).get("completed") is True
+    return await activation_completed(store, user)
 
 
 async def handle_pairing(
@@ -106,7 +107,7 @@ async def handle_pairing(
                 if not await channel.recipient_matches(conversation, chat_id):
                     raise ValueError("Pairing conversation does not match recipient")
                 await store.save_mode_conversation(
-                    user["user_id"], "daily", channel.channel_id, endpoint_dict(conversation)
+                    user["user_id"], DAILY_MODE_ID, channel.channel_id, endpoint_dict(conversation)
                 )
             conversation = await ModeConversationService(store, channel).ensure(
                 user, chat_id=chat_id

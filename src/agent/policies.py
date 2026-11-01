@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from src.agent.modes import ModeDefinition, ModeUnavailableError
+from src.agent.modes import DAILY_MODE_ID, ModeDefinition, ModeUnavailableError
 from src.tools.context import ToolContext
 
 
@@ -19,7 +19,7 @@ class EntitlementPolicy(Protocol):
 class ExplicitThenDefault:
     """An explicitly requested Mode wins; otherwise the default Mode handles the Turn."""
 
-    def __init__(self, default: str = "daily"):
+    def __init__(self, default: str = DAILY_MODE_ID):
         self.default = default
 
     async def select(self, context: ToolContext, requested_mode: str | None) -> str:

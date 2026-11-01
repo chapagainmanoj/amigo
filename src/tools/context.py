@@ -7,6 +7,7 @@ passes it to each Tool as `ctx.deps`.
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.agent.modes import DAILY_MODE_ID
 from src.channels.base import ConversationRef, MessageChannel, Recipient
 from src.memory.store import MemoryStore
 from src.scheduler.reminders import ReminderScheduler
@@ -28,7 +29,7 @@ class ToolContext:
     clock: Clock = default_clock
     conversation: ConversationRef | None = None
     entered_by: str = "command"
-    mode_id: str = "daily"
+    mode_id: str = DAILY_MODE_ID
     mode_registry: Any = None
     handoff_id: str | None = None
     handoff_claim_token: str | None = None

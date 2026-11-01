@@ -4,16 +4,11 @@ import asyncio
 import copy
 import re
 import uuid
-from datetime import UTC, datetime, time, timedelta
+from datetime import time, timedelta
 from functools import wraps
 from zoneinfo import ZoneInfo
 
-from src.utils import utc_now
-
-
-def instant(value):
-    value = datetime.fromisoformat(value) if isinstance(value, str) else value
-    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+from src.utils import instant, utc_now
 
 
 def local_day(value, timezone):

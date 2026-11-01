@@ -10,9 +10,16 @@ application registry. No request, profile flag, model result or operator grant c
 from dataclasses import dataclass
 from datetime import datetime
 
-from src.wellbeing import ProcessingConsent, WellbeingPolicy
+from src.wellbeing import ProcessingConsent, WellbeingPolicy, safety_tier
 
 wellbeing_policy = WellbeingPolicy()
+
+
+async def reflect_safety_response(mode_id: str | None, text: str) -> str | None:
+    """Deterministic safety response, available even while Reflect processing is disabled."""
+    if mode_id not in {"reflect", "cbt"}:
+        return None
+    return await wellbeing_policy.referral(await safety_tier(text))
 
 
 COACH_CONSENT_VERSION = "coaching-v1"

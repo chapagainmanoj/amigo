@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.access import is_full_access_user
 from src.agent.catalogue import build_registry
-from src.agent.modes import ModeUnavailableError
+from src.agent.modes import DAILY_MODE_ID, ModeUnavailableError
 from src.agent.policies import admit
 from src.api.dependencies import get_activated_user, get_store
 from src.channels.base import ConversationRef
@@ -43,8 +43,8 @@ async def list_modes(
         timezone=user.get("timezone") or "UTC", turn_id="mode-availability",
     )
     # The open Daily-control Session holds the chat's current Mode, the field /mode updates.
-    control = await store.get_active_session(user["user_id"], "daily")
-    current_mode = (control or {}).get("active_mode_id") or "daily"
+    control = await store.get_active_session(user["user_id"], DAILY_MODE_ID)
+    current_mode = (control or {}).get("active_mode_id") or DAILY_MODE_ID
     result = []
     for mode in build_registry():
         grant = await store.get_active_mode_grant(user["user_id"], mode.id)

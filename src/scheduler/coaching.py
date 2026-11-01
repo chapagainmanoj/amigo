@@ -5,9 +5,9 @@ import uuid
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+from src.access import activation_completed
 from src.channels.registry import ChannelRegistry
-from src.memory.proactive import instant
-from src.utils import default_clock
+from src.utils import default_clock, instant
 
 logger = logging.getLogger(__name__)
 
@@ -175,9 +175,7 @@ class CoachingDeliveryWorker:
                     await self.store.finish_coaching_delivery(user_id, key, token, "cancelled")
                     continue
                 channel, recipient = resolved
-                auth_id = user.get("supabase_auth_id")
-                activation = await self.store.get_activation_state(auth_id) if auth_id else {}
-                if activation.get("completed") is not True:
+                if not await activation_completed(self.store, user):
                     await self.store.finish_coaching_delivery(user_id, key, token, "cancelled")
                     continue
                 if not await self._admitted():

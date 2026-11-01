@@ -6,6 +6,7 @@ from functools import partial
 from weakref import WeakKeyDictionary
 
 from src.access import entitled
+from src.agent.modes import DAILY_MODE_ID
 from src.channels.base import ConversationRef, endpoint_dict
 from src.maintenance import run_isolated_steps
 
@@ -20,7 +21,7 @@ class ModeConversationService:
         self.channel = channel
         self._locks = _CREATION_LOCKS.setdefault(store, {})
 
-    async def ensure(self, user: dict, mode_id: str = "daily", *, chat_id=None):
+    async def ensure(self, user: dict, mode_id: str = DAILY_MODE_ID, *, chat_id=None):
         if not self.channel.capabilities.threads:
             return None
         channel_id = self.channel.channel_id
@@ -66,9 +67,10 @@ class ModeConversationService:
         )
         if mode is None:
             await self.store.save_mode_conversation(
-                user["user_id"], "daily", incoming.channel, endpoint_dict(incoming), alias=True
+                user["user_id"], DAILY_MODE_ID, incoming.channel, endpoint_dict(incoming),
+                alias=True,
             )
-            return "daily"
+            return DAILY_MODE_ID
         return mode
 
     async def close_expired(self):
@@ -84,7 +86,7 @@ class ModeConversationService:
     async def _close_unavailable(self, row, registry):
         if row["channel"] != self.channel.channel_id or row.get("closed_at") is not None:
             return
-        if row["mode_id"] == "daily":
+        if row["mode_id"] == DAILY_MODE_ID:
             return
         from src.agent.modes import UnknownModeError
 

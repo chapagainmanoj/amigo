@@ -11,6 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from src.agent.modes import DAILY_MODE_ID
 from src.evaluation.meaning import ResponseMeaning, has_meaning
 
 MUTATING_TOOLS = {
@@ -145,7 +146,7 @@ def is_gemini_model(model_id: str) -> bool:
     return model_id.startswith(("gemini-", "google:gemini-", "google-gla:gemini-"))
 
 
-def tool_schema(mode_id: str = "daily", *, mode_definition=None) -> list[dict]:
+def tool_schema(mode_id: str = DAILY_MODE_ID, *, mode_definition=None) -> list[dict]:
     """The Tool name, description, parameters, and return schema the Daily Mode offers the model."""
     from src.agent.catalogue import build_registry
 
@@ -427,7 +428,7 @@ class ModeEvalSuite(BaseModel):
 
 def load_mode_suite(path: Path, mode_id: str) -> GateASuite | ModeEvalSuite:
     """Daily keeps its exact approved contract; other Modes use their declared contract."""
-    if mode_id == "daily":
+    if mode_id == DAILY_MODE_ID:
         return load_suite(path)
     return ModeEvalSuite.model_validate_json(path.read_text())
 

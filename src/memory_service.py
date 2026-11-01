@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import UTC, timedelta
 from typing import Any
 
+from src.agent.modes import DAILY_MODE_ID
 from src.memory.durable import (
     MEMORY_POLICY_VERSION,
     PAYLOAD_FIELDS,
@@ -350,7 +351,7 @@ class MemoryService:
     ):
         if not await self.available() or explicit_intent is not True or not query.strip():
             return {"memories": [], "disclosure": None}
-        if mode_id != "daily" or purpose not in PURPOSES:
+        if mode_id != DAILY_MODE_ID or purpose not in PURPOSES:
             return {"memories": [], "disclosure": None}
         rows = await self.store.read_memory_context(user_id, mode_id, turn_id, purpose, query)
         if len(rows) > 3 or any(

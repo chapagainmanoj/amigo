@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from src.agent.modes import DAILY_MODE_ID
 from src.commands.base import (
     IdempotencyConflictError,
     InvalidTransitionError,
@@ -205,10 +206,10 @@ class InMemoryStore:
 
     # ── Sessions ──
 
-    async def get_active_session(self, user_id: str, mode_id: str = "daily") -> dict | None:
+    async def get_active_session(self, user_id: str, mode_id: str = DAILY_MODE_ID) -> dict | None:
         active = [
             s for s in self._sessions.values()
-            if s["user_id"] == user_id and s.get("mode_id", "daily") == mode_id
+            if s["user_id"] == user_id and s.get("mode_id", DAILY_MODE_ID) == mode_id
             and s.get("ended_at") is None
         ]
         if not active:
@@ -217,7 +218,7 @@ class InMemoryStore:
         return dict(active[0])
 
     async def create_session(
-        self, user_id: str, session_type: str = "casual", mode_id: str = "daily"
+        self, user_id: str, session_type: str = "casual", mode_id: str = DAILY_MODE_ID
     ) -> dict:
         session_id = _new_id()
         now = utc_now().isoformat()
@@ -231,7 +232,7 @@ class InMemoryStore:
             "last_activity_at": now,
             "message_count": 0,
             "context_summary": None,
-            "active_mode_id": None if mode_id == "daily" else mode_id,
+            "active_mode_id": None if mode_id == DAILY_MODE_ID else mode_id,
         }
         self._sessions[session_id] = session
         return dict(session)
@@ -736,7 +737,7 @@ class InMemoryStore:
                     "channel",
                 )
             },
-            "mode_id": session.get("mode_id", "daily"),
+            "mode_id": session.get("mode_id", DAILY_MODE_ID),
         }
 
     async def get_session_messages(
@@ -750,11 +751,11 @@ class InMemoryStore:
         ]
 
     async def has_session_on_local_day(
-        self, user_id: str, timezone: str, mode_id: str = "daily"
+        self, user_id: str, timezone: str, mode_id: str = DAILY_MODE_ID
     ) -> bool:
         start_utc, end_utc = local_day_utc_range(timezone)
         for s in self._sessions.values():
-            if s["user_id"] != user_id or s.get("mode_id", "daily") != mode_id:
+            if s["user_id"] != user_id or s.get("mode_id", DAILY_MODE_ID) != mode_id:
                 continue
             started = datetime.fromisoformat(s["started_at"])
             if start_utc <= started < end_utc:
@@ -762,7 +763,7 @@ class InMemoryStore:
         return False
 
     async def get_yesterday_summary(
-        self, user_id: str, timezone: str, mode_id: str = "daily"
+        self, user_id: str, timezone: str, mode_id: str = DAILY_MODE_ID
     ) -> str | None:
         yesterday = yesterday_in_tz(timezone)
         start_utc, end_utc = local_day_utc_range(timezone, yesterday)
@@ -771,7 +772,7 @@ class InMemoryStore:
             key=lambda x: x.get("ended_at") or "",
             reverse=True,
         ):
-            if s["user_id"] != user_id or s.get("mode_id", "daily") != mode_id:
+            if s["user_id"] != user_id or s.get("mode_id", DAILY_MODE_ID) != mode_id:
                 continue
             if s.get("context_summary") is None:
                 continue

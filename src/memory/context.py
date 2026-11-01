@@ -2,6 +2,7 @@
 
 import logging
 
+from src.agent.modes import DAILY_MODE_ID
 from src.memory.store import MemoryStore
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,7 @@ class ContextBuilder:
         self.store = store
 
     async def get_yesterday_summary(
-        self, user_id: str, timezone: str, *, mode_id: str = "daily"
+        self, user_id: str, timezone: str, *, mode_id: str = DAILY_MODE_ID
     ) -> str | None:
         """Get the most recent closed session's summary from yesterday (user's timezone)."""
         return await self.store.get_yesterday_summary(user_id, timezone, mode_id=mode_id)
