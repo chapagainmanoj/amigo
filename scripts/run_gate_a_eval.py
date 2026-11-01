@@ -407,7 +407,7 @@ async def run(args) -> int:
         baseline_revision = (
             baseline_inputs.get("git_revision") if isinstance(baseline_inputs, dict) else None
         )
-        from scripts.check_gate_a_evidence import check_evidence
+        from src.evaluation.gate_a_evidence import check_evidence
 
         baseline_errors = check_evidence(
             baseline,

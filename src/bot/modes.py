@@ -9,7 +9,7 @@ from src.conversations import ModeConversationService
 from src.mode_readiness import (
     COACH_CONSENT_BUTTONS,
     COACH_PROCESSING_NOTICE,
-    reflect_safety_response,
+    mode_safety_response,
 )
 from src.tools.context import ToolContext
 
@@ -77,7 +77,7 @@ class ModeController:
             ):
                 return PreparedModeTurn(context, selected, "Use /mode, /mode <id>, or /daily.")
             selected = DAILY_MODE_ID if command == "/daily" else parts[1]
-        safety_reply = await reflect_safety_response(selected, text)
+        safety_reply = await mode_safety_response(await self.runtime.registry.find(selected), text)
         if safety_reply is not None:
             return PreparedModeTurn(context, selected, safety_reply)
         try:

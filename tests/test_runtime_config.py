@@ -8,8 +8,8 @@ from src.config import Settings
 from src.runtime_config import (
     UnsafeProductionConfigurationError,
     parse_allowed_chat_ids,
-    validate_runtime_configuration,
 )
+from src.startup import validate_runtime_configuration
 
 
 def _production_config(**overrides) -> SimpleNamespace:

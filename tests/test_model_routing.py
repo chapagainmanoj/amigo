@@ -10,13 +10,14 @@ from pydantic import ValidationError
 from pydantic_ai.messages import ModelResponse, TextPart
 from pydantic_ai.models.function import FunctionModel
 
-from scripts.check_gate_a_evidence import check_evidence
 from src.agent.catalogue import DAILY, build_registry
 from src.agent.runtime import ModeRuntime, _provider_for
 from src.config import Settings
+from src.evaluation.gate_a_evidence import check_evidence
 from src.evaluation.model_policy import fallback_currency, require_evaluated_model
 from src.model_routing import resolve_model
-from src.runtime_config import UnsafeProductionConfigurationError, validate_runtime_configuration
+from src.runtime_config import UnsafeProductionConfigurationError
+from src.startup import validate_runtime_configuration
 from tests.fakes import FakeStore
 from tests.gate_a_fixtures import passing_gate_a_evidence
 from tests.test_modes import _deliver, _participant
@@ -172,7 +173,7 @@ def test_non_gemini_full_evidence_can_allow_model_but_never_gate_a(tmp_path):
     _save(tmp_path, evidence)
     with (
         patch("src.evaluation.model_policy.fallback_currency", return_value=currency),
-        patch("scripts.check_gate_a_evidence.current_fingerprints", return_value={}),
+        patch("src.evaluation.gate_a_evidence.current_fingerprints", return_value={}),
     ):
         require_evaluated_model(DAILY, "anthropic:claude-x", tmp_path)
         errors = check_evidence(
@@ -206,7 +207,7 @@ def test_model_allowlist_rejects_failures_stale_or_wrong_inputs_and_unreviewed(t
     _save(tmp_path, evidence, review=mutation != "review")
     with (
         patch("src.evaluation.model_policy.fallback_currency", return_value=currency),
-        patch("scripts.check_gate_a_evidence.current_fingerprints", return_value={}),
+        patch("src.evaluation.gate_a_evidence.current_fingerprints", return_value={}),
         pytest.raises(ValueError, match="no current passing evaluation"),
     ):
         require_evaluated_model(DAILY, "anthropic:claude-x", tmp_path)
@@ -262,7 +263,7 @@ def test_model_review_naive_utc_clock_is_not_interpreted_in_host_timezone(tmp_pa
             )
             with (
                 patch("src.evaluation.model_policy.fallback_currency", return_value=currency),
-                patch("scripts.check_gate_a_evidence.current_fingerprints", return_value={}),
+                patch("src.evaluation.gate_a_evidence.current_fingerprints", return_value={}),
             ):
                 require_evaluated_model(DAILY, "anthropic:claude-x", tmp_path)
     finally:

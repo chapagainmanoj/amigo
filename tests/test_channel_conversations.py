@@ -277,3 +277,12 @@ async def test_topics_off_does_not_echo_stored_thread():
     ref = ConversationRef("telegram", {"chat_id": 123, "thread_id": 227})
     await channel.send_message(123, "Command mode reply", conversation=ref)
     assert "message_thread_id" not in channel.bot.send_message.await_args.kwargs
+
+
+def test_the_app_wires_telegram_bare_chats_to_their_daily_topic():
+    """The composition root, not a handler, gives Telegram its default conversation resolver."""
+    from src import main
+
+    resolver = main.channel.default_conversation_resolver
+    assert resolver is not None
+    assert resolver.__self__ is main.handlers.turn_processor.modes.conversations

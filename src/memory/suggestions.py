@@ -8,7 +8,7 @@ from datetime import timedelta
 from zoneinfo import ZoneInfo
 
 from src.agent.modes import DAILY_MODE_ID
-from src.utils import utc_now
+from src.utils import instant, utc_now
 
 
 class LocalSuggestionState:
@@ -89,13 +89,12 @@ class LocalSuggestionState:
             yield
 
     async def _opening_allowed(self, offer):
-        from src.memory.memory_store import _utc_timestamp
 
         actor = offer["user_id"]
         if not await self.preference(actor) or await self.pending_confirmation(actor):
             return False
         if offer["grant_required"] and not await self.store._mode_state._active_grant(
-            actor, offer["target_mode_id"], _utc_timestamp(utc_now())
+            actor, offer["target_mode_id"], instant(utc_now())
         ):
             return False
         source = await self.owned_session(actor, offer["source_session_id"])
@@ -137,11 +136,10 @@ class LocalSuggestionState:
 
     async def _target_session(self, actor, target_mode):
         """Prepare the complete local transaction before publishing selector/receipt updates."""
-        from src.memory.memory_store import _utc_timestamp
 
         user = await self.store.get_user_by_id(actor)
         timezone = ZoneInfo(user.get("timezone") or "UTC")
-        now = _utc_timestamp(utc_now())
+        now = instant(utc_now())
         sessions = getattr(self.store, "_sessions", None)
         rows = list(sessions.values()) if sessions is not None else self.store.sessions
         candidates = [
@@ -154,9 +152,9 @@ class LocalSuggestionState:
         candidates.sort(key=lambda row: (row["started_at"], row["session_id"]), reverse=True)
         old = candidates[0] if candidates else None
         stale = old is not None and (
-            _utc_timestamp(old["last_activity_at"])
+            instant(old["last_activity_at"])
             < now - timedelta(minutes=user.get("session_timeout_minutes") or 120)
-            or _utc_timestamp(old["last_activity_at"]).astimezone(timezone).date()
+            or instant(old["last_activity_at"]).astimezone(timezone).date()
             < now.astimezone(timezone).date()
         )
         if old is not None and not stale:
@@ -189,9 +187,8 @@ class LocalSuggestionState:
             offer = self.offers.get(offer_id)
             if not offer or offer["user_id"] != user_id or offer["state"] != "pending":
                 return None
-            from src.memory.memory_store import _utc_timestamp
 
-            if _utc_timestamp(offer["expires_at"]) <= _utc_timestamp(utc_now()):
+            if instant(offer["expires_at"]) <= instant(utc_now()):
                 offer["state"] = "expired"
                 return None
             if not confirm:
@@ -224,7 +221,6 @@ class LocalSuggestionState:
             return copy.deepcopy(offer)
 
     async def claim_opening(self, user_id, offer_id):
-        from src.memory.memory_store import _utc_timestamp
 
         async with self._opening_locks():
             offer = self.offers.get(offer_id)
@@ -236,9 +232,9 @@ class LocalSuggestionState:
                 or not await self._opening_allowed(offer)
             ):
                 return None
-            if offer["opening_claimed_at"] is not None and _utc_timestamp(
+            if offer["opening_claimed_at"] is not None and instant(
                 offer["opening_claimed_at"]
-            ) > _utc_timestamp(utc_now()) - timedelta(minutes=5):
+            ) > instant(utc_now()) - timedelta(minutes=5):
                 return {"status": "busy"}
             offer.update(
                 opening_claim_token=str(uuid.uuid4()), opening_claimed_at=utc_now().isoformat()
@@ -246,7 +242,6 @@ class LocalSuggestionState:
             return {"status": "claimed", "offer": copy.deepcopy(offer)}
 
     async def _owns_opening(self, offer, user_id, token):
-        from src.memory.memory_store import _utc_timestamp
 
         return bool(
             offer
@@ -256,8 +251,8 @@ class LocalSuggestionState:
             and token is not None
             and offer["opening_claim_token"] == token
             and offer["opening_claimed_at"] is not None
-            and _utc_timestamp(offer["opening_claimed_at"])
-            > _utc_timestamp(utc_now()) - timedelta(minutes=5)
+            and instant(offer["opening_claimed_at"])
+            > instant(utc_now()) - timedelta(minutes=5)
         )
 
     async def release_opening(self, user_id, offer_id, token):
@@ -279,18 +274,17 @@ class LocalSuggestionState:
             return True
 
     async def pending_confirmation(self, user_id):
-        from src.memory.memory_store import _utc_timestamp
 
         pending_coach = any(
             row["user_id"] == user_id
             and row["used_at"] is None
-            and _utc_timestamp(row["expires_at"]) > _utc_timestamp(utc_now())
+            and instant(row["expires_at"]) > instant(utc_now())
             for row in self.store._coaching_state.approvals.values()
         )
         return pending_coach or any(
             row["user_id"] == user_id
             and row["resolved_at"] is None
-            and _utc_timestamp(row["expires_at"]) > _utc_timestamp(utc_now())
+            and instant(row["expires_at"]) > instant(utc_now())
             for row in self.store._mode_state.handoffs.values()
         )
 

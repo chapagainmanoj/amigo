@@ -67,6 +67,7 @@ REFLECT_CANDIDATE = ModeDefinition(
     toolsets=(),
     context=(),
     eval_suite="evals/reflect/v1/cases.json",
+    safety_referral=True,
     invalidating_inputs=("src/agent/reflect.py", "src/wellbeing.py"),
     limits=(
         "Non-clinical reflection; no therapy, monitoring, journal storage or automatic Tasks. "

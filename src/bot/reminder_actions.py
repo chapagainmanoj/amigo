@@ -7,9 +7,8 @@ from src.commands.base import CommandContext, InvalidTransitionError, ProactiveB
 from src.commands.later import ApplyLaterCommand
 from src.memory.store import MemoryStore
 from src.scheduler.reminders import ReminderScheduler
-from src.tools.reminders import CancelRemindersTool, ScheduleReminderTool
+from src.tools.reminders import CancelRemindersTool
 from src.tools.tasks import UpdateTaskStatusTool
-from src.tools.toolsets import parse_time_expression
 
 logger = logging.getLogger(__name__)
 
@@ -27,39 +26,8 @@ class ReminderActions:
         self.store = store
         self.scheduler = scheduler
         self.cancel_reminders_tool = CancelRemindersTool(store, scheduler)
-        self.schedule_reminder_tool = ScheduleReminderTool(store, scheduler)
         self.update_task_status_tool = UpdateTaskStatusTool(store)
         self.apply_later_command = ApplyLaterCommand(store)
-
-    async def schedule_for_task(
-        self, user: dict, task: dict, time_expr: str, chat_id: Recipient
-    ) -> None:
-        """Resolve a time expression and schedule a reminder in UTC.
-
-        Only unambiguous relative expressions may bypass explicit confirmation.
-        """
-        try:
-            tz = user.get("timezone") or "UTC"
-            resolved = parse_time_expression(time_expr, tz)
-            if (
-                resolved.clarification_required
-                or resolved.confirmation_required
-                or resolved.utc_instant is None
-            ):
-                logger.warning("Time expression requires clarification: %s", time_expr)
-                return
-            await self.schedule_reminder_tool.run_exact(
-                context=CommandContext(
-                    actor_user_id=user["user_id"],
-                    surface=self.channel.channel_id,
-                    idempotency_key=f"{self.channel.channel_id}:legacy-schedule:{task['task_id']}:{time_expr}",
-                ),
-                task=task,
-                scheduled_at=resolved.utc_instant,
-                timezone=tz,
-            )
-        except Exception:
-            logger.exception("Failed to schedule reminder for task: %s", task["title"])
 
     async def cancel_for_task(self, task_id: str, user_id: str) -> None:
         """Acknowledge all pending reminders for a task and cancel scheduler jobs."""

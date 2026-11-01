@@ -45,22 +45,13 @@ from src.memory.proactive import LocalProactiveState, reminder_budget_transactio
 from src.memory.reminders import validate_reminder_timing, validate_reminder_updates
 from src.memory.tasks import validate_task_status
 from src.schema import EXPECTED_SCHEMA_VERSION, require_schema_version
-from src.utils import local_day_utc_range, today_in_tz, utc_now, yesterday_in_tz
+from src.utils import instant, local_day_utc_range, today_in_tz, utc_now, yesterday_in_tz
 
 logger = logging.getLogger(__name__)
 
 
 def _new_id() -> str:
     return str(uuid.uuid4())
-
-
-def _utc_timestamp(value: str | datetime) -> datetime:
-    """Interpret legacy naive timestamps as UTC; preserve explicitly offset instants."""
-    instant = datetime.fromisoformat(value) if isinstance(value, str) else value
-    return (
-        instant.replace(tzinfo=ZoneInfo("UTC"))
-        if instant.tzinfo is None else instant.astimezone(ZoneInfo("UTC"))
-    )
 
 
 def _elapsed_ms(later: str, earlier: str) -> int:
@@ -1228,16 +1219,16 @@ class InMemoryStore:
 
     async def claim_scheduler_effects(self, limit: int, worker_id: str) -> list[dict]:
         claimed = []
-        now = _utc_timestamp(utc_now())
+        now = instant(utc_now())
         for effect in sorted(
-            self._scheduler_outbox.values(), key=lambda item: _utc_timestamp(item["created_at"])
+            self._scheduler_outbox.values(), key=lambda item: instant(item["created_at"])
         ):
             abandoned = (
                 effect["status"] == "processing"
                 and effect.get("claimed_at")
-                and now - _utc_timestamp(effect["claimed_at"]) > timedelta(minutes=5)
+                and now - instant(effect["claimed_at"]) > timedelta(minutes=5)
             )
-            available = _utc_timestamp(effect["available_at"]) <= now
+            available = instant(effect["available_at"]) <= now
             if (
                 (effect["status"] != "pending" or not available)
                 and not abandoned
@@ -1619,26 +1610,6 @@ class InMemoryStore:
             ),
         }
 
-    async def get_pending_reminders_for_reload(self, cutoff: datetime) -> list[dict]:
-        results = []
-        for r in self._reminders.values():
-            if r["status"] != "pending":
-                continue
-            scheduled = datetime.fromisoformat(r["scheduled_time"])
-            if scheduled.tzinfo is not None:
-                from zoneinfo import ZoneInfo
-                scheduled = scheduled.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-            if scheduled >= cutoff:
-                task = self._tasks.get(r["task_id"], {})
-                user = self._users.get(r["user_id"], {})
-                entry = dict(r)
-                entry["tasks"] = {"title": task.get("title", "")}
-                entry["user_profiles"] = {
-                    "primary_channel": user.get("primary_channel", "telegram"),
-                }
-                results.append(entry)
-        return results
-
     async def get_reminders_for_reconciliation(self) -> list[dict]:
         results = []
         for reminder in self._reminders.values():
@@ -1700,18 +1671,6 @@ class InMemoryStore:
         return entry
 
     # ── Usage Events ──
-
-    async def log_usage(
-        self, user_id: str, model: str, input_tokens: int,
-        output_tokens: int, session_id: str | None = None,
-    ) -> None:
-        self._usage.append({
-            "user_id": user_id,
-            "model": model,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "session_id": session_id,
-        })
 
     # ── Pairing and Account Linking ──
 

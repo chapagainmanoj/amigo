@@ -19,8 +19,8 @@ from src.config import Settings
 from src.runtime_config import (
     UnsafeProductionConfigurationError,
     require_agent_credentials,
-    validate_runtime_configuration,
 )
+from src.startup import validate_runtime_configuration
 
 
 def _info():

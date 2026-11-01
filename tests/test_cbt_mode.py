@@ -6,7 +6,7 @@ from src.access import entitled
 from src.agent.catalogue import build_registry
 from src.agent.modes import PLACEHOLDER_FACTS
 from src.config import settings
-from src.mode_readiness import reflect_safety_response
+from src.mode_readiness import mode_safety_response
 from tests.fakes import FakeStore
 
 FULL, TRIAL = 111, 222
@@ -30,8 +30,18 @@ async def test_only_full_access_accounts_can_open_cbt():
 
 
 async def test_crisis_language_in_cbt_gets_the_fixed_referral_before_the_model():
-    assert await reflect_safety_response("cbt", "I am thinking about killing myself") is not None
-    assert await reflect_safety_response("cbt", "my friend hasn't replied") is None
+    cbt = build_registry()["cbt"]
+    assert await mode_safety_response(cbt, "I am thinking about killing myself") is not None
+    assert await mode_safety_response(cbt, "my friend hasn't replied") is None
+
+
+async def test_only_wellbeing_modes_declare_the_crisis_referral():
+    registry = build_registry()
+    assert {mode.id for mode in registry if mode.safety_referral} == {"reflect", "cbt"}
+    crisis = "I am thinking about killing myself"
+    assert await mode_safety_response(registry["daily"], crisis) is None
+    assert await mode_safety_response(await registry.find("nonexistent"), crisis) is None
+    assert await mode_safety_response(await registry.find(None), crisis) is None
 
 
 def test_cbt_has_no_tools_or_context_and_states_its_limits():

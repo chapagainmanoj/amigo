@@ -66,6 +66,7 @@ CBT = ModeDefinition(
     toolsets=(),
     context=(),
     eval_suite="evals/cbt/v1/cases.json",
+    safety_referral=True,
     invalidating_inputs=("src/agent/cbt.py", "src/wellbeing.py", "evals/cbt/v1/cases.json"),
     limits=(
         "Owner research experiment, not therapy or a reviewed CBT protocol. Messages are "

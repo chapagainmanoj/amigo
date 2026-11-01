@@ -14,10 +14,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.check_gate_a_evidence import (  # noqa: E402
+from src.evaluation.gate_a_evidence import (  # noqa: E402
     check_evidence as check_gate_a_evidence,
 )
-from scripts.check_gate_a_evidence import comparison_reviewed_at  # noqa: E402
+from src.evaluation.gate_a_evidence import comparison_reviewed_at  # noqa: E402
 
 REQUIRED_CHECKS = {
     "backend_ci", "frontend_ci", "clean_migrations", "model_evaluation",

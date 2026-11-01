@@ -1417,3 +1417,63 @@ ADR 0003 remains Accepted, pending spike. Phase 4 not started; owner client obse
   `completed` and a linked full-access Discord account; `ModeDefinition.toolsets` notes that
   `get_type_hints()` fails by design; the truthy-site count above corrected. Reviewer verified
   byte-identical `tool_schema()` and Mode instructions vs HEAD for all five Modes. pytest 1865 passed.
+
+## Architecture review fixes (1 Nov 2026, uncommitted; independent review on Fable 5.1)
+
+- Priority 1 — `src` imported `scripts` (latent production crash; the image ships only `src`, `evals`):
+  `scripts/check_gate_a_evidence.py` moved to `src/evaluation/gate_a_evidence.py` (ROOT = parents[2],
+  no sys.path hack); the script is now a thin CLI. `model_policy`, `run_gate_a_eval`,
+  `validate_preflight_evidence` and tests import the new module. Added to `INVALIDATING_INPUT_PATHS`.
+  New `test_src_never_imports_outside_the_package` (mutation-checked: fails on HEAD's model_policy).
+- Priority 2 — participant content in logs: task titles removed from `scheduler/reminders.py`,
+  `tools/reminders.py`, `memory/store.py` (ids instead). Dead `ReminderActions.schedule_for_task`
+  (logged title and time expression, swallowed every error) deleted. New `tests/test_log_privacy.py`
+  AST guard (mutation-checked).
+- Priority 3 (partial) — dead Store methods `get_pending_reminders_for_reload`, `log_usage` deleted from
+  all three Stores and the smoke stub; `FakeStore.usage` and dead `FakeDB/FakeTable/FakeResult` removed.
+  Kept: `claim/finish_telegram_update` (ADR 0007 step 1, precondition schema 24 in production not met),
+  `set_proactive_consent` and `inspect_memories` (used internally and by tests).
+- Startup gate split: `runtime_config.validate_settings` (+ public `validate_model_routes`) is settings
+  only; `startup.validate_runtime_configuration` remains the one call from `main`/`cli` and adds the
+  per-Mode evidence, in the original error order. `KNOWN_EDGES` is now empty. Tests import the gate
+  from `src.startup`; an import from the old location fails loudly rather than gating less.
+- Safety: `ModeDefinition.safety_referral` (Reflect, CBT) replaces the `{"reflect","cbt"}` set;
+  `mode_readiness.mode_safety_response(mode, text)` looks the Mode up via `ModeRegistry.find`, so a
+  planned/disabled Mode still gets the referral. Test asserts exactly Reflect and CBT declare it.
+- Wiring: Telegram's default conversation resolver is set in `main` (composition root), not by
+  `BotHandlers` via hasattr (constructor injection impossible: channel ↔ conversation service cycle);
+  `api/memory` no longer lazily builds a MemoryService; `main` and `cli` pass an explicit ModeRuntime.
+- Small: `_utc_timestamp` copies replaced by `utils.instant` (removes 6 function-local cycle imports);
+  `memory.context`, `memory.sessions` reclassified as services.
+- Protected files touched: `scripts/smoke_check.py` (removed the dead `get_pending_reminders_for_reload`
+  stub). `src/config.py` not touched.
+- Evidence: pytest 1869 passed; ruff clean; smoke `--scheduler` 0; Gate A `--validate-only` 0;
+  `check_gate_a_evidence.py --help` 0; `test_gate_a_currency.py` diff is imports only. No billed runs.
+- Declined, with reason:
+  - `MemoryController` → `bot/`: `tools/memory.py` (service) uses it; the move would be an outward import.
+  - Scheduler sync methods → async: thin wrappers over APScheduler's sync API, no I/O; churn only.
+  - `cli.py` fixture surface "telegram": deliberate, Activation needs a messaging-app resolution.
+- Deferred (owner decision / ADR / migration):
+  - Store Protocol + pyright + FakeStore as InMemoryStore subclass (67 differing methods; ADR first).
+  - `AccessPolicy` injection (17 src call sites, 70 test patches in 13 files).
+  - `main` wiring into `build_app()` in lifespan; `default_runtime` stays as the test default.
+  - RPC status codes instead of string-matched Postgres errors; `create_task` dedupe unique index
+    (both need migrations).
+  - Telegram-keyed full access: follow ADR 0007 (blocked on schema 24 in production).
+  - TypedDict participant/activation shapes: after a type checker exists.
+  - Gate A evidence is stale for this tree (many invalidating inputs changed).
+- Second independent review (Fable 5.1): no blockers; 2 should-fix, 5 nits, all fixed:
+  - Evidence-gated routes still could not start in production: the Gate A fingerprint also hashes
+    `migrations/*.sql` and `scripts/run_gate_a_eval.py`, absent from the image. Dockerfile now copies
+    both; new `tests/test_deployment_image.py` checks every fingerprint input is in the COPY set
+    (mutation-checked). **Deploy config touched: `Dockerfile`.**
+  - `tests/test_log_privacy.py` rewritten: any `*log*` receiver, every argument and keyword, `.get`/
+    `getattr` constants, `%`/`.format`, wider content names; leak-form and safe-form tests.
+  - Startup routes validated once; pins warning after the evidence check (HEAD's order) via
+    `runtime_config.warn_participant_pins`; `validate_settings` no longer re-runs routes.
+  - Reflect safety test now uses a registry with Reflect `disabled`.
+  - `test_src_never_imports_outside_the_package` also sees `import_module`/`__import__` constants.
+  - `docs/pre-launch-gap-analysis.md` no longer cites the removed `log_usage()`.
+  - `default_runtime` / `default_turn_orchestrator` built lazily (module `__getattr__`); importing
+    `src.main` builds neither (verified).
+  - Evidence: pytest 1873 passed; ruff clean; smoke 0; Gate A `--validate-only` 0; checker CLI 0.

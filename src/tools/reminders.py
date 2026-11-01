@@ -56,7 +56,7 @@ class ScheduleReminderTool:
         send_time = self.clock.local_time_to_utc(hour, minute, timezone)
 
         if send_time <= self.clock.utc_now():
-            logger.info("Skipping reminder for %s — time already passed", task["title"])
+            logger.info("Skipping reminder for task %s — time already passed", task["task_id"])
             return {"reminder": None, "scheduled_time": send_time}
 
         return await self.command.run(

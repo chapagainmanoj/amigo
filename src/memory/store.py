@@ -1307,7 +1307,9 @@ class MemoryStore:
             .execute()
         )
         if existing and existing.data:
-            logger.info("Deduplicating create_task — returning existing task '%s'", title)
+            logger.info(
+                "Deduplicating create_task — returning existing task %s", existing.data["task_id"]
+            )
             return existing.data
 
         data = {
@@ -1690,21 +1692,6 @@ class MemoryStore:
         return result.data
 
     @_observe_database_call
-    async def get_pending_reminders_for_reload(self, cutoff: datetime) -> list[dict]:
-        """Get pending reminders due after cutoff with task title and primary channel."""
-        result = await (
-            self.db.table("reminders")
-            .select(
-                "*, tasks(title), "
-                "user_profiles!reminders_user_id_fkey(primary_channel)"
-            )
-            .eq("status", "pending")
-            .gte("scheduled_time", cutoff.isoformat())
-            .execute()
-        )
-        return result.data
-
-    @_observe_database_call
     async def get_reminders_for_reconciliation(self) -> list[dict]:
         """Return authoritative active Reminder rows and their owned delivery context."""
         result = await (
@@ -1766,26 +1753,6 @@ class MemoryStore:
         return result.data[0]
 
     # ── Usage Events ──
-
-    @_observe_database_call
-    async def log_usage(self, user_id: str, model: str, input_tokens: int,
-                        output_tokens: int, session_id: str | None = None) -> None:
-        """Log LLM usage for cost tracking."""
-        # Rough cost estimation (Gemini Flash pricing)
-        cost_per_m_input = 0.15
-        cost_per_m_output = 0.60
-        estimated_cost = (
-            (input_tokens / 1_000_000) * cost_per_m_input
-            + (output_tokens / 1_000_000) * cost_per_m_output
-        )
-        await self.db.table("usage_events").insert({
-            "user_id": user_id,
-            "model": model,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "estimated_cost": estimated_cost,
-            "session_id": session_id,
-        }).execute()
 
     # ── Pairing and Account Linking ──
 

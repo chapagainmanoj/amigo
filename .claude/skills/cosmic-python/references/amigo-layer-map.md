@@ -28,14 +28,14 @@ Channels and policies are true Protocol ports (`BP-PROTOCOL-PORTS`).
 |---|---|
 | Domain | `activation`, `agent.modes`, `agent.prompts`, `agent.safety`, `bot.keyboards`, `channels.base`, `coaching_templates`, `commands.base`, `dashboard_snapshot`, `evaluation.meaning`, `schema`, `time_resolution`, `utils`, `wellbeing`, `workflows` |
 | Config | `config`, `model_routing`, `runtime_config` |
-| Adapter | `channels.*` (not `base`, `registry`), `db`, `memory`, `model_usage`, `observability`, `telemetry`, `agent.claude_cli_model` |
-| Service | `access`, `mode_readiness`, `reliability`, `agent.*` (rest, incl. `policies`, `runtime`, `catalogue`, `registry`), `bot.update_claims`, `channels.registry`, `commands.*`, `tools`, `turns`, `conversations`, `handoffs`, `coaching`, `mode_suggestions`, `memory_service`, `maintenance`, `scheduler`, `evaluation.*` (rest) |
+| Adapter | `channels.*` (not `base`, `registry`), `db`, `memory` (not `context`, `sessions`), `model_usage`, `observability`, `telemetry`, `agent.claude_cli_model` |
+| Service | `access`, `mode_readiness`, `reliability`, `agent.*` (rest, incl. `policies`, `runtime`, `catalogue`, `registry`), `bot.update_claims`, `channels.registry`, `commands.*`, `tools`, `turns`, `conversations`, `handoffs`, `memory.context`, `memory.sessions`, `coaching`, `mode_suggestions`, `memory_service`, `maintenance`, `scheduler`, `evaluation.*` (rest) |
 | Entrypoint | `main`, `cli`, `__main__`, `api`, `bot` (rest), `auth`, `startup` |
 
 Why some modules sit outside their folder's layer:
 - `access`, `mode_readiness`, `agent.policies`, `reliability`: entitlement/readiness rules that
   await the Store and read settings → services. `access` owns the access-posture rule
-  (`admitted`) and the Activation gate (`activation_completed`) for every handler and sender. `reflect_safety_response` lives in `mode_readiness` because it
+  (`admitted`) and the Activation gate (`activation_completed`) for every handler and sender. `mode_safety_response` lives in `mode_readiness` because it
   awaits the `wellbeing_policy` instance held there; `wellbeing` keeps the pure primitives.
 - `bot.keyboards`: pure button declarations shared by scheduler and handlers → domain.
 - `bot.update_claims`: per-participant Turn serialization used by `main`, `cli`, `handoffs` → service.
@@ -48,9 +48,17 @@ Why some modules sit outside their folder's layer:
 
 ## Known edges (`KNOWN_EDGES`)
 
-| Edge | Why it stays | Fix only with owner review |
-|---|---|---|
-| `runtime_config` → `agent.catalogue`, `evaluation.model_policy` | Fail-closed production gate (privacy decision 04): `MODE_MODELS` and a non-Gemini default need current per-Mode evaluation evidence before any side effect. One `validate_runtime_configuration` call is the whole gate. | Split into a second startup gate called by `main` and `cli`; touches a safety gate and its tests |
+None. The last pair (`runtime_config` → `agent.catalogue`, `evaluation.model_policy`) was fixed by
+splitting the startup gate: `runtime_config.validate_settings` checks settings only;
+`startup.validate_runtime_configuration` is still the one call `main` and `cli` make, and adds the
+per-Mode evaluation evidence (privacy decision 04).
+
+`test_src_never_imports_outside_the_package` also refuses any `src` import of `scripts` or `tests`:
+the image ships only `src` and `evals`.
+
+Fixed on 1 Nov 2026 (architecture review): Gate A evidence checker moved into
+`src/evaluation/gate_a_evidence.py`; startup gate split; `memory.context`, `memory.sessions`
+reclassified as services; `mode_safety_response` reads `ModeDefinition.safety_referral`.
 
 Fixed on 1 Nov 2026: `reliability` reclassified as service; `dashboard_snapshot` takes a `Clock`;
 access posture moved from `bot/handlers` to `access.admitted`; seven Activation checks collapsed

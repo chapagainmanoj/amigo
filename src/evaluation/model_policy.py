@@ -83,7 +83,7 @@ def require_evaluated_fallback(mode, root: Path) -> None:
             raise ValueError("fallback evidence must pin its Mode instructions")
         # Recompute every case score and aggregate, never trust a manifest's passed flag.
         # Supplying the Mode avoids registration recursion while validating startup invariants.
-        from scripts.check_gate_a_evidence import check_evidence
+        from src.evaluation.gate_a_evidence import check_evidence
 
         errors = check_evidence(
             evidence,
@@ -141,7 +141,7 @@ def require_evaluated_model(mode, model: str, root: Path) -> None:
             != canonical_hash(mode.instructions(PLACEHOLDER_FACTS))
         ):
             raise ValueError("Model evidence identity or execution inputs are stale")
-        from scripts.check_gate_a_evidence import check_evidence
+        from src.evaluation.gate_a_evidence import check_evidence
 
         errors = check_evidence(
             evidence,

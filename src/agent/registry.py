@@ -25,6 +25,10 @@ class ModeRegistry:
         except KeyError:
             raise UnknownModeError(mode_id) from None
 
+    async def find(self, mode_id: str | None) -> ModeDefinition | None:
+        """The registered Mode with this id, or None for no id or an unknown one."""
+        return self._modes.get(mode_id) if mode_id else None
+
     async def live(self) -> list[ModeDefinition]:
         return [mode for mode in self._modes.values() if mode.status == "live"]
 

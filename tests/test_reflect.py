@@ -271,7 +271,21 @@ async def test_reflect_danger_bypasses_disabled_mode_model_and_sensitive_storage
         store=store, scheduler=FakeScheduler(), channel=channel, user=user,
         session_id="unused", chat_id=71001, timezone="UTC", turn_id="safety-test",
     )
-    runtime = SimpleNamespace(resolve=AsyncMock(side_effect=AssertionError("No model admission")))
+    from dataclasses import replace
+
+    from src.agent.catalogue import build_registry
+    from src.agent.registry import ModeRegistry
+
+    # Reflect switched off: the referral must still run before any admission or model call.
+    registry = ModeRegistry(
+        replace(mode, status="disabled") if mode.id == "reflect" else mode
+        for mode in build_registry()
+    )
+    assert registry["reflect"].status == "disabled"
+    runtime = SimpleNamespace(
+        registry=registry,
+        resolve=AsyncMock(side_effect=AssertionError("No model admission")),
+    )
     text = "I am about to kill myself"
     if entry == "prepare":
         from src.memory.sessions import SessionManager

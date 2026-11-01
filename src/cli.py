@@ -30,9 +30,10 @@ from src.memory.memory_store import InMemoryStore
 from src.memory.pairing import PAIRING_TOKEN_HEX_LENGTH
 from src.memory.sessions import SessionManager
 from src.observability import quiet_routine_logs
-from src.runtime_config import require_agent_credentials, validate_runtime_configuration
+from src.runtime_config import require_agent_credentials
 from src.scheduler.outbox import SchedulerOutboxWorker
 from src.scheduler.reminders import ReminderScheduler
+from src.startup import validate_runtime_configuration
 from src.utils import utc_now
 
 # ANSI
@@ -195,7 +196,10 @@ async def run_cli(onboard: bool = False, preview_modes: bool = False):
     reminder_scheduler = ReminderScheduler(channel=channel, store=store)
     outbox_worker = SchedulerOutboxWorker(store, reminder_scheduler)
 
-    mode_runtime = _preview_runtime() if preview_modes else None
+    from src.agent.catalogue import build_registry
+    from src.agent.runtime import ModeRuntime
+
+    mode_runtime = _preview_runtime() if preview_modes else ModeRuntime(build_registry())
     handlers = BotHandlers(
         channel=channel,
         store=store,
@@ -228,7 +232,7 @@ async def run_cli(onboard: bool = False, preview_modes: bool = False):
             f"simulated Activation complete.{_RESET}"
         )
         print(f"{_DIM}Use --onboard flag to walk through onboarding.{_RESET}\n")
-        if mode_runtime is not None:
+        if preview_modes:
             granted = await _grant_preview_modes(store, mode_runtime)
             print(
                 f"{_DIM}Preview Modes (development only, not live): {', '.join(granted)}. "

@@ -9,6 +9,8 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.agent.catalogue import build_registry
+from src.agent.runtime import ModeRuntime
 from src.api.activation import router as activation_router
 from src.api.channels import router as channels_router
 from src.api.coaching import router as coaching_router
@@ -35,12 +37,11 @@ from src.reliability import assess_readiness
 from src.runtime_config import (
     is_production,
     require_agent_credentials,
-    validate_runtime_configuration,
 )
 from src.scheduler.coaching import CoachingDeliveryWorker
 from src.scheduler.outbox import SchedulerOutboxWorker
 from src.scheduler.reminders import ReminderScheduler
-from src.startup import initialize_runtime
+from src.startup import initialize_runtime, validate_runtime_configuration
 
 validate_runtime_configuration(settings)
 
@@ -69,6 +70,8 @@ discord_channel = DiscordChannel(store) if settings.discord_enabled else None
 # Every channel this process runs; proactive messages use each participant's primary one.
 channels = ChannelRegistry([channel] + ([discord_channel] if discord_channel else []))
 session_mgr = SessionManager(store)
+# One Mode runtime for every channel's handlers, handoffs and the dashboard Mode switch.
+mode_runtime = ModeRuntime(build_registry())
 reminder_scheduler = ReminderScheduler(channel=channels, store=store)
 outbox_worker = SchedulerOutboxWorker(store, reminder_scheduler)
 handlers = BotHandlers(
@@ -76,8 +79,12 @@ handlers = BotHandlers(
     store=store,
     session_mgr=session_mgr,
     reminder_scheduler=reminder_scheduler,
+    mode_runtime=mode_runtime,
     channels=channels,
 )
+# Telegram resolves a bare chat to its Daily topic through the conversation service, which itself
+# needs the channel: wired here, after both exist, rather than by the handler.
+channel.default_conversation_resolver = handlers.turn_processor.modes.conversations.ensure_by_chat
 update_coordinator = ChannelUpdateCoordinator(store)
 # One BotHandlers per channel; all share the store, scheduler and the one Turn serializer.
 handlers_by_channel = {channel.channel_id: handlers}
@@ -88,6 +95,7 @@ if discord_channel is not None:
         store=store,
         session_mgr=session_mgr,
         reminder_scheduler=reminder_scheduler,
+        mode_runtime=mode_runtime,
         channels=channels,
     )
     coordinators[discord_channel.channel_id] = ChannelUpdateCoordinator(

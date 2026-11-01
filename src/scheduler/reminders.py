@@ -364,7 +364,7 @@ class ReminderScheduler:
                 "task_title": task_title,
             },
         )
-        logger.info("Scheduled reminder %s at %s for '%s'", job_id, send_time, task_title)
+        logger.info("Scheduled reminder %s at %s", job_id, send_time)
 
     def cancel_reminder(self, user_id: str, reminder_id: str) -> None:
         """Cancel a scheduled reminder."""

@@ -47,7 +47,7 @@ from src.memory.proactive import LocalProactiveState, reminder_budget_transactio
 from src.memory.reminders import validate_reminder_timing, validate_reminder_updates
 from src.memory.tasks import validate_task_status
 from src.schema import EXPECTED_SCHEMA_VERSION, require_schema_version
-from src.utils import utc_now
+from src.utils import instant, utc_now
 
 
 async def complete_activation(store, auth_id: str) -> None:
@@ -64,15 +64,6 @@ async def complete_activation(store, auth_id: str) -> None:
     if auth_id not in journeys:
         await store.acknowledge_activation_terms(auth_id, ACTIVATION_POLICY_VERSION)
     journeys[auth_id]["completed_at"] = utc_now().isoformat()
-
-
-def _utc_timestamp(value: str | datetime) -> datetime:
-    """Interpret legacy naive timestamps as UTC; preserve explicitly offset instants."""
-    instant = datetime.fromisoformat(value) if isinstance(value, str) else value
-    return (
-        instant.replace(tzinfo=ZoneInfo("UTC"))
-        if instant.tzinfo is None else instant.astimezone(ZoneInfo("UTC"))
-    )
 
 
 def _elapsed_ms(later: str, earlier: str) -> int:
@@ -168,7 +159,6 @@ class FakeStore:
         self.tasks: list[dict] = []
         self.reminders: list[dict] = []
         self.feedback: list[dict] = []
-        self.usage: list[dict] = []
         self.pairing_tokens: dict[str, dict] = {}
         self.command_receipts: dict[tuple[str, str], dict] = {}
         self.scheduler_outbox: dict[str, dict] = {}
@@ -183,8 +173,6 @@ class FakeStore:
         self._proactive_state = LocalProactiveState()
         self._memory_state = LocalMemoryState()
         self._identity_state = LocalIdentityState()
-        # Fake Supabase client for direct queries (used by SessionManager)
-        self.db = FakeDB(self)
 
     async def connect(self) -> None:
         """Match MemoryStore startup without creating an external client."""
@@ -1345,16 +1333,16 @@ class FakeStore:
 
     async def claim_scheduler_effects(self, limit: int, worker_id: str) -> list[dict]:
         claimed = []
-        now = _utc_timestamp(utc_now())
+        now = instant(utc_now())
         for effect in sorted(
-            self.scheduler_outbox.values(), key=lambda item: _utc_timestamp(item["created_at"])
+            self.scheduler_outbox.values(), key=lambda item: instant(item["created_at"])
         ):
             abandoned = (
                 effect["status"] == "processing"
                 and effect.get("claimed_at")
-                and now - _utc_timestamp(effect["claimed_at"]) > timedelta(minutes=5)
+                and now - instant(effect["claimed_at"]) > timedelta(minutes=5)
             )
-            available = _utc_timestamp(effect["available_at"]) <= now
+            available = instant(effect["available_at"]) <= now
             if (
                 (effect["status"] != "pending" or not available)
                 and not abandoned
@@ -1771,43 +1759,6 @@ class FakeStore:
             ),
         }
 
-    async def get_pending_reminders_for_reload(self, cutoff: datetime) -> list[dict]:
-        rows = []
-        for reminder in self.reminders:
-            scheduled = datetime.fromisoformat(reminder["scheduled_time"])
-            if reminder["status"] != "pending" or scheduled < cutoff:
-                continue
-            task = next((t for t in self.tasks if t["task_id"] == reminder["task_id"]), None)
-            user = next(
-                (u for u in self.users.values() if u["user_id"] == reminder["user_id"]),
-                None,
-            )
-            rows.append({
-                **reminder,
-                "tasks": {"title": task["title"] if task else "your task"},
-                "user_profiles": {
-                    "primary_channel": user.get("primary_channel", "telegram") if user else None,
-                },
-                "reminder_occurrences": (
-                    {
-                        "occurrence_id": self.reminder_occurrences[
-                            reminder["reminder_id"]
-                        ]["occurrence_id"],
-                        "reminder_delivery_attempts": [
-                            copy.deepcopy(attempt)
-                            for attempt in self.reminder_delivery_attempts.values()
-                            if attempt["occurrence_id"]
-                            == self.reminder_occurrences[reminder["reminder_id"]][
-                                "occurrence_id"
-                            ]
-                        ],
-                    }
-                    if reminder["reminder_id"] in self.reminder_occurrences
-                    else None
-                ),
-            })
-        return rows
-
     async def get_reminders_for_reconciliation(self) -> list[dict]:
         rows = []
         for reminder in self.reminders:
@@ -1865,12 +1816,6 @@ class FakeStore:
         fb = {"user_id": user_id, "content": content, "session_id": session_id}
         self.feedback.append(fb)
         return fb
-
-    async def log_usage(self, user_id, model, input_tokens, output_tokens, session_id=None):
-        self.usage.append({
-            "user_id": user_id, "model": model,
-            "input_tokens": input_tokens, "output_tokens": output_tokens,
-        })
 
     # ── Pairing and Account Linking ──
 
@@ -2072,127 +2017,6 @@ class FakeStore:
     async def resolve_mode_suggestion(self, user_id, offer_id, confirm):
         return await (await self._suggestions()).resolve(user_id, offer_id, confirm)
 
-
-
-class FakeDB:
-    """Minimal fake for self.store.db.table(...) chains used by SessionManager."""
-
-    def __init__(self, store: FakeStore):
-        self._store = store
-
-    def table(self, name: str):
-        return FakeTable(self._store, name)
-
-
-class FakeTable:
-    """Chainable fake for Supabase table queries."""
-
-    def __init__(self, store: FakeStore, table_name: str):
-        self._store = store
-        self._table = table_name
-        self._filters: dict = {}
-        self._select_cols = "*"
-        self._limit_n = None
-
-    def select(self, cols):
-        self._select_cols = cols
-        return self
-
-    def eq(self, col, val):
-        self._filters[col] = val
-        return self
-
-    def gte(self, col, val):
-        self._filters[f"{col}__gte"] = val
-        return self
-
-    def lt(self, col, val):
-        self._filters[f"{col}__lt"] = val
-        return self
-
-    def is_(self, col, val):
-        self._filters[f"{col}__is"] = val
-        return self
-
-    def in_(self, col, vals):
-        self._filters[f"{col}__in"] = vals
-        return self
-
-    def not_(self):
-        return self
-
-    def order(self, col, desc=False):
-        return self
-
-    def limit(self, n):
-        self._limit_n = n
-        return self
-
-    def maybe_single(self):
-        return self
-
-    def single(self):
-        return self
-
-    def execute(self):
-        """Return matching rows from the in-memory store."""
-        if self._table == "sessions":
-            data = self._filter_list(self._store.sessions)
-        elif self._table == "tasks":
-            data = self._filter_list(self._store.tasks)
-        elif self._table == "reminders":
-            data = self._filter_list(self._store.reminders)
-        else:
-            data = []
-
-        if self._limit_n:
-            data = data[:self._limit_n]
-
-        return FakeResult(data)
-
-    def update(self, updates):
-        return self
-
-    def insert(self, data):
-        return self
-
-    def _filter_list(self, items: list[dict]) -> list[dict]:
-        result = []
-        for item in items:
-            match = True
-            for key, val in self._filters.items():
-                if "__gte" in key:
-                    col = key.replace("__gte", "")
-                    if item.get(col, "") < val:
-                        match = False
-                elif "__lt" in key:
-                    col = key.replace("__lt", "")
-                    if item.get(col, "") >= val:
-                        match = False
-                elif "__is" in key:
-                    col = key.replace("__is", "")
-                    if val == "null" and item.get(col) is not None:
-                        match = False
-                elif "__in" in key:
-                    col = key.replace("__in", "")
-                    if item.get(col) not in val:
-                        match = False
-                else:
-                    if item.get(key) != val:
-                        match = False
-            if match:
-                result.append(item)
-        return result
-
-
-class FakeResult:
-    def __init__(self, data):
-        if isinstance(data, list) and len(data) == 0:
-            self.data = []
-        elif isinstance(data, list):
-            self.data = data
-        else:
-            self.data = data
 
 
 class FakeScheduler:

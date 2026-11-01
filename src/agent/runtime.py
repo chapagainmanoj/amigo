@@ -6,6 +6,7 @@ history and persistence belong to the application Turn orchestrator outside ``sr
 Pydantic AI stays behind this module and the Toolsets (ADR 0002).
 """
 
+import functools
 import time
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
@@ -454,4 +455,18 @@ def _presented(mode: ModeDefinition) -> AbstractToolset[ToolContext]:
     return PreparedToolset(combined, in_declared_order)
 
 
-default_runtime = ModeRuntime(build_registry())
+
+@functools.cache
+def _default_runtime() -> ModeRuntime:
+    return ModeRuntime(build_registry())
+
+
+def __getattr__(name: str):
+    """``default_runtime``: built on first use, for tests and eval scripts only.
+
+    Composition roots (``main``, ``cli``) build and pass their own runtime, so production never
+    constructs this one.
+    """
+    if name == "default_runtime":
+        return _default_runtime()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

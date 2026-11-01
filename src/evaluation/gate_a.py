@@ -95,6 +95,7 @@ INVALIDATING_INPUT_PATHS = (
     "src/dashboard_snapshot.py",
     "src/db/supabase.py",
     "src/evaluation/gate_a.py",
+    "src/evaluation/gate_a_evidence.py",
     "src/evaluation/meaning.py",
     "src/evaluation/model_policy.py",
     "src/handoffs.py",

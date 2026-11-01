@@ -163,10 +163,6 @@ class SmokeStore:
         reminder["updates"].append(dict(updates))
         return reminder
 
-    async def get_pending_reminders_for_reload(self, cutoff: datetime) -> list[dict]:
-        return []
-
-
 async def smoke_channel() -> None:
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("SMOKE_TEST_CHAT_ID")

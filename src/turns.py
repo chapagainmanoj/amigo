@@ -4,6 +4,7 @@ The model runtime plans and invokes its authorized Tools. This layer owns Sessio
 and friendly failure mapping, keeping direct side effects out of ``src/agent/``.
 """
 
+import functools
 import logging
 import time
 from typing import Any
@@ -14,10 +15,9 @@ from src.agent.runtime import (
     ModeRunResult,
     ModeRuntime,
     SessionMessage,
-    default_runtime,
 )
 from src.memory.context import ContextBuilder
-from src.mode_readiness import reflect_safety_response
+from src.mode_readiness import mode_safety_response
 from src.telemetry import TurnRecord, emit_turn_record, record_count
 from src.tools.context import ToolContext
 
@@ -40,7 +40,9 @@ class SessionTurnOrchestrator:
     ) -> ModeRunResult:
         """Run a Turn with transcript persistence, propagating execution failures."""
         started = time.perf_counter()
-        safety_reply = await reflect_safety_response(requested_mode, text)
+        safety_reply = await mode_safety_response(
+            await self.runtime.registry.find(requested_mode), text
+        )
         if safety_reply is not None:
             return ModeRunResult.reply_only(safety_reply)
         initial_count = record_count.get()
@@ -65,7 +67,9 @@ class SessionTurnOrchestrator:
         A caller that already admitted the Mode passes it as ``mode`` to skip resolving again.
         """
         started = time.perf_counter()
-        safety_reply = await reflect_safety_response(requested_mode, text)
+        safety_reply = await mode_safety_response(
+            await self.runtime.registry.find(requested_mode), text
+        )
         if safety_reply is not None:
             return safety_reply
         initial_count = record_count.get()
@@ -143,7 +147,19 @@ class SessionTurnOrchestrator:
         return result
 
 
-default_turn_orchestrator = SessionTurnOrchestrator(default_runtime)
+
+@functools.cache
+def _default_turn_orchestrator() -> SessionTurnOrchestrator:
+    from src.agent.runtime import default_runtime
+
+    return SessionTurnOrchestrator(default_runtime)
+
+
+def __getattr__(name: str):
+    """``default_turn_orchestrator``: built on first use, for tests and eval scripts only."""
+    if name == "default_turn_orchestrator":
+        return _default_turn_orchestrator()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _record_unexecuted(context, error, started):

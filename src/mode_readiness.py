@@ -9,15 +9,19 @@ application registry. No request, profile flag, model result or operator grant c
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from src.wellbeing import ProcessingConsent, WellbeingPolicy, safety_tier
+
+if TYPE_CHECKING:
+    from src.agent.modes import ModeDefinition
 
 wellbeing_policy = WellbeingPolicy()
 
 
-async def reflect_safety_response(mode_id: str | None, text: str) -> str | None:
-    """Deterministic safety response, available even while Reflect processing is disabled."""
-    if mode_id not in {"reflect", "cbt"}:
+async def mode_safety_response(mode: "ModeDefinition | None", text: str) -> str | None:
+    """Deterministic crisis referral for a ``safety_referral`` Mode, even while it is disabled."""
+    if mode is None or not mode.safety_referral:
         return None
     return await wellbeing_policy.referral(await safety_tier(text))
 

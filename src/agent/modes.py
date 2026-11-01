@@ -86,6 +86,9 @@ class ModeDefinition:
     limits: str = "Amigo is experimental and cannot provide clinical care or monitoring."
     # Short first messages shown when the Mode opens, so the participant knows what to send.
     examples: tuple[str, ...] = ()
+    # Wellbeing Modes: the deterministic crisis referral runs on every Turn addressed to this Mode,
+    # before admission, so it works even while the Mode is planned, disabled or refused.
+    safety_referral: bool = False
 
     def intro(self) -> str:
         """What the participant sees on entering this Mode."""

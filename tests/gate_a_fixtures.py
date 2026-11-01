@@ -10,7 +10,6 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
-from scripts.check_gate_a_evidence import ROOT, current_fingerprints
 from src.config import settings
 from src.evaluation.gate_a import (
     GATE_A_ENVIRONMENT,
@@ -26,6 +25,7 @@ from src.evaluation.gate_a import (
     summarize_scores,
     tool_schema,
 )
+from src.evaluation.gate_a_evidence import ROOT, current_fingerprints
 
 SUITE_PATH: Path = ROOT / "evals/gate_a/v1/cases.json"
 

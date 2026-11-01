@@ -8,8 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from scripts.check_gate_a_evidence import ROOT
-from scripts.check_gate_a_evidence import check_evidence as _check_evidence
 from src.evaluation.gate_a import (
     GATE_A_ENTRY_MODULES,
     INVALIDATING_INPUT_PATHS,
@@ -21,6 +19,8 @@ from src.evaluation.gate_a import (
     score_turn,
     summarize_scores,
 )
+from src.evaluation.gate_a_evidence import ROOT
+from src.evaluation.gate_a_evidence import check_evidence as _check_evidence
 from tests.gate_a_fixtures import passing_gate_a_bundle, passing_gate_a_evidence
 
 REVISION = "0" * 39 + "a"

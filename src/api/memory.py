@@ -9,15 +9,14 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from src.agent.modes import DAILY_MODE_ID
-from src.api.dependencies import get_activated_user, get_store
+from src.api.dependencies import get_activated_user
 from src.memory_service import PAYLOAD_FIELDS, MemoryService, memory_csv, memory_now
 
 router = APIRouter()
 
 
-async def get_memory_service(request: Request, store: Annotated[object, Depends(get_store)]):
-    if not hasattr(request.app.state, "memory_service"):
-        request.app.state.memory_service = MemoryService(store)
+async def get_memory_service(request: Request):
+    """The one MemoryService, built by the composition root (``main``) and shared with the bot."""
     return request.app.state.memory_service
 
 

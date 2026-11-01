@@ -16,7 +16,6 @@ from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.usage import RequestUsage
 
-from scripts.check_gate_a_evidence import check_evidence
 from scripts.run_gate_a_eval import _run_execution
 from scripts.run_gate_a_eval import run as run_provider_eval
 from scripts.run_mode_deterministic_eval import run as run_deterministic
@@ -25,6 +24,7 @@ from src.agent.modes import ModelPolicy
 from src.agent.registry import ModeRegistry
 from src.agent.runtime import FAILURE_REPLY, ModeRuntime
 from src.evaluation.gate_a import dependency_versions, load_suite
+from src.evaluation.gate_a_evidence import check_evidence
 from src.evaluation.model_policy import fallback_currency, require_evaluated_fallback
 from src.turns import SessionTurnOrchestrator
 from tests.fakes import FakeStore
@@ -315,7 +315,7 @@ def test_fallback_evidence_recomputes_full_case_results(tmp_path):
     # Historical evidence verification only needs archived suite and recorded hashes, not copies
     # of the implementation sources. Keep fingerprints rooted in the actual repo during this test.
     with (
-        patch("scripts.check_gate_a_evidence.current_fingerprints", return_value={}),
+        patch("src.evaluation.gate_a_evidence.current_fingerprints", return_value={}),
         patch("src.evaluation.model_policy.fallback_currency", return_value=currency),
     ):
         require_evaluated_fallback(mode, tmp_path)

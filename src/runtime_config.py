@@ -85,9 +85,12 @@ def _required_key_settings(config: object) -> list[str]:
     )
 
 
-def validate_runtime_configuration(config: object) -> None:
-    """Reject unsafe production settings before startup creates any side effect."""
-    _validate_model_routing(config)
+def validate_settings(config: object) -> None:
+    """Reject unsafe settings other than model routes (``validate_model_routes``).
+
+    The full startup gate, routes and per-Mode evaluation evidence included, is
+    ``src.startup.validate_runtime_configuration``.
+    """
     if getattr(config, "discord_enabled", False) is True:
         _require_secret(
             "DISCORD_BOT_TOKEN", getattr(config, "discord_bot_token", ""), minimum_length=50
@@ -180,9 +183,8 @@ def _invalid(name: str, reason: str) -> None:
     raise UnsafeProductionConfigurationError(f"Invalid production setting {name}: {reason}")
 
 
-def _validate_model_routing(config: object) -> None:
-    from pathlib import Path
-
+def validate_model_routes(config: object) -> None:
+    """Parse model routes and refuse unapproved providers and development-only models."""
     from src.model_routing import configured_routes
 
     try:
@@ -207,39 +209,13 @@ def _validate_model_routing(config: object) -> None:
             model.startswith("claude-cli:") for model in [default, *modes.values(), *pins.values()]
         ):
             _invalid("model routing", "Claude CLI is development-only")
-    if modes:
-        from src.agent.catalogue import build_registry
 
-        registry = build_registry()
-        if set(modes) - {mode.id for mode in registry}:
-            raise UnsafeProductionConfigurationError("MODE_MODELS names an unknown Mode")
-        if is_production(config):
-            from src.evaluation.model_policy import require_evaluated_model
 
-            root = Path(__file__).resolve().parents[1]
-            for mode_id, model in modes.items():
-                try:
-                    require_evaluated_model(registry[mode_id], model, root)
-                except ValueError:
-                    raise UnsafeProductionConfigurationError(
-                        "MODE_MODELS requires current passing per-Mode/model evaluation evidence"
-                    ) from None
-    if is_production(config) and not default.startswith("google:"):
-        # Gate A certifies the Gemini path; another default needs evidence per live Mode.
-        from src.agent.catalogue import build_registry
-        from src.evaluation.model_policy import require_evaluated_model
+def warn_participant_pins(config: object) -> None:
+    """Owner pins are allowed but always announced at startup."""
+    from src.model_routing import configured_routes
 
-        root = Path(__file__).resolve().parents[1]
-        registry = build_registry()
-        for mode in registry:
-            if mode.status == "live" and mode.id not in modes:
-                try:
-                    require_evaluated_model(mode, default, root)
-                except ValueError:
-                    raise UnsafeProductionConfigurationError(
-                        "A non-Gemini DEFAULT_MODEL requires passing evaluation evidence "
-                        "for every live Mode"
-                    ) from None
+    pins = configured_routes(config)[3]
     if pins:
         import logging
 

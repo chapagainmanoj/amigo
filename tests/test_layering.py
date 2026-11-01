@@ -66,6 +66,8 @@ LAYERS: dict[str, str] = {
     "handoffs": SERVICE,
     "maintenance": SERVICE,
     "memory_service": SERVICE,
+    "memory.context": SERVICE,  # ContextBuilder: assembles Turn context from Store reads
+    "memory.sessions": SERVICE,  # SessionManager: Session lifecycle over the Store
     "mode_readiness": SERVICE,
     "mode_suggestions": SERVICE,
     "reliability": SERVICE,  # awaits the Store and logs; readiness use case for main
@@ -83,15 +85,7 @@ LAYERS: dict[str, str] = {
 }
 
 # (importer, imported) pairs that break ALLOWED today. Fix, then delete the entry.
-KNOWN_EDGES: frozenset[tuple[str, str]] = frozenset(
-    {
-        # Fail-closed production gate (privacy decision 04): MODE_MODELS and a non-Gemini
-        # default need current per-Mode evaluation evidence before any side effect starts.
-        # Kept in validate_runtime_configuration so one call stays the whole gate.
-        ("runtime_config", "agent.catalogue"),
-        ("runtime_config", "evaluation.model_policy"),
-    }
-)
+KNOWN_EDGES: frozenset[tuple[str, str]] = frozenset()
 
 
 def _module_name(path: Path) -> str:
@@ -190,6 +184,44 @@ def test_every_module_has_a_layer():
 def test_imports_point_inward():
     new = sorted(_violations() - KNOWN_EDGES)
     assert not new, f"layer violations (cosmic-python:AP-OUTWARD-IMPORT): {new}"
+
+
+def _imported_names(node: ast.AST) -> list[str]:
+    """Absolute module names an import statement, ``import_module`` or ``__import__`` loads."""
+    if isinstance(node, ast.ImportFrom) and not node.level:
+        return [node.module or ""]
+    if isinstance(node, ast.Import):
+        return [alias.name for alias in node.names]
+    if (
+        isinstance(node, ast.Call)
+        and ast.unparse(node.func).split(".")[-1] in {"import_module", "__import__"}
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+    ):
+        return [node.args[0].value]
+    return []
+
+
+def test_dynamic_imports_are_seen():
+    tree = ast.parse("importlib.import_module('scripts.x')\n__import__('tests.fakes')\n")
+    names = [name for node in ast.walk(tree) for name in _imported_names(node)]
+    assert names == ["scripts.x", "tests.fakes"]
+
+
+def test_src_never_imports_outside_the_package():
+    """``src`` never imports ``scripts`` or ``tests``: neither is a package in the image.
+
+    A runtime ``scripts`` import from ``src`` crashes production with ModuleNotFoundError.
+    """
+    outside = sorted(
+        f"{module} -> {name}"
+        for module, path in _modules()
+        for node in _runtime_nodes(ast.parse(path.read_text()))
+        for name in _imported_names(node)
+        if name.split(".")[0] in {"scripts", "tests"}
+    )
+    assert not outside, f"src imports modules missing from the image: {outside}"
 
 
 def test_import_forms_are_resolved():

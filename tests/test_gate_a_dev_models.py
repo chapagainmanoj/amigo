@@ -2,9 +2,9 @@
 
 import pytest
 
-from scripts.check_gate_a_evidence import ROOT, check_evidence
 from scripts.run_gate_a_eval import _release_inputs
 from src.evaluation.gate_a import is_gemini_model, load_suite
+from src.evaluation.gate_a_evidence import ROOT, check_evidence
 from tests.gate_a_fixtures import passing_gate_a_evidence
 
 

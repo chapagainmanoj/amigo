@@ -53,10 +53,6 @@ class BotHandlers:
             store, channel, reminder_scheduler, session_mgr, self.turn_processor.mode_runtime,
             channels=channels,
         )
-        if hasattr(channel, "default_conversation_resolver"):
-            channel.default_conversation_resolver = (
-                self.turn_processor.modes.conversations.ensure_by_chat
-            )
 
     async def handle_message(
         self,

@@ -5,7 +5,7 @@ import uuid
 
 from src.access import trial_exhausted, trial_finished_message
 from src.agent.modes import DAILY_MODE_ID
-from src.agent.runtime import ModeRuntime, default_runtime
+from src.agent.runtime import ModeRuntime
 from src.bot.modes import ModeController
 from src.channels.base import ConversationRef, MessageChannel, Recipient
 from src.memory.sessions import SessionManager
@@ -32,7 +32,12 @@ class TurnProcessor:
         self.store = store
         self.session_mgr = session_mgr
         self.scheduler = scheduler
-        self.mode_runtime = mode_runtime or default_runtime
+        # Composition roots (main, cli) always pass one; the module default serves tests.
+        if mode_runtime is None:
+            from src.agent.runtime import default_runtime
+
+            mode_runtime = default_runtime
+        self.mode_runtime = mode_runtime
         self.turn_orchestrator = SessionTurnOrchestrator(self.mode_runtime)
         self.modes = ModeController(store, channel, scheduler, session_mgr, self.mode_runtime)
         self.suggestions = ModeSuggestionController(self.modes)
